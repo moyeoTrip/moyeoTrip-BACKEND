@@ -1,0 +1,21 @@
+root = true
+
+[*]
+trim_trailing_whitespace = true
+insert_final_newline = true
+
+[*.{kt,kts}]
+# 프로퍼티에 대한 주석은 다른줄로 하는 강제사항 제거
+ktlint_standard_comment-wrapping = disabled
+ktlint_standard_comment-spacing = disabled
+ktlint_standard_discouraged-comment-location = disabled
+ktlint_standard_if-else-wrapping = disabled
+ktlint_standard_no-consecutive-comments = disabled
+ktlint_standard_spacing-between-declarations-with-comments = disabled
+
+# KDoc 작성 강제사항 제거
+ktlint_standard_kdoc = disabled
+
+# 사용되지 않는 import문 제거 강제사항 적용
+# 오탐이 많아서 기본값이 disabled로 되어있지만, 있는게 더 낫다고 생각해서 enabled로 바꿔봄
+ktlint_standard_no-unused-imports = enabled

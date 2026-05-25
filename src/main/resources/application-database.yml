@@ -1,0 +1,32 @@
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    database: oracle
+    database-platform: org.hibernate.dialect.OracleDialect
+    open-in-view: false
+    properties:
+      hibernate:
+        default_batch_fetch_size: 100
+  datasource:
+    driver-class-name: oracle.jdbc.OracleDriver
+    hikari:
+      # DB 최대 세션수가 30개인데 서버배포시 rolling update 가 디폴트 10 을 먹으면 아슬아슬해서 줄였음.
+      maximum-pool-size: 5
+      minimum-idle: 1
+      # 운영에서 가상 스레드(spring.threads.virtual.enabled=true) 가 늘어남에 따라 connection 대기 시간이 길어질 수 있으므로
+      # 명시적으로 timeout 을 잡아 thread leak 을 빨리 탐지.
+      connection-timeout: 5000 # 5s — 풀이 비면 빠르게 SQLException 으로 떨어트림
+      validation-timeout: 2000
+      idle-timeout: 300000 # 5min
+      max-lifetime: 1800000 # 30min — DB 측 idle session 정리 주기보다 짧게
+      # 누수 탐지 — 운영에서 60초 이상 connection 잡힌 채 안 돌아오면 WARN 로그 + stack.
+      leak-detection-threshold: 60000
+      pool-name: MoyeoTrupHikariCP
+      # 운영에서 connection pool 이 초기화될 때마다 세션 레벨에서 parallel query 를 비활성화하는 SQL 을 실행하도록 설정.
+      connection-init-sql: ALTER SESSION DISABLE PARALLEL QUERY
+logging:
+  level:
+    org:
+      hibernate: info
+    com.zaxxer.hikari: info # leak/timeout 이벤트 즉시 가시화

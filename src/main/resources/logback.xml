@@ -1,0 +1,49 @@
+<configuration>
+    <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
+    <include resource="org/springframework/boot/logging/logback/console-appender.xml"/>
+    <!-- traceId 는 TraceFilter 가 MDC 에 설정 — 요청 로그 상관관계 추적용 -->
+    <property name="CONSOLE_PATTERN" value="%d{HH:mm:ss.SSS} [%X{traceId:-}] %-5level %logger{36} - %m%n"/>
+    <!-- protocol/error logger 는 JSON 한 줄이라 traceId 별도 prefix 없이 그대로 -->
+    <property name="TRACE_LOG_PATTERN" value="%m%n"/>
+
+
+    <appender name="stdout" class="ch.qos.logback.core.ConsoleAppender">
+        <target>System.out</target>
+        <encoder>
+            <Pattern>${CONSOLE_PATTERN}</Pattern>
+        </encoder>
+    </appender>
+
+    <appender name="stderr" class="ch.qos.logback.core.ConsoleAppender">
+        <target>System.err</target>
+        <encoder>
+            <Pattern>${CONSOLE_PATTERN}</Pattern>
+        </encoder>
+    </appender>
+
+    <appender name="trace-stdout" class="ch.qos.logback.core.ConsoleAppender">
+        <target>System.out</target>
+        <encoder>
+            <Pattern>${TRACE_LOG_PATTERN}</Pattern>
+        </encoder>
+    </appender>
+
+    <appender name="trace-stderr" class="ch.qos.logback.core.ConsoleAppender">
+        <target>System.err</target>
+        <encoder>
+            <Pattern>${TRACE_LOG_PATTERN}</Pattern>
+        </encoder>
+    </appender>
+
+    <logger name="protocol" level="INFO" additivity="false">
+        <appender-ref ref="trace-stdout"/>
+    </logger>
+
+    <logger name="error" level="ERROR" additivity="false">
+        <appender-ref ref="trace-stderr"/>
+    </logger>
+
+    <root level="INFO">
+        <appender-ref ref="stdout"/>
+    </root>
+</configuration>

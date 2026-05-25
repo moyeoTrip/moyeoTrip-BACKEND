@@ -1,0 +1,10 @@
+spring:
+  # 기본 local, 운영은 deployment 가 SPRING_PROFILES_ACTIVE=prod 로 override.
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:local}
+  config:
+    import: 'optional:aws-parameterstore:/config/MoyeoTrip'
+  cloud:
+    aws:
+      region:
+        static: ap-northeast-2

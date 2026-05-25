@@ -1,0 +1,29 @@
+def checkDeploymentCompletion(){
+  sh('kubectl rollout status deployment/moyeo-trip-api -nstable')
+}
+
+node {
+    stage ('Clone') {
+       echo "깃 클론 시작"
+       git branch: "main", url:'https://github.com/moyeoTrip/moyeoTrip-BACKEND.git', credentialsId: "docker-hub"
+       echo "깃 클론 끝"
+    }
+    stage('Build & Push image') {
+       echo "빌드 시작"
+       withCredentials([usernamePassword(credentialsId: 'docker-hub', usernameVariable: 'DOCKER_USERNAME', passwordVariable: 'DOCKER_PASSWORD')]) {
+         sh("./gradlew jib --no-daemon")
+       }
+      echo "빌드 끝"
+    }
+    stage ('Deploy'){
+        echo "배포 시작"
+        if(params.DEPLOY_ACTION == 'apply manifest') {
+            sh('kubectl apply -f deployment -nstable')
+            checkDeploymentCompletion()
+        } else if(params.DEPLOY_ACTION == 'rollout restart') {
+            sh('kubectl rollout restart deployment/moyeo-trip-api -nstable')
+            checkDeploymentCompletion()
+        }
+        echo "배포 종료"
+    }
+}

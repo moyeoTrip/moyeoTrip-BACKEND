@@ -1,0 +1,79 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: moyeo-trip-api
+  namespace: stable
+spec:
+  progressDeadlineSeconds: 900
+  selector:
+    matchLabels:
+      app: moyeo-trip-api
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  revisionHistoryLimit: 3
+  template:
+    metadata:
+      labels:
+        app: moyeo-trip-api
+    spec:
+      containers:
+        - image: ghcr.io/moyeotrip/moyeotrip_backend:latest
+          imagePullPolicy: Always
+          name: moyeo-trip-api
+          resources:
+            limits:
+              cpu: 800m
+              memory: 2048Mi
+          ports:
+            - name: http
+              containerPort: 8080
+            - name: management
+              containerPort: 8888
+          env:
+            - name: APP_NAME
+              value: moyeo-trip-api
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: moyeo-trip-secret
+                  key: awsSecretKey
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: moyeo-trip-secret
+                  key: awsAccessKey
+            - name: JAVA_TOOL_OPTIONS
+              value: >
+                -XX:InitialRAMPercentage=50
+                -XX:MaxRAMPercentage=50
+                -XX:MinRAMPercentage=50
+          startupProbe:
+            httpGet:
+              port: 8888
+              path: /actuator/health/liveness
+            periodSeconds: 10
+            failureThreshold: 40
+          readinessProbe:
+            httpGet:
+              port: 8888
+              path: /actuator/health/readiness
+            periodSeconds: 5
+            timeoutSeconds: 3
+          livenessProbe:
+            httpGet:
+              port: 8888
+              path: /actuator/health/liveness
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 5
+      volumes:
+        - name: share-vol
+          emptyDir: {}
+      imagePullSecrets:
+        - name: ghcr-login-secret
+      nodeSelector:
+        performance: high

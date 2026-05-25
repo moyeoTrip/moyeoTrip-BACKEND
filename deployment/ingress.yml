@@ -1,0 +1,30 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: moyeo-trip-api-ingress
+  namespace: stable
+  annotations:
+    ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/use-forwarded-headers: 'true'
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: 50mb
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    kubernetes.io/tls-acme: 'true'
+spec:
+  rules:
+  - host: moyeo-trip-api.jayden-bin.cc
+    http:
+      paths:
+      - path: /(api|swagger-ui|api-docs)/*
+        pathType: Prefix
+        backend:
+          service:
+            name: moyeo-trip-api-svc
+            port:
+              number: 80
+  tls:
+    - hosts:
+        - moyeo-trip-api.jayden-bin.cc
+      secretName: moyeo-trip-ssl-cert
