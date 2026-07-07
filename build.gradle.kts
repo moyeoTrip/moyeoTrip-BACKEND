@@ -54,6 +54,13 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-validation")
     runtimeOnly("org.flywaydb:flyway-database-oracle")
 
+    // OAuth2 & JWT
+    implementation("org.springframework.security:spring-security-oauth2-client")
+    implementation("org.springframework.security:spring-security-oauth2-jose")
+    implementation("io.jsonwebtoken:jjwt-api:0.12.3")
+    runtimeOnly("io.jsonwebtoken:jjwt-impl:0.12.3")
+    runtimeOnly("io.jsonwebtoken:jjwt-jackson:0.12.3")
+
     // Secret & Config
     implementation(platform("io.awspring.cloud:spring-cloud-aws-dependencies:4.0.2"))
     implementation("io.awspring.cloud:spring-cloud-aws-starter-parameter-store:4.0.2")
@@ -62,6 +69,8 @@ dependencies {
     // Kotlin
     implementation("org.jetbrains.kotlin:kotlin-reflect")
     implementation("tools.jackson.module:jackson-module-kotlin")
+    implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.21.3")
+
 
     // Infrastructures
     runtimeOnly("com.oracle.database.jdbc:ojdbc11:23.26.1.0.0")
@@ -83,6 +92,12 @@ dependencies {
     testImplementation("org.springframework.boot:spring-boot-starter-webmvc-test")
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+
+    //Utilities
+    implementation("commons-io:commons-io:2.21.0")
+
+    //Firebase
+    implementation("com.google.firebase:firebase-admin:9.8.0")
 }
 
 kotlin {
