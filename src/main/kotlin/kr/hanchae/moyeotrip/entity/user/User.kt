@@ -25,12 +25,17 @@ class User(
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     val userRole: UserRole,
-    @Column(nullable = false, updatable = false)
-    val providerUserId: String,
-    userInformation: UserInformation,
+    @Column(updatable = false)
+    val providerUserId: String? = null,
+    @Column(unique = true, updatable = false)
+    val email: String? = null,
+    val password: String? = null,
+    @Column(nullable = false)
+    var signupState: SignupState = SignupState.USER_INFO_REQUIRED,
+    userInformation: UserInformation? = null
 ) : BaseModifiableEntity() {
     @Embedded
-    var information: UserInformation = userInformation
+    var information: UserInformation? = userInformation
         protected set
 
     @Column(unique = true)
@@ -38,27 +43,33 @@ class User(
         protected set
 
     companion object {
-        fun createUser(
-            email: String?,
+        fun createSocailUser(
             providerType: ProviderType,
             providerUserId: String,
             userRole: UserRole,
-            gender: Gender,
-            nickname: String,
-            profileFileName: String? = null,
         ): User = User(
             providerType = providerType,
             providerUserId = providerUserId,
             userRole = userRole,
-            userInformation = UserInformation(
-                email = email,
-                nickname = nickname,
-                gender = gender,
-                profileFileName = profileFileName
-            ),
+        )
+
+        fun createEmailUser(
+            email: String,
+            password: String,
+            userRole: UserRole,
+        ): User = User(
+            providerType = ProviderType.EMAIL,
+            userRole = userRole,
+            email = email,
+            password = password
         )
     }
     fun changeFcmToken(token: String) {
         this.fcmToken = token
+    }
+
+    fun changeSignupStateComplete(userInformation: UserInformation) {
+        this.information = userInformation
+        this.signupState = SignupState.SIGNUP_COMPLETE
     }
 }

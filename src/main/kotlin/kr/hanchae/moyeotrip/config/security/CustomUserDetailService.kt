@@ -1,9 +1,10 @@
 package kr.hanchae.moyeotrip.config.security
 
-import kr.hanchae.moyeotrip.exception.UserNotFoundException
-import kr.hanchae.moyeotrip.entity.user.User
+import kr.hanchae.moyeotrip.exception.BaseException
+import kr.hanchae.moyeotrip.exception.ErrorCode
 import kr.hanchae.moyeotrip.repository.UserRepository
-import org.springframework.security.core.GrantedAuthority
+import org.springframework.security.core.authority.SimpleGrantedAuthority
+import org.springframework.security.core.userdetails.User
 import org.springframework.security.core.userdetails.UserDetails
 import org.springframework.security.core.userdetails.UserDetailsService
 import org.springframework.stereotype.Service
@@ -12,26 +13,20 @@ import org.springframework.stereotype.Service
 class CustomUserDetailService(
     private val userRepository: UserRepository,
 ) : UserDetailsService {
-    override fun loadUserByUsername(userIdStr: String): UserDetails {
-        val userId = userIdStr.toLong()
-        return SecurityUser(userRepository.findById(userId).orElseThrow { UserNotFoundException(userId) })
+    override fun loadUserByUsername(email: String): UserDetails {
+        val user =
+            userRepository.findByEmail(email) ?: throw BaseException(ErrorCode.USER_NOT_FOUND, ErrorCode.USER_NOT_FOUND.errorMessage)
+
+        return CustomUserDto(
+            id = user.id.toString(),
+            password = user.password!!,
+            authorities = listOf(SimpleGrantedAuthority(user.userRole.name)),
+        )
     }
 }
 
-class SecurityUser(
-    val user: User,
-) : UserDetails {
-    override fun getAuthorities(): Collection<GrantedAuthority> = listOf()
-
-    override fun getPassword(): String = ""
-
-    override fun getUsername(): String = ""
-
-    override fun isAccountNonExpired(): Boolean = true
-
-    override fun isAccountNonLocked(): Boolean = true
-
-    override fun isCredentialsNonExpired(): Boolean = true
-
-    override fun isEnabled(): Boolean = true
-}
+class CustomUserDto(
+    id: String,
+    password: String,
+    authorities: Collection<SimpleGrantedAuthority>,
+) : User(id, password, authorities)

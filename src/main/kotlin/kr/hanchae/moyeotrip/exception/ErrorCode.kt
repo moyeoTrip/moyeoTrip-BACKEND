@@ -13,6 +13,7 @@ enum class ErrorCode(
 
     // UNAUTHORIZED는 40100부터 시작
     UNAUTHORIZED(HttpStatus.UNAUTHORIZED, 40100, "인증되지 않은 사용자입니다."),
+    INVALID_CREDENTIALS(HttpStatus.UNAUTHORIZED, 40200, "잘못된 이메일 또는 비밀번호입니다."),
 
     // FORBIDDEN는 40300부터 시작
     FORBIDDEN(HttpStatus.FORBIDDEN, 40300, "접근 권한이 없습니다."),
@@ -23,6 +24,7 @@ enum class ErrorCode(
     // 리소스 충돌은 40900부터 시작
     ALREADY_EXIST_NICKNAME(HttpStatus.CONFLICT, 40900, "이미 사용중인 닉네임입니다."),
     ALREADY_EXIST_PROVIDER_USER_ID(HttpStatus.CONFLICT, 40901, "이미 존재하는 유저입니다."),
+    USER_INFO_REQUIRED(HttpStatus.CONFLICT, 40902, "추가 정보 입력이 필요합니다.(닉네임, 프로필 사진, 성별)"),
 
     // 요청크기에 대한 에러는 41300부터 시작
     PAYLOAD_TOO_LARGE(HttpStatus.PAYLOAD_TOO_LARGE, 41300, "파일 크기가 너무 큽니다."),

@@ -1,6 +1,9 @@
 spring:
   application:
     name: MoyeoTrip
+  config:
+    # Spring Boot does not load .env automatically. Treat the project-root .env as a properties file.
+    import: optional:file:.env[.properties]
   # DB / JPA / Hikari 공통 설정은 모든 profile 에서 로드 — Spring 의 `application-{profile}.yml` 자동 매핑은
   profiles:
     include:
@@ -12,6 +15,10 @@ spring:
   cloud:
     compatibility-verifier:
       enabled: false
+    aws:
+      s3:
+        bucket: ${AWS_S3_BUCKET}
+        cdn-url: ${AWS_S3_CDN_URL}
   threads:
     virtual:
       enabled: true
@@ -51,3 +58,9 @@ apple:
     key-id: ${APPLE_KEY_ID}
     p8-private-key: ${APPLE_P8_PRIVATE_KEY}
     redirect-url: ${APPLE_REDIRECT_URL}
+
+client:
+  tour-api:
+    apiKey: ${TOUR_API_KEY}
+firebase:
+  firebaseServiceAccountJson: ${FIREBASE_SERVICE_ACCOUNT_JSON}

@@ -3,8 +3,12 @@ package kr.hanchae.moyeotrip.config.security
 import kr.hanchae.moyeotrip.utils.jwt.JwtUtil
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
+import org.springframework.security.authentication.AuthenticationManager
+import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration
 import org.springframework.security.config.annotation.web.builders.HttpSecurity
 import org.springframework.security.config.http.SessionCreationPolicy
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder
+import org.springframework.security.crypto.password.PasswordEncoder
 import org.springframework.security.web.SecurityFilterChain
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter
 
@@ -14,6 +18,12 @@ class SecurityConfig(
     private val jwtUtil: JwtUtil,
     private val customUserDetailService: CustomUserDetailService,
 ) {
+    @Bean
+    fun passwordEncoder(): PasswordEncoder = BCryptPasswordEncoder()
+
+    @Bean
+    fun authenticationManager(authenticationConfiguration: AuthenticationConfiguration): AuthenticationManager =
+        authenticationConfiguration.authenticationManager
     @Bean
     fun filterChain(http: HttpSecurity): SecurityFilterChain =
         http
@@ -41,10 +51,5 @@ val PERMITTED_URL_PATTERNS =
         "/ready",
         "/swagger-ui/**",
         "/api-docs/**",
-        "/api/v1/auth/temporal/**",
-        "/api/v1/auth/login/kakao/**",
-        "/api/v1/auth/user/kakao",
-        "/api/v1/auth/check-nickname",
-        "/api/v1/auth/refresh",
-        "/api/v1/auth/terms/**",
+        "/api/v1/auth/**",
     )

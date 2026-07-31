@@ -1,6 +1,6 @@
 package kr.hanchae.moyeotrip.utils
 
-import kr.hanchae.moyeotrip.config.security.SecurityUser
+import kr.hanchae.moyeotrip.config.security.CustomUserDto
 import kr.hanchae.moyeotrip.exception.BaseException
 import kr.hanchae.moyeotrip.exception.ErrorCode
 import org.springframework.core.MethodParameter
@@ -24,7 +24,7 @@ class LoginUserResolver : HandlerMethodArgumentResolver {
     ): Long {
         val authentication = SecurityContextHolder.getContext().authentication?.principal
         // 로그인이 안됐다면 필터에서 짤렸을거라 null일 수  없긴 할텐데 혹시나 몰라 일단 null 체크를 해줌
-        return (authentication as? SecurityUser)?.user?.id ?: throw BaseException(
+        return (authentication as? CustomUserDto)?.username?.toLong() ?: throw BaseException(
             ErrorCode.UNAUTHORIZED,
             ErrorCode.UNAUTHORIZED.errorMessage,
         )

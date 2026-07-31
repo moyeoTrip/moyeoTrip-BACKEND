@@ -7,16 +7,13 @@ import jakarta.persistence.Enumerated
 
 @Embeddable
 data class UserInformation(
-    @Column(unique = true)
-    val email: String?,
+    @Column(length = 24, unique = true, updatable = false, nullable = true)
+    var nickname: String,
 
-    @Column(nullable = false, length = 24, unique = true, updatable = false)
-    val nickname: String,
-
-    @Column(nullable = false, updatable = false)
+    @Column(updatable = false,nullable = true)
     @Enumerated(EnumType.STRING)
-    val gender: Gender?,
+    var gender: Gender,
 
-    @Column(nullable = false, updatable = false)
-    val profileFileName: String? = "DEFAULT",
+    @Column(updatable = false,nullable = true)
+    var profileFileName: String,
 )
