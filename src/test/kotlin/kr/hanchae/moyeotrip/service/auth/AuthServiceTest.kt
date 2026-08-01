@@ -8,6 +8,7 @@ import kr.hanchae.moyeotrip.controller.auth.request.FirebaseLoginRequest
 import kr.hanchae.moyeotrip.controller.auth.request.FirebaseSignupRequest
 import kr.hanchae.moyeotrip.controller.auth.request.KakaoCustomTokenRequest
 import kr.hanchae.moyeotrip.controller.client.KakaoTokenInfoResponse
+import kr.hanchae.moyeotrip.entity.user.Gender
 import kr.hanchae.moyeotrip.entity.user.NicknameColor
 import kr.hanchae.moyeotrip.entity.user.ProviderType
 import kr.hanchae.moyeotrip.entity.user.SignupState
@@ -31,6 +32,7 @@ import org.mockito.Mockito.mock
 import org.mockito.Mockito.verify
 import org.mockito.Mockito.verifyNoInteractions
 import org.mockito.Mockito.`when`
+import java.time.LocalDate
 
 class AuthServiceTest {
     private lateinit var userRepository: UserRepository
@@ -111,7 +113,14 @@ class AuthServiceTest {
 
         val response =
             authService.signupWithFirebase(
-                FirebaseSignupRequest("id-token", "selection-token", "따스한 사슴 1234", "fcm-token"),
+                FirebaseSignupRequest(
+                    idToken = "id-token",
+                    nicknameSelectionToken = "selection-token",
+                    nickname = "따스한 사슴 1234",
+                    gender = Gender.F,
+                    birthDate = LocalDate.of(1998, 4, 12),
+                    fcmToken = "fcm-token",
+                ),
                 ProviderType.EMAIL,
             )
 
@@ -121,6 +130,8 @@ class AuthServiceTest {
         verify(userRepository).save(savedUser.capture())
         assertEquals("따스한 사슴 1234", savedUser.value.information?.nickname)
         assertEquals(NicknameColor.RED, savedUser.value.information?.nicknameColor)
+        assertEquals(Gender.F, savedUser.value.information?.gender)
+        assertEquals(LocalDate.of(1998, 4, 12), savedUser.value.information?.birthDate)
         assertEquals("fcm-token", savedUser.value.fcmToken)
         assertEquals(SignupState.PROFILE_IMAGE_REQUIRED, savedUser.value.signupState)
         assertEquals(SignupState.PROFILE_IMAGE_REQUIRED, response.signupState)

@@ -6,28 +6,28 @@ import jakarta.servlet.http.HttpServletResponse
 import kr.hanchae.moyeotrip.exception.ErrorCode
 import kr.hanchae.moyeotrip.exception.ErrorResponse
 import kr.hanchae.moyeotrip.logging.TraceManager
-import org.springframework.security.core.AuthenticationException
-import org.springframework.security.web.AuthenticationEntryPoint
+import org.springframework.security.access.AccessDeniedException
+import org.springframework.security.web.access.AccessDeniedHandler
 import org.springframework.stereotype.Component
 
 @Component
-class CustomAuthenticationEntryPoint(
+class CustomAccessDeniedHandler(
     private val objectMapper: ObjectMapper,
     private val traceManager: TraceManager,
-) : AuthenticationEntryPoint {
-    override fun commence(
+) : AccessDeniedHandler {
+    override fun handle(
         request: HttpServletRequest,
         response: HttpServletResponse,
-        authException: AuthenticationException,
+        accessDeniedException: AccessDeniedException,
     ) {
-        traceManager.doErrorLog(authException)
+        traceManager.doErrorLog(accessDeniedException)
         response.contentType = "application/json"
-        response.status = HttpServletResponse.SC_UNAUTHORIZED
+        response.status = HttpServletResponse.SC_FORBIDDEN
         objectMapper.writeValue(
             response.outputStream,
             ErrorResponse.of(
-                ErrorCode.UNAUTHORIZED,
-                ErrorCode.UNAUTHORIZED.errorMessage,
+                ErrorCode.FORBIDDEN,
+                ErrorCode.FORBIDDEN.errorMessage,
             ),
         )
     }

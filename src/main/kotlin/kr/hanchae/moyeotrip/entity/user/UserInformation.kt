@@ -4,6 +4,7 @@ import jakarta.persistence.Column
 import jakarta.persistence.Embeddable
 import jakarta.persistence.EnumType
 import jakarta.persistence.Enumerated
+import java.time.LocalDate
 
 @Embeddable
 data class UserInformation(
@@ -15,6 +16,8 @@ data class UserInformation(
     @Column(updatable = false, nullable = true)
     @Enumerated(EnumType.STRING)
     var gender: Gender,
+    @Column(updatable = false, nullable = true)
+    var birthDate: LocalDate? = null,
     @Column(nullable = true)
     var profileFileName: String? = null,
 )

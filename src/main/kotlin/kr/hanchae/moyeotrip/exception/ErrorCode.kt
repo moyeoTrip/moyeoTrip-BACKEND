@@ -29,7 +29,7 @@ enum class ErrorCode(
     // 리소스 충돌은 40900부터 시작
     ALREADY_EXIST_NICKNAME(HttpStatus.CONFLICT, 40900, "이미 사용중인 닉네임입니다."),
     ALREADY_EXIST_PROVIDER_USER_ID(HttpStatus.CONFLICT, 40901, "이미 존재하는 유저입니다."),
-    USER_INFO_REQUIRED(HttpStatus.CONFLICT, 40902, "추가 정보 입력이 필요합니다.(닉네임, 프로필 사진, 성별)"),
+    USER_INFO_REQUIRED(HttpStatus.CONFLICT, 40902, "추가 정보 입력이 필요합니다.(닉네임, 성별, 생년월일)"),
     AUTH_IDENTITY_ALREADY_LINKED(HttpStatus.CONFLICT, 40903, "이미 다른 계정으로 가입이 되어있습니다"),
     AUTH_PROVIDER_ALREADY_LINKED(HttpStatus.CONFLICT, 40904, "해당 로그인 제공자가 이미 연결되어 있습니다."),
 

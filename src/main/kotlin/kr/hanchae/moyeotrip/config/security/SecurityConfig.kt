@@ -15,6 +15,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 @Configuration
 class SecurityConfig(
     private val customAuthenticationEntryPoint: CustomAuthenticationEntryPoint,
+    private val customAccessDeniedHandler: CustomAccessDeniedHandler,
     private val jwtUtil: JwtUtil,
     private val customUserDetailService: CustomUserDetailService,
 ) {
@@ -45,6 +46,7 @@ class SecurityConfig(
                     .authenticated()
             }.exceptionHandling {
                 it.authenticationEntryPoint(customAuthenticationEntryPoint)
+                it.accessDeniedHandler(customAccessDeniedHandler)
             }.build()
 }
 

@@ -4,6 +4,7 @@ import jakarta.servlet.FilterChain
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
 import org.slf4j.MDC
+import org.springframework.boot.security.autoconfigure.web.servlet.SecurityFilterProperties
 import org.springframework.core.Ordered
 import org.springframework.stereotype.Component
 import org.springframework.web.filter.OncePerRequestFilter
@@ -34,7 +35,7 @@ class TraceFilter(
         traceManager.wrappedResponse = wrappedResponse
 
         try {
-            filterChain.doFilter(wrappedRequest, wrappedResponse ?: response)
+            filterChain.doFilter(wrappedRequest, wrappedResponse)
         } finally {
             try {
                 wrappedResponse.copyBodyToResponse()
@@ -44,7 +45,8 @@ class TraceFilter(
         }
     }
 
-    override fun getOrder(): Int = Ordered.LOWEST_PRECEDENCE - 11 // precedence HttpTraceFilter
+    // 요청 컨텍스트가 준비된 뒤, Spring Security 바로 앞에서 실행되어 401/403 응답까지 추적한다.
+    override fun getOrder(): Int = SecurityFilterProperties.DEFAULT_FILTER_ORDER - 1
 
     companion object {
         const val MDC_TRACE_ID = "traceId"

@@ -2,7 +2,10 @@ package kr.hanchae.moyeotrip.controller.auth.request
 
 import io.swagger.v3.oas.annotations.media.Schema
 import jakarta.validation.constraints.NotBlank
+import jakarta.validation.constraints.Past
 import jakarta.validation.constraints.Size
+import kr.hanchae.moyeotrip.entity.user.Gender
+import java.time.LocalDate
 
 data class FirebaseSignupRequest(
     @field:Schema(
@@ -30,6 +33,22 @@ data class FirebaseSignupRequest(
     @field:NotBlank(message = "닉네임은 필수입니다.")
     @field:Size(min = 2, max = 24, message = "닉네임은 2자부터 24자 이하로 입력 가능합니다.")
     val nickname: String,
+    @field:Schema(
+        description = "회원 프로필에 저장할 성별",
+        example = "F",
+        allowableValues = ["M", "F", "N"],
+        requiredMode = Schema.RequiredMode.REQUIRED,
+    )
+    val gender: Gender,
+    @field:Schema(
+        description = "회원 생년월일. 미래 날짜는 허용하지 않습니다.",
+        example = "1998-04-12",
+        type = "string",
+        format = "date",
+        requiredMode = Schema.RequiredMode.REQUIRED,
+    )
+    @field:Past(message = "생년월일은 과거 날짜여야 합니다.")
+    val birthDate: LocalDate,
     @field:Schema(
         description = "푸시 알림에 사용할 최신 Firebase Cloud Messaging 등록 토큰",
         example = "fcm_registration_token_example",

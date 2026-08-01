@@ -27,7 +27,10 @@ data class FirebaseLoginResponse(
     )
     val isNewUser: Boolean,
     @field:Schema(
-        description = "회원가입 진행 상태. PROFILE_IMAGE_REQUIRED이면 발급된 서비스 토큰으로 프로필 이미지 생성·조회·선택을 이어서 진행해야 합니다.",
+        description =
+            "서버가 관리하는 회원가입 진행 상태. 클라이언트 로컬 상태보다 이 값을 우선하며, " +
+                "다른 기기에서도 PROFILE_IMAGE_REQUIRED이면 발급된 서비스 토큰으로 " +
+                "프로필 이미지 생성·조회·선택을 이어서 진행해야 합니다.",
         example = "SIGNUP_COMPLETE",
         allowableValues = ["USER_INFO_REQUIRED", "PROFILE_IMAGE_REQUIRED", "SIGNUP_COMPLETE"],
         requiredMode = Schema.RequiredMode.REQUIRED,

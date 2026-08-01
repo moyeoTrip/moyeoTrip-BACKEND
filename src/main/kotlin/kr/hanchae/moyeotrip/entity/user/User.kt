@@ -12,6 +12,7 @@ import jakarta.persistence.Id
 import jakarta.persistence.OneToMany
 import jakarta.persistence.Table
 import kr.hanchae.moyeotrip.entity.BaseModifiableEntity
+import java.time.LocalDate
 
 @Entity
 @Table(
@@ -89,6 +90,8 @@ class User(
             email: String?,
             nickname: String,
             nicknameColor: NicknameColor,
+            gender: Gender = Gender.N,
+            birthDate: LocalDate? = null,
             userRole: UserRole,
         ): User =
             User(
@@ -99,7 +102,8 @@ class User(
                     UserInformation(
                         nickname = nickname,
                         nicknameColor = nicknameColor,
-                        gender = Gender.N,
+                        gender = gender,
+                        birthDate = birthDate,
                     ),
             )
     }

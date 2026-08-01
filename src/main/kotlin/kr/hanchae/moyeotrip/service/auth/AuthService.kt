@@ -13,7 +13,6 @@ import kr.hanchae.moyeotrip.controller.auth.response.FirebaseLoginResponse
 import kr.hanchae.moyeotrip.controller.auth.response.LinkedProvidersResponse
 import kr.hanchae.moyeotrip.controller.auth.response.ServiceTokensResponse
 import kr.hanchae.moyeotrip.controller.client.KakaoTokenInfoResponse
-import kr.hanchae.moyeotrip.entity.user.Gender
 import kr.hanchae.moyeotrip.entity.user.NicknameColor
 import kr.hanchae.moyeotrip.entity.user.ProviderType
 import kr.hanchae.moyeotrip.entity.user.SignupState
@@ -113,7 +112,12 @@ class AuthService(
         }
         if (existingUser != null) {
             existingUser.setSignupInformation(
-                UserInformation(nickname = nickname, nicknameColor = nicknameColor, gender = Gender.N),
+                UserInformation(
+                    nickname = nickname,
+                    nicknameColor = nicknameColor,
+                    gender = request.gender,
+                    birthDate = request.birthDate,
+                ),
             )
             request.fcmToken?.let(existingUser::changeFcmToken)
             return makeTokens(existingUser)
@@ -124,6 +128,8 @@ class AuthService(
                 email = identity.email,
                 nickname = nickname,
                 nicknameColor = nicknameColor,
+                gender = request.gender,
+                birthDate = request.birthDate,
                 userRole = UserRole.ROLE_USER,
             )
         user.addAuthIdentity(identity.providerType, identity.uid)

@@ -292,7 +292,8 @@ interface AuthAPISpec {
     @Operation(
         summary = "Firebase 제공자 자동 판별 회원가입",
         description = """
-            Firebase 제공자를 자동 판별하고 닉네임과 인증 수단을 등록합니다.
+            Firebase 제공자를 자동 판별하고 선택한 닉네임, 성별, 생년월일로 사용자를 생성합니다.
+            클라이언트 흐름은 로그인 방식 → 닉네임 → 성별·생년월일 → 사용자 생성 순서입니다.
             응답의 PROFILE_IMAGE_REQUIRED에 따라 프로필 이미지 생성·선택 단계를 이어서 진행해야 합니다.
         """,
     )
@@ -347,10 +348,16 @@ interface AuthAPISpec {
         ],
     )
     fun signupWithFirebase(
-        @RequestBody(description = "Firebase ID Token, 닉네임 선택 토큰, 선택한 닉네임과 선택적 FCM Token", required = true) request: FirebaseSignupRequest,
+        @RequestBody(
+            description = "Firebase ID Token, 닉네임 선택 토큰, 선택한 닉네임, 성별, 생년월일과 선택적 FCM Token",
+            required = true,
+        ) request: FirebaseSignupRequest,
     ): ResponseEntity<ServiceTokensResponse>
 
-    @Operation(summary = "카카오 회원가입", description = "카카오 Custom Token 로그인의 Firebase ID Token으로 신규 회원을 생성합니다.")
+    @Operation(
+        summary = "카카오 회원가입",
+        description = "카카오 Custom Token 로그인의 Firebase ID Token과 닉네임·성별·생년월일로 신규 회원을 생성합니다.",
+    )
     @SecurityRequirements
     @ApiResponses(
         value = [
@@ -397,12 +404,12 @@ interface AuthAPISpec {
         ],
     )
     fun signupWithKakao(
-        @RequestBody(description = "카카오 Firebase ID Token과 서버가 발급한 닉네임 선택 정보", required = true) request: FirebaseSignupRequest,
+        @RequestBody(description = "카카오 Firebase ID Token, 닉네임 선택 정보, 성별과 생년월일", required = true) request: FirebaseSignupRequest,
     ): ResponseEntity<ServiceTokensResponse>
 
     @Operation(
         summary = "이메일 회원가입",
-        description = "클라이언트에서 Firebase 이메일 계정을 생성한 후 받은 ID Token으로 닉네임 등록을 완료하고 프로필 이미지 선택 단계로 진입합니다. 비밀번호는 서버에 전달하거나 저장하지 않습니다.",
+        description = "클라이언트에서 Firebase 이메일 계정을 생성한 후 받은 ID Token과 닉네임·성별·생년월일로 사용자를 생성하고 프로필 이미지 선택 단계로 진입합니다. 비밀번호는 서버에 전달하거나 저장하지 않습니다.",
     )
     @SecurityRequirements
     @ApiResponses(
@@ -450,10 +457,13 @@ interface AuthAPISpec {
         ],
     )
     fun signupWithEmail(
-        @RequestBody(description = "이메일 Firebase ID Token과 서버가 발급한 닉네임 선택 정보", required = true) request: FirebaseSignupRequest,
+        @RequestBody(description = "이메일 Firebase ID Token, 닉네임 선택 정보, 성별과 생년월일", required = true) request: FirebaseSignupRequest,
     ): ResponseEntity<ServiceTokensResponse>
 
-    @Operation(summary = "Apple 회원가입", description = "Firebase Apple 로그인으로 받은 ID Token을 이용해 닉네임을 등록하고 프로필 이미지 선택 단계로 진입합니다.")
+    @Operation(
+        summary = "Apple 회원가입",
+        description = "Firebase Apple 로그인으로 받은 ID Token과 닉네임·성별·생년월일로 사용자를 생성한 뒤 프로필 이미지 선택 단계로 진입합니다.",
+    )
     @SecurityRequirements
     @ApiResponses(
         value = [
@@ -500,7 +510,7 @@ interface AuthAPISpec {
         ],
     )
     fun signupWithApple(
-        @RequestBody(description = "Apple Firebase ID Token과 서버가 발급한 닉네임 선택 정보", required = true) request: FirebaseSignupRequest,
+        @RequestBody(description = "Apple Firebase ID Token, 닉네임 선택 정보, 성별과 생년월일", required = true) request: FirebaseSignupRequest,
     ): ResponseEntity<ServiceTokensResponse>
 
     @Operation(
