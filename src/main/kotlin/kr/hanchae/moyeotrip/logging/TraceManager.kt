@@ -1,5 +1,7 @@
 package kr.hanchae.moyeotrip.logging
 
+import jakarta.servlet.http.HttpServletRequest
+import jakarta.servlet.http.HttpServletResponse
 import kr.hanchae.moyeotrip.utils.MoyeoTripJsonMappers
 import org.springframework.boot.actuate.web.exchanges.HttpExchange
 import org.springframework.stereotype.Component
@@ -15,6 +17,8 @@ import java.io.StringWriter
 import java.net.URLDecoder
 import java.nio.charset.Charset
 import java.nio.charset.StandardCharsets
+import java.time.Instant
+import java.util.Collections
 
 @Component
 @RequestScope
@@ -81,6 +85,54 @@ class TraceManager {
             path = trace.request.uri.path,
             method = trace.request.method,
             remoteAddress = req?.remoteAddr ?: "unknown",
+            cause = throwableToStackTrace(throwable),
+            errorType = throwable?.javaClass,
+            checkpoints = if (checkpoints.isEmpty()) null else checkpoints,
+            logType = if (isErrorLog()) LogType.ERROR else LogType.PROTOCOL,
+        )
+    }
+
+    /** Security에서 필터 체인을 종료해 Actuator HttpExchange가 생성되지 않은 경우의 trace. */
+    fun getFilterTrace(
+        request: HttpServletRequest,
+        response: HttpServletResponse,
+        startedAt: Instant,
+        elapsedMillis: Long,
+    ): Trace {
+        val req = wrappedRequest
+        val res = wrappedResponse
+        val requestHeaders =
+            Collections.list(request.headerNames).associateWith { name ->
+                Collections.list(request.getHeaders(name))
+            }
+        val responseHeaders = response.headerNames.associateWith { name -> response.getHeaders(name).toList() }
+
+        return Trace(
+            timestamp = startedAt.toString(),
+            traceRequest =
+                TraceRequest(
+                    headers = Redaction.redactHeaders(requestHeaders),
+                    params = Redaction.redactQueryParams(TracePayloadParser.queryToMap(request.queryString)),
+                    body =
+                        TracePayloadParser.buildBody(
+                            req?.contentAsByteArray?.toString(Charset.defaultCharset()),
+                            req?.contentType ?: request.contentType,
+                        ),
+                ),
+            traceResponse =
+                TraceResponse(
+                    status = response.status,
+                    headers = Redaction.redactHeaders(responseHeaders),
+                    body =
+                        TracePayloadParser.buildBody(
+                            res?.contentAsByteArray?.toString(Charset.defaultCharset()),
+                            res?.contentType ?: response.contentType,
+                        ),
+                ),
+            elapsed = elapsedMillis,
+            path = request.requestURI,
+            method = request.method,
+            remoteAddress = request.remoteAddr ?: "unknown",
             cause = throwableToStackTrace(throwable),
             errorType = throwable?.javaClass,
             checkpoints = if (checkpoints.isEmpty()) null else checkpoints,

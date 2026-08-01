@@ -44,6 +44,7 @@ class FirebaseAuthenticationClient(
             when (signInProvider) {
                 "password", "emailLink" -> ProviderType.EMAIL
                 "apple.com" -> ProviderType.APPLE
+                "google.com" -> ProviderType.GOOGLE
                 "custom" -> parseCustomProvider(claims["providerType"] as? String)
                 else -> throw BaseException(ErrorCode.INVALID_AUTH_PROVIDER, "지원하지 않는 Firebase 로그인 제공자입니다: $signInProvider")
             }

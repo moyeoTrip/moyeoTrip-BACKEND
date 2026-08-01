@@ -37,7 +37,10 @@ class TraceRepository(
     override fun add(httpTrace: HttpExchange) {
         traceManager.httpTrace = httpTrace
         val trace = traceManager.getTrace() ?: return
+        addTrace(trace)
+    }
 
+    fun addTrace(trace: Trace) {
         contents.addLast(trace)
         sizeCounter.incrementAndGet()
         while (sizeCounter.get() > MAX_BUFFER_SIZE) {

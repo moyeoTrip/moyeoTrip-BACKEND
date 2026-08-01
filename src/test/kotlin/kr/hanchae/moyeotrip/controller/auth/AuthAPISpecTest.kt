@@ -17,7 +17,7 @@ class AuthAPISpecTest {
     fun `모든 인증 API에 operation과 응답 문서가 존재한다`() {
         val methods = AuthAPISpec::class.java.declaredMethods
 
-        assertEquals(14, methods.size)
+        assertEquals(17, methods.size)
         methods.forEach { method ->
             assertTrue(method.isAnnotationPresent(Operation::class.java), "${method.name}에 @Operation이 없습니다.")
             assertTrue(method.isAnnotationPresent(ApiResponses::class.java), "${method.name}에 @ApiResponses가 없습니다.")

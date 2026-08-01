@@ -10,6 +10,8 @@ import org.springframework.stereotype.Component
 import org.springframework.web.filter.OncePerRequestFilter
 import org.springframework.web.util.ContentCachingRequestWrapper
 import org.springframework.web.util.ContentCachingResponseWrapper
+import java.time.Duration
+import java.time.Instant
 import java.util.UUID
 
 // 응답 본문 캐시는 default off — ContentCachingResponseWrapper 가 size cap 없이 메모리 누적해 OOM 위험.
@@ -17,6 +19,7 @@ import java.util.UUID
 @Component
 class TraceFilter(
     private val traceManager: TraceManager,
+    private val traceRepository: TraceRepository,
 ) : OncePerRequestFilter(),
     Ordered {
     override fun doFilterInternal(
@@ -25,6 +28,7 @@ class TraceFilter(
         filterChain: FilterChain,
     ) {
         val traceId = request.getHeader(TRACE_ID_HEADER)?.takeIf { it.isNotBlank() } ?: UUID.randomUUID().toString()
+        val startedAt = Instant.now()
         MDC.put(MDC_TRACE_ID, traceId)
         response.setHeader(TRACE_ID_HEADER, traceId)
 
@@ -36,8 +40,21 @@ class TraceFilter(
 
         try {
             filterChain.doFilter(wrappedRequest, wrappedResponse)
+        } catch (throwable: Throwable) {
+            traceManager.doErrorLog(throwable)
+            throw throwable
         } finally {
             try {
+                if (traceManager.httpTrace == null) {
+                    traceRepository.addTrace(
+                        traceManager.getFilterTrace(
+                            request = wrappedRequest,
+                            response = wrappedResponse,
+                            startedAt = startedAt,
+                            elapsedMillis = Duration.between(startedAt, Instant.now()).toMillis(),
+                        ),
+                    )
+                }
                 wrappedResponse.copyBodyToResponse()
             } finally {
                 MDC.remove(MDC_TRACE_ID)

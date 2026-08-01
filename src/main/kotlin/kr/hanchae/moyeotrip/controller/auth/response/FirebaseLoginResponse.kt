@@ -39,7 +39,7 @@ data class FirebaseLoginResponse(
     @field:Schema(
         description = "Firebase 토큰에서 판별한 로그인 제공자",
         example = "EMAIL",
-        allowableValues = ["EMAIL", "KAKAO", "APPLE"],
+        allowableValues = ["EMAIL", "KAKAO", "APPLE", "GOOGLE"],
         requiredMode = Schema.RequiredMode.REQUIRED,
         accessMode = Schema.AccessMode.READ_ONLY,
     )

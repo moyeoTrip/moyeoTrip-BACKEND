@@ -44,8 +44,16 @@ class FirebaseAuthenticationClientTest {
     }
 
     @Test
-    fun `지원하지 않는 Firebase 제공자는 거부한다`() {
+    fun `Firebase Google 로그인은 Google 제공자로 판별한다`() {
         val token = firebaseToken(provider = "google.com", uid = "google-uid")
+        `when`(firebaseAuth.verifyIdToken("id-token", true)).thenReturn(token)
+
+        assertEquals(ProviderType.GOOGLE, client.verifyIdToken("id-token").providerType)
+    }
+
+    @Test
+    fun `지원하지 않는 Firebase 제공자는 거부한다`() {
+        val token = firebaseToken(provider = "github.com", uid = "github-uid")
         `when`(firebaseAuth.verifyIdToken("id-token", true)).thenReturn(token)
 
         val exception = assertThrows(BaseException::class.java) { client.verifyIdToken("id-token") }

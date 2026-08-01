@@ -57,6 +57,11 @@ class AuthController(
         @Valid @RequestBody request: FirebaseLoginRequest,
     ): FirebaseLoginResponse = authService.loginWithFirebase(request, ProviderType.APPLE)
 
+    @PostMapping("/login/google")
+    override fun loginWithGoogle(
+        @Valid @RequestBody request: FirebaseLoginRequest,
+    ): FirebaseLoginResponse = authService.loginWithFirebase(request, ProviderType.GOOGLE)
+
     @PostMapping("/signup/firebase")
     override fun signupWithFirebase(
         @Valid @RequestBody request: FirebaseSignupRequest,
@@ -80,11 +85,23 @@ class AuthController(
     ): ResponseEntity<ServiceTokensResponse> =
         ResponseEntity.status(HttpStatus.CREATED).body(authService.signupWithFirebase(request, ProviderType.APPLE))
 
+    @PostMapping("/signup/google")
+    override fun signupWithGoogle(
+        @Valid @RequestBody request: FirebaseSignupRequest,
+    ): ResponseEntity<ServiceTokensResponse> =
+        ResponseEntity.status(HttpStatus.CREATED).body(authService.signupWithFirebase(request, ProviderType.GOOGLE))
+
     @PostMapping("/providers/firebase")
     override fun linkFirebaseProvider(
         @AuthenticationPrincipal principal: CustomUserDto,
         @Valid @RequestBody request: FirebaseLoginRequest,
     ): LinkedProvidersResponse = authService.linkFirebaseIdentity(principal.username.toLong(), request)
+
+    @PostMapping("/providers/google")
+    override fun linkGoogleProvider(
+        @AuthenticationPrincipal principal: CustomUserDto,
+        @Valid @RequestBody request: FirebaseLoginRequest,
+    ): LinkedProvidersResponse = authService.linkFirebaseIdentity(principal.username.toLong(), request, ProviderType.GOOGLE)
 
     @PostMapping("/providers/kakao")
     override fun linkKakaoProvider(

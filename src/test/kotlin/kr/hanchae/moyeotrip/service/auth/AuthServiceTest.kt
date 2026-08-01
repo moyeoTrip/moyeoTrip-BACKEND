@@ -178,6 +178,24 @@ class AuthServiceTest {
     }
 
     @Test
+    fun `로그인 사용자는 Google 인증 수단을 추가할 수 있다`() {
+        val user = User(id = 7L, userRole = UserRole.ROLE_USER)
+        val googleIdentity = UserAuthIdentity(user = user, providerType = ProviderType.GOOGLE, providerUserId = "google-uid")
+        `when`(firebaseAuthenticationClient.verifyIdToken("google-token"))
+            .thenReturn(FirebaseIdentity("google-uid", "user@gmail.com", ProviderType.GOOGLE))
+        `when`(userRepository.findById(7L)).thenReturn(java.util.Optional.of(user))
+        `when`(userAuthIdentityRepository.findByProviderTypeAndProviderUserId(ProviderType.GOOGLE, "google-uid"))
+            .thenReturn(null)
+        `when`(userAuthIdentityRepository.existsByUserIdAndProviderType(7L, ProviderType.GOOGLE)).thenReturn(false)
+        `when`(userAuthIdentityRepository.findAllByUserId(7L)).thenReturn(listOf(googleIdentity))
+
+        val response = authService.linkFirebaseIdentity(7L, FirebaseLoginRequest("google-token"), ProviderType.GOOGLE)
+
+        assertEquals(setOf(ProviderType.GOOGLE), response.providers)
+        verify(userAuthIdentityRepository).save(any(UserAuthIdentity::class.java))
+    }
+
+    @Test
     fun `추가로 연결한 Apple 인증 수단으로 기존 사용자 로그인에 성공한다`() {
         val user =
             User.createFirebaseUser(

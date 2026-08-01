@@ -140,8 +140,10 @@ class AuthService(
     fun linkFirebaseIdentity(
         userId: Long,
         request: FirebaseLoginRequest,
+        expectedProvider: ProviderType? = null,
     ): LinkedProvidersResponse {
         val identity = firebaseAuthenticationClient.verifyIdToken(request.idToken)
+        validateExpectedProvider(identity, expectedProvider)
         return linkIdentity(userId, identity.providerType, identity.uid)
     }
 

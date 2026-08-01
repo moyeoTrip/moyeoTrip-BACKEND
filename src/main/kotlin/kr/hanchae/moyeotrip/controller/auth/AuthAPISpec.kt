@@ -27,7 +27,7 @@ import org.springframework.http.ResponseEntity
 
 @Tag(
     name = SwaggerTag.AUTH,
-    description = "Firebase 기반 이메일·Apple·카카오 로그인, 회원가입, 인증 수단 연결 및 서비스 JWT 재발급 API",
+    description = "Firebase 기반 이메일·Google·Apple·카카오 로그인, 회원가입, 인증 수단 연결 및 서비스 JWT 재발급 API",
 )
 interface AuthAPISpec {
     @Operation(
@@ -123,7 +123,7 @@ interface AuthAPISpec {
     @Operation(
         summary = "Firebase 제공자 자동 판별 로그인",
         description = """
-            Firebase ID Token의 sign_in_provider를 읽어 EMAIL, APPLE, KAKAO 중 하나로 판별합니다.
+            Firebase ID Token의 sign_in_provider를 읽어 EMAIL, GOOGLE, APPLE, KAKAO 중 하나로 판별합니다.
             미가입이면 토큰 없이 isNewUser=true를 반환합니다.
             프로필 선택 전 사용자는 서비스 토큰과 PROFILE_IMAGE_REQUIRED 상태를 반환합니다.
         """,
@@ -287,6 +287,36 @@ interface AuthAPISpec {
     )
     fun loginWithApple(
         @RequestBody(description = "Firebase Apple 로그인 ID Token", required = true) request: FirebaseLoginRequest,
+    ): FirebaseLoginResponse
+
+    @Operation(summary = "Google 로그인", description = "Firebase Google 로그인으로 받은 ID Token의 google.com 제공자를 검증합니다.")
+    @SecurityRequirements
+    @ApiResponses(
+        value = [
+            ApiResponse(
+                responseCode = "200",
+                description = "Google 로그인 결과",
+                content = [
+                    Content(
+                        schema = Schema(implementation = FirebaseLoginResponse::class),
+                        examples = [ExampleObject(value = AuthSwaggerExamples.LOGIN_GOOGLE)],
+                    ),
+                ],
+            ),
+            ApiResponse(
+                responseCode = "400",
+                description = "Google 제공자 불일치",
+                content = [Content(schema = Schema(implementation = ErrorResponse::class))],
+            ),
+            ApiResponse(
+                responseCode = "401",
+                description = "유효하지 않은 Firebase ID Token",
+                content = [Content(schema = Schema(implementation = ErrorResponse::class))],
+            ),
+        ],
+    )
+    fun loginWithGoogle(
+        @RequestBody(description = "Firebase Google 로그인 ID Token", required = true) request: FirebaseLoginRequest,
     ): FirebaseLoginResponse
 
     @Operation(
@@ -514,8 +544,35 @@ interface AuthAPISpec {
     ): ResponseEntity<ServiceTokensResponse>
 
     @Operation(
+        summary = "Google 회원가입",
+        description = "Firebase Google ID Token과 닉네임·성별·생년월일로 사용자를 생성하고 프로필 이미지 선택 단계로 진입합니다.",
+    )
+    @SecurityRequirements
+    @ApiResponses(
+        value = [
+            ApiResponse(
+                responseCode = "201",
+                description = "Google 회원 등록 및 프로필 이미지 선택 단계 진입",
+                content = [
+                    Content(
+                        schema = Schema(implementation = ServiceTokensResponse::class),
+                        examples = [ExampleObject(value = AuthSwaggerExamples.SERVICE_TOKENS)],
+                    ),
+                ],
+            ),
+            ApiResponse(responseCode = "400", description = "요청 검증 실패 또는 Google 제공자 불일치"),
+            ApiResponse(responseCode = "401", description = "유효하지 않은 Firebase ID Token"),
+            ApiResponse(responseCode = "409", description = "닉네임, 이메일 또는 인증 수단 중복"),
+        ],
+    )
+    fun signupWithGoogle(
+        @RequestBody(description = "Google Firebase ID Token, 닉네임 선택 정보, 성별과 생년월일", required = true)
+        request: FirebaseSignupRequest,
+    ): ResponseEntity<ServiceTokensResponse>
+
+    @Operation(
         summary = "Firebase 인증 수단 연결",
-        description = "로그인된 사용자에게 Firebase EMAIL 또는 APPLE 인증 수단을 추가합니다. 연결 후 해당 수단으로 동일 계정에 로그인할 수 있습니다.",
+        description = "로그인된 사용자에게 Firebase EMAIL, GOOGLE 또는 APPLE 인증 수단을 추가합니다. 연결 후 해당 수단으로 동일 계정에 로그인할 수 있습니다.",
     )
     @SecurityRequirement(name = "Authorization")
     @ApiResponses(
@@ -578,6 +635,29 @@ interface AuthAPISpec {
         @RequestBody(description = "새로 연결할 Firebase 계정의 ID Token", required = true) request: FirebaseLoginRequest,
     ): LinkedProvidersResponse
 
+    @Operation(
+        summary = "Google 인증 수단 연결",
+        description = "현재 사용자에게 Firebase Google 계정을 추가합니다. 연결 후 해당 Google 계정으로 동일 사용자에 로그인할 수 있습니다.",
+    )
+    @SecurityRequirement(name = "Authorization")
+    @ApiResponses(
+        value = [
+            ApiResponse(
+                responseCode = "200",
+                description = "Google 인증 수단 연결 완료",
+                content = [Content(schema = Schema(implementation = LinkedProvidersResponse::class))],
+            ),
+            ApiResponse(responseCode = "400", description = "Google 제공자가 아닌 Firebase ID Token"),
+            ApiResponse(responseCode = "401", description = "서비스 JWT 또는 Firebase ID Token이 유효하지 않음"),
+            ApiResponse(responseCode = "404", description = "로그인 사용자 없음"),
+            ApiResponse(responseCode = "409", description = "Google 계정이 이미 현재 또는 다른 사용자에게 연결됨"),
+        ],
+    )
+    fun linkGoogleProvider(
+        @Parameter(hidden = true) principal: CustomUserDto,
+        @RequestBody(description = "연결할 Google 계정의 Firebase ID Token", required = true) request: FirebaseLoginRequest,
+    ): LinkedProvidersResponse
+
     @Operation(summary = "카카오 인증 수단 연결", description = "로그인된 사용자에게 카카오 계정을 추가합니다. 카카오 토큰의 app_id까지 검증하며, 연결 후 카카오로 동일 계정에 로그인할 수 있습니다.")
     @SecurityRequirement(name = "Authorization")
     @ApiResponses(
@@ -635,7 +715,7 @@ interface AuthAPISpec {
         @RequestBody(description = "새로 연결할 카카오 계정의 access token", required = true) request: KakaoCustomTokenRequest,
     ): LinkedProvidersResponse
 
-    @Operation(summary = "연결된 로그인 제공자 조회", description = "현재 로그인 사용자에게 연결된 EMAIL, APPLE, KAKAO 제공자 목록을 반환합니다.")
+    @Operation(summary = "연결된 로그인 제공자 조회", description = "현재 로그인 사용자에게 연결된 EMAIL, APPLE, KAKAO, GOOGLE 제공자 목록을 반환합니다.")
     @SecurityRequirement(name = "Authorization")
     @ApiResponses(
         value = [
@@ -740,7 +820,10 @@ private object AuthSwaggerExamples {
     const val LOGIN_APPLE =
         """{"accessToken":"access-token","refreshToken":"refresh-token","isNewUser":false,""" +
             """"signupState":"SIGNUP_COMPLETE","providerType":"APPLE"}"""
-    const val LINKED_PROVIDERS = """{"providers":["EMAIL","APPLE","KAKAO"]}"""
+    const val LOGIN_GOOGLE =
+        """{"accessToken":"access-token","refreshToken":"refresh-token","isNewUser":false,""" +
+            """"signupState":"SIGNUP_COMPLETE","providerType":"GOOGLE"}"""
+    const val LINKED_PROVIDERS = """{"providers":["EMAIL","APPLE","KAKAO","GOOGLE"]}"""
     const val BAD_REQUEST = """{"code":40000,"errorMessage":"잘못된 요청입니다."}"""
     const val INVALID_REFRESH_TOKEN = """{"code":40001,"errorMessage":"유효하지 않은 RefreshToken 입니다."}"""
     const val INVALID_PROVIDER = """{"code":40002,"errorMessage":"요청한 로그인 제공자와 Firebase 인증 정보가 일치하지 않습니다."}"""
