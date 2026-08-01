@@ -28,10 +28,12 @@ class JwtFilter(
 
         val token = bearerToken.removeBearer()
         if (jwtUtil.validateToken(jwtUtil.accessKey, token)) {
-            val userIdStr = jwtUtil.getUserId(jwtUtil.accessKey, token).toString()
-            val securityUser = customUserDetailService.loadUserByUsername(userIdStr)
-            val authentication = UsernamePasswordAuthenticationToken(securityUser, null, securityUser.authorities)
-            SecurityContextHolder.getContext().authentication = authentication
+            runCatching {
+                val userId = jwtUtil.getUserId(jwtUtil.accessKey, token)
+                val securityUser = customUserDetailService.loadUserById(userId)
+                val authentication = UsernamePasswordAuthenticationToken(securityUser, null, securityUser.authorities)
+                SecurityContextHolder.getContext().authentication = authentication
+            }
         }
         filterChain.doFilter(request, response)
     }

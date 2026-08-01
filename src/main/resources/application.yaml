@@ -15,10 +15,6 @@ spring:
   cloud:
     compatibility-verifier:
       enabled: false
-    aws:
-      s3:
-        bucket: ${AWS_S3_BUCKET}
-        cdn-url: ${AWS_S3_CDN_URL}
   threads:
     virtual:
       enabled: true
@@ -44,23 +40,3 @@ springdoc:
     enabled: true
   api-docs:
     path: /api-docs
-
-jwt:
-  access-key: ${JWT_ACCESS_KEY}
-  refresh-key: ${JWT_REFRESH_KEY}
-  access-token-expiration-time: ${JWT_ACCESS_TOKEN_EXPIRATION_TIME}
-  refresh-token-expiration-time: ${JWT_REFRESH_TOKEN_EXPIRATION_TIME}
-
-apple:
-  oauth2:
-    client-id: ${APPLE_CLIENT_ID}
-    team-id: ${APPLE_TEAM_ID}
-    key-id: ${APPLE_KEY_ID}
-    p8-private-key: ${APPLE_P8_PRIVATE_KEY}
-    redirect-url: ${APPLE_REDIRECT_URL}
-
-client:
-  tour-api:
-    apiKey: ${TOUR_API_KEY}
-firebase:
-  firebaseServiceAccountJson: ${FIREBASE_SERVICE_ACCOUNT_JSON}

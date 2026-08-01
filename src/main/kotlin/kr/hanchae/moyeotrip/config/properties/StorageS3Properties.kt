@@ -10,4 +10,5 @@ data class StorageS3Properties(
     val accessKey: String,
     val secretKey: String,
     val bucket: String,
+    val cdnUrl: String,
 )

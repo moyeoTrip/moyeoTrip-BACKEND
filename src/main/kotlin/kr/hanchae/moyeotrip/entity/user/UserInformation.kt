@@ -9,11 +9,9 @@ import jakarta.persistence.Enumerated
 data class UserInformation(
     @Column(length = 24, unique = true, updatable = false, nullable = true)
     var nickname: String,
-
-    @Column(updatable = false,nullable = true)
+    @Column(updatable = false, nullable = true)
     @Enumerated(EnumType.STRING)
     var gender: Gender,
-
-    @Column(updatable = false,nullable = true)
-    var profileFileName: String,
+    @Column(updatable = false, nullable = true)
+    var profileFileName: String? = null,
 )

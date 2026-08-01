@@ -1,52 +1,155 @@
 package kr.hanchae.moyeotrip.service.auth
 
-import kr.hanchae.moyeotrip.config.security.CustomUserDto
-import kr.hanchae.moyeotrip.controller.auth.request.EmailLoginRequest
-import kr.hanchae.moyeotrip.controller.auth.request.EmailSignupRequest
-import kr.hanchae.moyeotrip.controller.auth.request.KakaoLoginRequest
-import kr.hanchae.moyeotrip.controller.auth.request.UserCreateRequest
+import kr.hanchae.moyeotrip.client.KakaoClient
+import kr.hanchae.moyeotrip.config.properties.KakaoProperties
+import kr.hanchae.moyeotrip.controller.auth.request.FirebaseLoginRequest
+import kr.hanchae.moyeotrip.controller.auth.request.FirebaseSignupRequest
+import kr.hanchae.moyeotrip.controller.auth.request.KakaoCustomTokenRequest
 import kr.hanchae.moyeotrip.controller.auth.request.RefreshAccessTokenRequest
-import kr.hanchae.moyeotrip.exception.InvalidRefreshTokenException
-import kr.hanchae.moyeotrip.exception.UserNotFoundException
-import kr.hanchae.moyeotrip.controller.auth.response.KakaoLoginResponse
-import kr.hanchae.moyeotrip.controller.auth.response.NicknameCheckResponse
+import kr.hanchae.moyeotrip.controller.auth.response.FirebaseCustomTokenResponse
+import kr.hanchae.moyeotrip.controller.auth.response.FirebaseLoginResponse
+import kr.hanchae.moyeotrip.controller.auth.response.LinkedProvidersResponse
 import kr.hanchae.moyeotrip.controller.auth.response.ServiceTokensResponse
-import kr.hanchae.moyeotrip.controller.client.KakaoUserInfoResponse
+import kr.hanchae.moyeotrip.controller.client.KakaoTokenInfoResponse
+import kr.hanchae.moyeotrip.entity.user.Gender
 import kr.hanchae.moyeotrip.entity.user.ProviderType
 import kr.hanchae.moyeotrip.entity.user.SignupState
 import kr.hanchae.moyeotrip.entity.user.User
-import kr.hanchae.moyeotrip.entity.user.User.Companion.createEmailUser
+import kr.hanchae.moyeotrip.entity.user.UserInformation
 import kr.hanchae.moyeotrip.entity.user.UserRole
 import kr.hanchae.moyeotrip.exception.AlreadyExistNicknameException
 import kr.hanchae.moyeotrip.exception.AlreadyExistedProviderUserIdException
 import kr.hanchae.moyeotrip.exception.BaseException
 import kr.hanchae.moyeotrip.exception.ErrorCode
+import kr.hanchae.moyeotrip.exception.InvalidRefreshTokenException
 import kr.hanchae.moyeotrip.exception.KakaoClientException
-import kr.hanchae.moyeotrip.repository.ObjectStorageRepository
+import kr.hanchae.moyeotrip.exception.UserNotFoundException
+import kr.hanchae.moyeotrip.repository.UserAuthIdentityRepository
 import kr.hanchae.moyeotrip.repository.UserRepository
 import kr.hanchae.moyeotrip.utils.jwt.JwtUtil
-import org.springframework.security.authentication.AuthenticationManager
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken
-import org.springframework.security.core.Authentication
-import org.springframework.security.crypto.password.PasswordEncoder
-
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import org.springframework.web.client.RestClientException
 
 @Service
 @Transactional
 class AuthService(
     private val userRepository: UserRepository,
     private val jwtUtil: JwtUtil,
-    private val objectStorageRepository: ObjectStorageRepository,
-    private val authenticationManager: AuthenticationManager,
-    private val passwordEncoder: PasswordEncoder,
+    private val firebaseAuthenticationService: FirebaseAuthenticationService,
+    private val kakaoClient: KakaoClient,
+    private val kakaoProperties: KakaoProperties,
+    private val userAuthIdentityRepository: UserAuthIdentityRepository,
 ) {
+    fun createKakaoCustomToken(request: KakaoCustomTokenRequest): FirebaseCustomTokenResponse {
+        val tokenInfo = getKakaoTokenInfo(request.accessToken)
+        if (tokenInfo.appId != kakaoProperties.appId) {
+            throw BaseException(ErrorCode.INVALID_KAKAO_APP, ErrorCode.INVALID_KAKAO_APP.errorMessage)
+        }
+        return FirebaseCustomTokenResponse(
+            firebaseAuthenticationService.createKakaoCustomToken(tokenInfo.id.toString()),
+        )
+    }
+
+    fun loginWithFirebase(
+        request: FirebaseLoginRequest,
+        expectedProvider: ProviderType? = null,
+    ): FirebaseLoginResponse {
+        val identity = firebaseAuthenticationService.verifyIdToken(request.idToken)
+        validateExpectedProvider(identity, expectedProvider)
+        val user = findUser(identity)
+        if (user == null) {
+            return FirebaseLoginResponse(isNewUser = true, providerType = identity.providerType)
+        }
+
+        request.fcmToken
+            ?.takeIf { it != user.fcmToken }
+            ?.let(user::changeFcmToken)
+
+        if (user.signupState == SignupState.USER_INFO_REQUIRED) {
+            return FirebaseLoginResponse(isNewUser = true, providerType = identity.providerType)
+        }
+        val tokens = makeTokens(user)
+        return FirebaseLoginResponse(
+            accessToken = tokens.accessToken,
+            refreshToken = tokens.refreshToken,
+            isNewUser = false,
+            providerType = identity.providerType,
+        )
+    }
+
+    fun signupWithFirebase(
+        request: FirebaseSignupRequest,
+        expectedProvider: ProviderType? = null,
+    ): ServiceTokensResponse {
+        val identity = firebaseAuthenticationService.verifyIdToken(request.idToken)
+        validateExpectedProvider(identity, expectedProvider)
+
+        if (userRepository.existsByInformationNickname(request.nickname)) {
+            throw AlreadyExistNicknameException()
+        }
+        val existingUser = findUser(identity)
+        if (existingUser != null) {
+            if (existingUser.signupState == SignupState.SIGNUP_COMPLETE) {
+                throw AlreadyExistedProviderUserIdException()
+            }
+            existingUser.changeSignupStateComplete(
+                UserInformation(nickname = request.nickname, gender = Gender.N),
+            )
+            request.fcmToken?.let(existingUser::changeFcmToken)
+            return makeTokens(existingUser)
+        }
+        if (identity.email != null && userRepository.findByEmail(identity.email) != null) {
+            throw BaseException(ErrorCode.AUTH_IDENTITY_ALREADY_LINKED, "해당 이메일의 기존 계정에 로그인 수단을 연결해 주세요.")
+        }
+
+        val user =
+            User.createFirebaseUser(
+                email = identity.email,
+                nickname = request.nickname,
+                userRole = UserRole.ROLE_USER,
+            )
+        user.addAuthIdentity(identity.providerType, identity.uid)
+        request.fcmToken?.let(user::changeFcmToken)
+        return makeTokens(userRepository.save(user))
+    }
+
+    fun linkFirebaseIdentity(
+        userId: Long,
+        request: FirebaseLoginRequest,
+    ): LinkedProvidersResponse {
+        val identity = firebaseAuthenticationService.verifyIdToken(request.idToken)
+        return linkIdentity(userId, identity.providerType, identity.uid)
+    }
+
+    fun linkKakaoIdentity(
+        userId: Long,
+        request: KakaoCustomTokenRequest,
+    ): LinkedProvidersResponse {
+        val tokenInfo = getKakaoTokenInfo(request.accessToken)
+        if (tokenInfo.appId != kakaoProperties.appId) {
+            throw BaseException(ErrorCode.INVALID_KAKAO_APP, ErrorCode.INVALID_KAKAO_APP.errorMessage)
+        }
+        return linkIdentity(userId, ProviderType.KAKAO, tokenInfo.id.toString())
+    }
+
+    @Transactional(readOnly = true)
+    fun getLinkedProviders(userId: Long): LinkedProvidersResponse {
+        if (!userRepository.existsById(userId)) {
+            throw UserNotFoundException(userId)
+        }
+        return linkedProvidersResponse(userId)
+    }
+
+    private fun linkedProvidersResponse(userId: Long): LinkedProvidersResponse =
+        LinkedProvidersResponse(
+            userAuthIdentityRepository.findAllByUserId(userId).mapTo(linkedSetOf()) { it.providerType },
+        )
+
     fun refreshTokens(request: RefreshAccessTokenRequest): ServiceTokensResponse {
         val refreshToken = request.refreshToken
-        require(
-            jwtUtil.validateToken(jwtUtil.refreshKey, refreshToken) &&
-                    jwtUtil.validateCachedRefreshTokenRotateId(refreshToken),
+        if (!jwtUtil.validateToken(jwtUtil.refreshKey, refreshToken) ||
+            !jwtUtil.validateCachedRefreshTokenRotateId(refreshToken)
         ) {
             throw InvalidRefreshTokenException()
         }
@@ -55,8 +158,49 @@ class AuthService(
         return makeTokens(user)
     }
 
+    private fun getKakaoTokenInfo(accessToken: String): KakaoTokenInfoResponse =
+        try {
+            kakaoClient.getTokenInfo(accessToken)
+        } catch (exception: RestClientException) {
+            throw KakaoClientException(exception.message)
+        } catch (exception: IllegalStateException) {
+            throw KakaoClientException(exception.message)
+        }
+
+    private fun validateExpectedProvider(
+        identity: FirebaseIdentity,
+        expectedProvider: ProviderType?,
+    ) {
+        if (expectedProvider != null && identity.providerType != expectedProvider) {
+            throw BaseException(ErrorCode.INVALID_AUTH_PROVIDER, ErrorCode.INVALID_AUTH_PROVIDER.errorMessage)
+        }
+    }
+
+    private fun findUser(identity: FirebaseIdentity): User? =
+        userAuthIdentityRepository.findByProviderTypeAndProviderUserId(identity.providerType, identity.uid)?.user
+
+    private fun linkIdentity(
+        userId: Long,
+        providerType: ProviderType,
+        providerUserId: String,
+    ): LinkedProvidersResponse {
+        val user = userRepository.findById(userId).orElseThrow { UserNotFoundException(userId) }
+        val existingIdentity = userAuthIdentityRepository.findByProviderTypeAndProviderUserId(providerType, providerUserId)
+        if (existingIdentity != null) {
+            if (existingIdentity.user.id != userId) {
+                throw BaseException(ErrorCode.AUTH_IDENTITY_ALREADY_LINKED, ErrorCode.AUTH_IDENTITY_ALREADY_LINKED.errorMessage)
+            }
+            return linkedProvidersResponse(userId)
+        }
+        if (userAuthIdentityRepository.existsByUserIdAndProviderType(userId, providerType)) {
+            throw BaseException(ErrorCode.AUTH_PROVIDER_ALREADY_LINKED, ErrorCode.AUTH_PROVIDER_ALREADY_LINKED.errorMessage)
+        }
+        userAuthIdentityRepository.save(user.addAuthIdentity(providerType, providerUserId))
+        return linkedProvidersResponse(userId)
+    }
+
     private fun makeTokens(user: User): ServiceTokensResponse {
-        if (user.signupState == SignupState.USER_INFO_REQUIRED) {
+        if (user.signupState == SignupState.USER_INFO_REQUIRED || user.information == null) {
             throw BaseException(ErrorCode.USER_INFO_REQUIRED, ErrorCode.USER_INFO_REQUIRED.errorMessage)
         }
         val accessToken = jwtUtil.generateAccessToken(user.id, user.information!!.nickname)
@@ -65,167 +209,4 @@ class AuthService(
         jwtUtil.storeCachedRefreshTokenRotateId(user.id, rotateId)
         return ServiceTokensResponse(accessToken, refreshToken)
     }
-
-    @Transactional
-    fun kakaoLogin(request: KakaoLoginRequest): KakaoLoginResponse {
-        val kakaoUserInfo = getKakaoUserInfo(request.accessToken)
-        val providerUserId = requireNotNull(kakaoUserInfo.id) { "해당 계정 정보가 존재하지 않습니다." }
-        val user = userRepository.findByProviderTypeAndProviderUserId(ProviderType.KAKAO,providerUserId)
-        return user?.let {
-            if (request.fcmToken!=null&&request.fcmToken != it.fcmToken) {
-                it.changeFcmToken(request.fcmToken)
-            }
-            val tokens = makeTokens(it)
-            KakaoLoginResponse(tokens.accessToken, tokens.refreshToken, isNewUser = false)
-        } ?: KakaoLoginResponse(isNewUser = true)
-    }
-
-    /*@RedisLock(
-        prefix = "userNickname",
-        key = "#request.nickname",
-        waitTime = 5,
-        leaseTime = 3,
-    )*/
-    @Transactional
-    fun createSocialUser(request: UserCreateRequest): ServiceTokensResponse {
-        if (userRepository.existsByInformation_Nickname(request.nickname)) {
-            throw AlreadyExistNicknameException()
-        }
-        //TODO:when(request)
-        val kakaoUserInfo = getKakaoUserInfo(request.accessToken)
-        val providerUserId = requireNotNull(kakaoUserInfo.id) { "해당 계정 정보가 존재하지 않습니다." }
-        if (userRepository.existsByProviderTypeAndProviderUserId(request.providerType,providerUserId)) {
-            throw AlreadyExistedProviderUserIdException()
-        }
-
-        val user =
-            userRepository.save(
-                User.createSocailUser(
-                    providerType = request.providerType,
-                    providerUserId = providerUserId,
-                    userRole = UserRole.ROLE_USER,
-
-                    /* 갖고 올 수 있는 정보인지 확인
-                    email = kakaoUserInfo.email,
-                    gender = kakaoUserInfo.gender*/
-                ),
-            )
-        return makeTokens(user)
-    }
-
-    @Transactional(readOnly = true)
-    fun checkDuplicatedNickName(nickname: String): NicknameCheckResponse =
-        NicknameCheckResponse(userRepository.existsByInformation_Nickname(nickname))
-
-    fun getKakaoUserInfo(accessToken: String): KakaoUserInfoResponse = runCatching {
-        getKakaoUserInfo(accessToken)
-    }.getOrElse { throw KakaoClientException(it.message) }
-
-    @Transactional
-    fun signupWithEmail(
-        request: EmailSignupRequest,
-    ) {
-        val existingUser = userRepository.findByEmail(request.email)
-        if (existingUser != null) {
-            throw BaseException(ErrorCode.ALREADY_EXIST_PROVIDER_USER_ID, ErrorCode.ALREADY_EXIST_PROVIDER_USER_ID.errorMessage)
-        }
-        val user = createEmailUser(
-            email = request.email,
-            userRole = UserRole.ROLE_USER,
-            password = passwordEncoder.encode(request.password)!!,
-        )
-        userRepository.save(user)
-    }
-
-    @Transactional(readOnly = true)
-    fun loginWithEmail(request: EmailLoginRequest): ServiceTokensResponse {
-        try {
-            val authentication: Authentication =
-                authenticationManager.authenticate(
-                    UsernamePasswordAuthenticationToken(request.email, request.password),
-                )
-            val userDetails = authentication.principal as CustomUserDto
-            val user = userRepository.findById(userDetails.username.toLong()).orElseThrow {
-                BaseException(ErrorCode.USER_NOT_FOUND, ErrorCode.USER_NOT_FOUND.errorMessage)}
-            return makeTokens(user)
-        } catch (e: Exception) {
-            throw BaseException(ErrorCode.INVALID_CREDENTIALS, e.message)
-        }
-    }
-    /*@RedisLock(
-        prefix = "userNickname",
-        key = "#nicknameUpdateRequest.nickname",
-        waitTime = 5,
-        leaseTime = 3,
-    )
-    @Transactional
-    fun updateNickname(
-        nicknameUpdateRequest: NicknameUpdateRequest,
-        userId: Long,
-    ) {
-        if (userRepository.existsByNicknameAndIdNot(nicknameUpdateRequest.nickname, userId)) {
-            throw AlreadyExistNicknameException()
-        }
-        val user = userRepository.findByIdOrNull(userId) ?: throw UserNotFoundException(userId)
-        user.updateNickname(nicknameUpdateRequest.nickname)
-    }
-
-    @Transactional
-    fun updateProfileImage(
-        userId: Long,
-        profileImage: MultipartFile,
-    ) {
-        val user = userRepository.findByIdOrNull(userId) ?: throw UserNotFoundException(userId)
-        val prevProfileImage = user.profileImage
-        val profileImageUrl =
-            objectStorageRepository.upload(ObjectStorageRepository.USER_PROFILE_IMAGE_PATH, profileImage)
-        prevProfileImage?.let { objectStorageRepository.delete(it) }
-        user.profileImage = profileImageUrl
-    }
-
-    @Transactional
-    fun deleteUser(userId: Long) {
-        val user = userRepository.findByIdOrNull(userId) ?: throw UserNotFoundException(userId)
-        user.information.profileFileName?.let { objectStorageRepository.delete(it) }
-        userRepository.delete(user)
-    }
-
-    fun getUsernameByIdToken(idToken: String): String = firebaseTokenHelper.getUid(idToken)
-
-
-
-    private fun validateRegisterInformation(registerRequest: RegisterRequest) {
-        if (userRepository.existsByUsername(registerRequest.username)) {
-            throw ExistResourceException("${registerRequest.username}: 이미 존재하는 회원입니다")
-        }
-
-        registerRequest.apply {
-            email?.apply { validateEmail(this) }
-            phoneNumber?.apply { validatePhoneNumber(this) }
-            validateNickname(nickname)
-        }
-    }
-
-    fun refreshAccessToken(refreshToken: String): TokenResponse {
-        val userId = jwtTokenService.extractUserId(refreshToken)
-            ?: throw IllegalArgumentException("Invalid refresh token")
-
-        val user = userRepository.findById(userId)
-            .orElseThrow { IllegalArgumentException("User not found") }
-
-        val newAccessToken = jwtTokenService.generateAccessToken(user)
-        val newRefreshToken = jwtTokenService.generateRefreshToken(user)
-
-        return TokenResponse(
-            accessToken = newAccessToken,
-            refreshToken = newRefreshToken,
-            expiresIn = 3600000L,
-            user = TokenResponse.UserInfo(
-                id = user.id,
-                email = user.email,
-                name = user.name,
-                profileImageUrl = user.profileImageUrl,
-            ),
-        )
-    }*/
 }

@@ -117,9 +117,9 @@ class JwtUtil(
             val expirationTime = parseClaims(key, token).expiration
             return expirationTime.after(Date.from(ZonedDateTime.now().toInstant()))
         } catch (ex: JwtException) {
-            log.error("Jwt Exception: $token")
+            log.debug("JWT 검증에 실패했습니다: {}", ex.message)
         } catch (ex: IllegalArgumentException) {
-            log.error("Invalid Auth Token: $token")
+            log.debug("올바르지 않은 JWT입니다: {}", ex.message)
         }
         return false
     }

@@ -10,10 +10,13 @@ enum class ErrorCode(
     // 요청을 잘못했을 때는 40000부터 시작
     BAD_REQUEST(HttpStatus.BAD_REQUEST, 40000, "잘못된 요청입니다."),
     INVALID_REFRESH_TOKEN(HttpStatus.BAD_REQUEST, 40001, "유효하지 않은 RefreshToken 입니다."),
+    INVALID_AUTH_PROVIDER(HttpStatus.BAD_REQUEST, 40002, "요청한 로그인 제공자와 Firebase 인증 정보가 일치하지 않습니다."),
 
     // UNAUTHORIZED는 40100부터 시작
     UNAUTHORIZED(HttpStatus.UNAUTHORIZED, 40100, "인증되지 않은 사용자입니다."),
-    INVALID_CREDENTIALS(HttpStatus.UNAUTHORIZED, 40200, "잘못된 이메일 또는 비밀번호입니다."),
+    INVALID_FIREBASE_TOKEN(HttpStatus.UNAUTHORIZED, 40101, "유효하지 않은 Firebase ID 토큰입니다."),
+    KAKAO_CLIENT_EXCEPTION(HttpStatus.UNAUTHORIZED, 40102, "유효하지 않은 카카오 액세스 토큰입니다."),
+    INVALID_KAKAO_APP(HttpStatus.UNAUTHORIZED, 40103, "다른 카카오 애플리케이션에서 발급된 액세스 토큰입니다."),
 
     // FORBIDDEN는 40300부터 시작
     FORBIDDEN(HttpStatus.FORBIDDEN, 40300, "접근 권한이 없습니다."),
@@ -25,11 +28,10 @@ enum class ErrorCode(
     ALREADY_EXIST_NICKNAME(HttpStatus.CONFLICT, 40900, "이미 사용중인 닉네임입니다."),
     ALREADY_EXIST_PROVIDER_USER_ID(HttpStatus.CONFLICT, 40901, "이미 존재하는 유저입니다."),
     USER_INFO_REQUIRED(HttpStatus.CONFLICT, 40902, "추가 정보 입력이 필요합니다.(닉네임, 프로필 사진, 성별)"),
-
-    // 요청크기에 대한 에러는 41300부터 시작
-    PAYLOAD_TOO_LARGE(HttpStatus.PAYLOAD_TOO_LARGE, 41300, "파일 크기가 너무 큽니다."),
+    AUTH_IDENTITY_ALREADY_LINKED(HttpStatus.CONFLICT, 40903, "이미 다른 계정으로 가입이 되어있습니다"),
+    AUTH_PROVIDER_ALREADY_LINKED(HttpStatus.CONFLICT, 40904, "해당 로그인 제공자가 이미 연결되어 있습니다."),
 
     // 서버에러는 50000부터 시작
     INTERNAL_SERVER_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, 50000, "서버에러입니다."),
-    KAKAO_CLIENT_EXCEPTION(HttpStatus.INTERNAL_SERVER_ERROR, 50001, "카카오 클라이언트 에러입니다."),
+    FIREBASE_AUTH_ERROR(HttpStatus.BAD_GATEWAY, 50200, "Firebase 인증 처리에 실패했습니다."),
 }

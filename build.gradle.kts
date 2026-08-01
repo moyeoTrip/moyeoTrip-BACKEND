@@ -71,7 +71,6 @@ dependencies {
     implementation("tools.jackson.module:jackson-module-kotlin")
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.21.3")
 
-
     // Infrastructures
     runtimeOnly("com.oracle.database.jdbc:ojdbc11:23.26.1.0.0")
     implementation("org.redisson:redisson-spring-boot-starter:4.3.1")

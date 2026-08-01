@@ -24,6 +24,7 @@ class SecurityConfig(
     @Bean
     fun authenticationManager(authenticationConfiguration: AuthenticationConfiguration): AuthenticationManager =
         authenticationConfiguration.authenticationManager
+
     @Bean
     fun filterChain(http: HttpSecurity): SecurityFilterChain =
         http
@@ -36,6 +37,8 @@ class SecurityConfig(
                 UsernamePasswordAuthenticationFilter::class.java,
             ).authorizeHttpRequests {
                 it
+                    .requestMatchers("/api/v1/auth/providers", "/api/v1/auth/providers/**")
+                    .authenticated()
                     .requestMatchers(*PERMITTED_URL_PATTERNS)
                     .permitAll()
                     .anyRequest()
