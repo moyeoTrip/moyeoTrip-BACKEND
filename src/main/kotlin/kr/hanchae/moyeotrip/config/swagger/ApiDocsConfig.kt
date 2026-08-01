@@ -28,8 +28,8 @@ class ApiDocsConfig {
 
     private fun createApiInfo(): Info =
         Info()
-            .title("모야트립 API")
-            .description("모야트립 API 문서입니다.")
+            .title("모여트립 API")
+            .description("Firebase 인증과 서비스 JWT를 사용하는 모여트립 백엔드 API 문서입니다. 각 API의 요청 예시, 성공 응답과 오류 코드를 함께 제공합니다.")
             .version("1.0.0")
 
     private fun createSecurityComponents(): Components =
@@ -39,6 +39,7 @@ class ApiDocsConfig {
                 SecurityScheme()
                     .type(SecurityScheme.Type.HTTP)
                     .scheme("bearer")
+                    .bearerFormat("JWT")
                     .`in`(SecurityScheme.In.HEADER)
                     .name(AUTHORIZATION),
             )

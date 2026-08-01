@@ -1,13 +1,33 @@
 package kr.hanchae.moyeotrip.controller.auth.request
 
+import io.swagger.v3.oas.annotations.media.Schema
 import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.Size
 
 data class FirebaseSignupRequest(
+    @field:Schema(
+        description = "회원가입에 사용할 Firebase ID Token. 토큰의 로그인 제공자가 호출한 가입 API와 일치해야 합니다.",
+        example = "eyJhbGciOiJSUzI1NiIsImtpZCI6IjEyMzQ1Njc4OTAifQ...",
+        requiredMode = Schema.RequiredMode.REQUIRED,
+        accessMode = Schema.AccessMode.WRITE_ONLY,
+    )
     @field:NotBlank(message = "Firebase ID 토큰은 필수입니다.")
     val idToken: String,
+    @field:Schema(
+        description = "서비스에서 사용할 고유 닉네임. 공백일 수 없으며 2~15자입니다.",
+        example = "경북여행자",
+        minLength = 2,
+        maxLength = 15,
+        requiredMode = Schema.RequiredMode.REQUIRED,
+    )
     @field:NotBlank(message = "닉네임은 필수입니다.")
     @field:Size(min = 2, max = 15, message = "닉네임은 2자부터 15자 이하로 입력 가능합니다.")
     val nickname: String,
+    @field:Schema(
+        description = "푸시 알림에 사용할 최신 Firebase Cloud Messaging 등록 토큰",
+        example = "fcm_registration_token_example",
+        requiredMode = Schema.RequiredMode.NOT_REQUIRED,
+        nullable = true,
+    )
     val fcmToken: String? = null,
 )

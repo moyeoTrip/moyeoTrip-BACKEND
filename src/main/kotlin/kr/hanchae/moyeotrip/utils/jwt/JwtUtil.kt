@@ -67,7 +67,7 @@ class JwtUtil(
     }
 
     companion object {
-        private const val REFRESH_TOKEN_CACHE_PREFIX = "Dallyeobom:refresh-token-cache:"
+        private const val REFRESH_TOKEN_CACHE_PREFIX = "MoyeoTrip:refresh-token-cache:"
 
         fun getRefreshTokenCacheKey(userId: Long): String = REFRESH_TOKEN_CACHE_PREFIX.plus(userId)
     }

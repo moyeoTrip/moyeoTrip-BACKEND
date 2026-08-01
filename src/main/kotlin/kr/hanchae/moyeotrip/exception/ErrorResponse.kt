@@ -1,7 +1,20 @@
 package kr.hanchae.moyeotrip.exception
 
+import io.swagger.v3.oas.annotations.media.Schema
+
+@Schema(description = "API 오류 응답")
 open class ErrorResponse private constructor(
+    @field:Schema(
+        description = "애플리케이션 오류 코드. HTTP 상태 코드와 별도로 세부 원인을 식별합니다.",
+        example = "40101",
+        requiredMode = Schema.RequiredMode.REQUIRED,
+    )
     val code: Int,
+    @field:Schema(
+        description = "사용자 또는 개발자가 확인할 수 있는 오류 설명",
+        example = "유효하지 않은 Firebase ID 토큰입니다.",
+        requiredMode = Schema.RequiredMode.REQUIRED,
+    )
     val errorMessage: String,
 ) {
     protected constructor(errorCode: ErrorCode) : this(errorCode.code, errorCode.errorMessage)
