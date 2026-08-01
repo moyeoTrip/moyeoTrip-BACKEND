@@ -20,6 +20,7 @@ import kr.hanchae.moyeotrip.controller.auth.request.RefreshAccessTokenRequest
 import kr.hanchae.moyeotrip.controller.auth.response.FirebaseCustomTokenResponse
 import kr.hanchae.moyeotrip.controller.auth.response.FirebaseLoginResponse
 import kr.hanchae.moyeotrip.controller.auth.response.LinkedProvidersResponse
+import kr.hanchae.moyeotrip.controller.auth.response.NicknameCandidatesResponse
 import kr.hanchae.moyeotrip.controller.auth.response.ServiceTokensResponse
 import kr.hanchae.moyeotrip.exception.ErrorResponse
 import org.springframework.http.ResponseEntity
@@ -29,6 +30,37 @@ import org.springframework.http.ResponseEntity
     description = "Firebase 기반 이메일·Apple·카카오 로그인, 회원가입, 인증 수단 연결 및 서비스 JWT 재발급 API",
 )
 interface AuthAPISpec {
+    @Operation(
+        summary = "닉네임 선택지 3개 생성",
+        description = """
+            `형용사 + 동물 이름 + 0000~9999의 4자리 숫자` 형식의 서로 다른 닉네임 3개를 서버에서 생성합니다.
+            각 후보에는 형용사, 동물, 무작위 색상과 형용사에 대응하는 여행 성향 설명이 함께 포함됩니다.
+            마음에 드는 후보가 없으면 이 API를 횟수 제한 없이 다시 호출해 새로운 3개를 받을 수 있습니다.
+            selectionToken은 10분간 유효하며 회원가입 시 선택한 닉네임과 함께 제출해야 합니다.
+        """,
+    )
+    @SecurityRequirements
+    @ApiResponses(
+        value = [
+            ApiResponse(
+                responseCode = "200",
+                description = "닉네임 선택지 생성 성공",
+                content = [
+                    Content(
+                        schema = Schema(implementation = NicknameCandidatesResponse::class),
+                        examples = [ExampleObject(value = AuthSwaggerExamples.NICKNAME_CANDIDATES)],
+                    ),
+                ],
+            ),
+            ApiResponse(
+                responseCode = "500",
+                description = "고유한 닉네임 후보를 생성하지 못함",
+                content = [Content(schema = Schema(implementation = ErrorResponse::class))],
+            ),
+        ],
+    )
+    fun generateNicknameCandidates(): NicknameCandidatesResponse
+
     @Operation(
         summary = "카카오 토큰을 Firebase Custom Token으로 교환",
         description = """
@@ -55,7 +87,9 @@ interface AuthAPISpec {
                 content = [
                     Content(
                         schema = Schema(implementation = ErrorResponse::class),
-                        examples = [ExampleObject(value = AuthSwaggerExamples.BAD_REQUEST)],
+                        examples = [
+                            ExampleObject(name = "요청 검증 실패", value = AuthSwaggerExamples.BAD_REQUEST),
+                        ],
                     ),
                 ],
             ),
@@ -249,7 +283,7 @@ interface AuthAPISpec {
         @RequestBody(description = "Firebase Apple 로그인 ID Token", required = true) request: FirebaseLoginRequest,
     ): FirebaseLoginResponse
 
-    @Operation(summary = "Firebase 제공자 자동 판별 회원가입", description = "Firebase 제공자를 자동 판별해 닉네임과 인증 수단을 등록하고 서비스 JWT를 발급합니다.")
+    @Operation(summary = "Firebase 제공자 자동 판별 회원가입", description = "Firebase 제공자를 자동 판별하고, 닉네임 후보 API에서 발급한 선택 토큰을 검증한 뒤 회원과 인증 수단을 등록합니다.")
     @SecurityRequirements
     @ApiResponses(
         value = [
@@ -268,7 +302,10 @@ interface AuthAPISpec {
                 content = [
                     Content(
                         schema = Schema(implementation = ErrorResponse::class),
-                        examples = [ExampleObject(value = AuthSwaggerExamples.BAD_REQUEST)],
+                        examples = [
+                            ExampleObject(name = "요청 검증 실패", value = AuthSwaggerExamples.BAD_REQUEST),
+                            ExampleObject(name = "닉네임 선택 오류", value = AuthSwaggerExamples.INVALID_NICKNAME_SELECTION),
+                        ],
                     ),
                 ],
             ), ApiResponse(
@@ -298,7 +335,7 @@ interface AuthAPISpec {
         ],
     )
     fun signupWithFirebase(
-        @RequestBody(description = "Firebase ID Token과 신규 회원 정보", required = true) request: FirebaseSignupRequest,
+        @RequestBody(description = "Firebase ID Token, 닉네임 선택 토큰, 선택한 닉네임과 선택적 FCM Token", required = true) request: FirebaseSignupRequest,
     ): ResponseEntity<ServiceTokensResponse>
 
     @Operation(summary = "카카오 회원가입", description = "카카오 Custom Token 로그인의 Firebase ID Token으로 신규 회원을 생성합니다.")
@@ -320,7 +357,10 @@ interface AuthAPISpec {
                 content = [
                     Content(
                         schema = Schema(implementation = ErrorResponse::class),
-                        examples = [ExampleObject(value = AuthSwaggerExamples.BAD_REQUEST)],
+                        examples = [
+                            ExampleObject(name = "요청 검증 실패", value = AuthSwaggerExamples.BAD_REQUEST),
+                            ExampleObject(name = "닉네임 선택 오류", value = AuthSwaggerExamples.INVALID_NICKNAME_SELECTION),
+                        ],
                     ),
                 ],
             ), ApiResponse(
@@ -345,7 +385,7 @@ interface AuthAPISpec {
         ],
     )
     fun signupWithKakao(
-        @RequestBody(description = "카카오 Firebase ID Token과 신규 회원 정보", required = true) request: FirebaseSignupRequest,
+        @RequestBody(description = "카카오 Firebase ID Token과 서버가 발급한 닉네임 선택 정보", required = true) request: FirebaseSignupRequest,
     ): ResponseEntity<ServiceTokensResponse>
 
     @Operation(
@@ -370,7 +410,10 @@ interface AuthAPISpec {
                 content = [
                     Content(
                         schema = Schema(implementation = ErrorResponse::class),
-                        examples = [ExampleObject(value = AuthSwaggerExamples.BAD_REQUEST)],
+                        examples = [
+                            ExampleObject(name = "요청 검증 실패", value = AuthSwaggerExamples.BAD_REQUEST),
+                            ExampleObject(name = "닉네임 선택 오류", value = AuthSwaggerExamples.INVALID_NICKNAME_SELECTION),
+                        ],
                     ),
                 ],
             ), ApiResponse(
@@ -395,7 +438,7 @@ interface AuthAPISpec {
         ],
     )
     fun signupWithEmail(
-        @RequestBody(description = "이메일 Firebase ID Token과 신규 회원 정보", required = true) request: FirebaseSignupRequest,
+        @RequestBody(description = "이메일 Firebase ID Token과 서버가 발급한 닉네임 선택 정보", required = true) request: FirebaseSignupRequest,
     ): ResponseEntity<ServiceTokensResponse>
 
     @Operation(summary = "Apple 회원가입", description = "Firebase Apple 로그인으로 받은 ID Token을 이용해 모여트립 회원가입을 완료합니다.")
@@ -417,7 +460,10 @@ interface AuthAPISpec {
                 content = [
                     Content(
                         schema = Schema(implementation = ErrorResponse::class),
-                        examples = [ExampleObject(value = AuthSwaggerExamples.BAD_REQUEST)],
+                        examples = [
+                            ExampleObject(name = "요청 검증 실패", value = AuthSwaggerExamples.BAD_REQUEST),
+                            ExampleObject(name = "닉네임 선택 오류", value = AuthSwaggerExamples.INVALID_NICKNAME_SELECTION),
+                        ],
                     ),
                 ],
             ), ApiResponse(
@@ -442,7 +488,7 @@ interface AuthAPISpec {
         ],
     )
     fun signupWithApple(
-        @RequestBody(description = "Apple Firebase ID Token과 신규 회원 정보", required = true) request: FirebaseSignupRequest,
+        @RequestBody(description = "Apple Firebase ID Token과 서버가 발급한 닉네임 선택 정보", required = true) request: FirebaseSignupRequest,
     ): ResponseEntity<ServiceTokensResponse>
 
     @Operation(
@@ -648,6 +694,8 @@ interface AuthAPISpec {
 }
 
 private object AuthSwaggerExamples {
+    const val NICKNAME_CANDIDATES =
+        """{"selectionToken":"550e8400-e29b-41d4-a716-446655440000","candidates":[{"nickname":"따스한 사슴 1234","adjective":"따스한","animal":"사슴","color":"RED","description":"처음 만난 사람에게도 다정하게 말을 건네요"},{"nickname":"빠른 거북이 9999","adjective":"빠른","animal":"거북이","color":"BLUE","description":"빠른 템포로 여행을 알차게 즐겨요"},{"nickname":"다정한 수달 5271","adjective":"다정한","animal":"수달","color":"MINT","description":"함께하는 사람을 세심하게 살피고 마음을 나눠요"}],"expiresInSeconds":600}"""
     const val CUSTOM_TOKEN = """{"customToken":"eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9..."}"""
     const val SERVICE_TOKENS = """{"accessToken":"eyJhbGciOiJIUzI1NiJ9.access...","refreshToken":"eyJhbGciOiJIUzI1NiJ9.refresh..."}"""
     const val LOGIN_EXISTING = """{"accessToken":"access-token","refreshToken":"refresh-token","isNewUser":false,"providerType":"EMAIL"}"""
@@ -659,6 +707,7 @@ private object AuthSwaggerExamples {
     const val BAD_REQUEST = """{"code":40000,"errorMessage":"잘못된 요청입니다."}"""
     const val INVALID_REFRESH_TOKEN = """{"code":40001,"errorMessage":"유효하지 않은 RefreshToken 입니다."}"""
     const val INVALID_PROVIDER = """{"code":40002,"errorMessage":"요청한 로그인 제공자와 Firebase 인증 정보가 일치하지 않습니다."}"""
+    const val INVALID_NICKNAME_SELECTION = """{"code":40003,"errorMessage":"닉네임 선택이 만료되었거나 발급된 후보와 일치하지 않습니다."}"""
     const val UNAUTHORIZED = """{"code":40100,"errorMessage":"인증되지 않은 사용자입니다."}"""
     const val INVALID_FIREBASE_TOKEN = """{"code":40101,"errorMessage":"유효하지 않은 Firebase ID 토큰입니다."}"""
     const val INVALID_KAKAO_APP = """{"code":40103,"errorMessage":"다른 카카오 애플리케이션에서 발급된 액세스 토큰입니다."}"""

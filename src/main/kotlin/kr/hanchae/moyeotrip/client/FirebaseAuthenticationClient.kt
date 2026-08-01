@@ -1,4 +1,4 @@
-package kr.hanchae.moyeotrip.service.auth
+package kr.hanchae.moyeotrip.client
 
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseAuthException
@@ -6,7 +6,7 @@ import com.google.firebase.auth.FirebaseToken
 import kr.hanchae.moyeotrip.entity.user.ProviderType
 import kr.hanchae.moyeotrip.exception.BaseException
 import kr.hanchae.moyeotrip.exception.ErrorCode
-import org.springframework.stereotype.Service
+import org.springframework.stereotype.Component
 
 data class FirebaseIdentity(
     val uid: String,
@@ -14,17 +14,11 @@ data class FirebaseIdentity(
     val providerType: ProviderType,
 )
 
-interface FirebaseAuthenticationService {
-    fun verifyIdToken(idToken: String): FirebaseIdentity
-
-    fun createKakaoCustomToken(kakaoProviderUserId: String): String
-}
-
-@Service
-class FirebaseAuthenticationServiceImpl(
+@Component
+class FirebaseAuthenticationClient(
     private val firebaseAuth: FirebaseAuth,
-) : FirebaseAuthenticationService {
-    override fun verifyIdToken(idToken: String): FirebaseIdentity =
+) {
+    fun verifyIdToken(idToken: String): FirebaseIdentity =
         try {
             firebaseAuth.verifyIdToken(idToken, true).toIdentity()
         } catch (exception: FirebaseAuthException) {
@@ -33,7 +27,7 @@ class FirebaseAuthenticationServiceImpl(
             throw BaseException(ErrorCode.INVALID_FIREBASE_TOKEN, exception.message)
         }
 
-    override fun createKakaoCustomToken(kakaoProviderUserId: String): String =
+    fun createKakaoCustomToken(kakaoProviderUserId: String): String =
         try {
             firebaseAuth.createCustomToken(
                 kakaoProviderUserId,

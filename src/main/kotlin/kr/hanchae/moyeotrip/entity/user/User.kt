@@ -46,6 +46,7 @@ class User(
         fun createFirebaseUser(
             email: String?,
             nickname: String,
+            nicknameColor: NicknameColor,
             userRole: UserRole,
         ): User =
             User(
@@ -55,6 +56,7 @@ class User(
                 userInformation =
                     UserInformation(
                         nickname = nickname,
+                        nicknameColor = nicknameColor,
                         gender = Gender.N,
                     ),
             )

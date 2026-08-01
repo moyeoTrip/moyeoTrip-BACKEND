@@ -9,6 +9,9 @@ import jakarta.persistence.Enumerated
 data class UserInformation(
     @Column(length = 24, unique = true, updatable = false, nullable = true)
     var nickname: String,
+    @Column(length = 20, updatable = false, nullable = true)
+    @Enumerated(EnumType.STRING)
+    var nicknameColor: NicknameColor,
     @Column(updatable = false, nullable = true)
     @Enumerated(EnumType.STRING)
     var gender: Gender,

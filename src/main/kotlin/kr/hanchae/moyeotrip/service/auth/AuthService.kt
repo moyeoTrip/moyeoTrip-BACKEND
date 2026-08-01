@@ -1,5 +1,7 @@
 package kr.hanchae.moyeotrip.service.auth
 
+import kr.hanchae.moyeotrip.client.FirebaseAuthenticationClient
+import kr.hanchae.moyeotrip.client.FirebaseIdentity
 import kr.hanchae.moyeotrip.client.KakaoClient
 import kr.hanchae.moyeotrip.config.properties.KakaoProperties
 import kr.hanchae.moyeotrip.controller.auth.request.FirebaseLoginRequest
@@ -12,6 +14,7 @@ import kr.hanchae.moyeotrip.controller.auth.response.LinkedProvidersResponse
 import kr.hanchae.moyeotrip.controller.auth.response.ServiceTokensResponse
 import kr.hanchae.moyeotrip.controller.client.KakaoTokenInfoResponse
 import kr.hanchae.moyeotrip.entity.user.Gender
+import kr.hanchae.moyeotrip.entity.user.NicknameColor
 import kr.hanchae.moyeotrip.entity.user.ProviderType
 import kr.hanchae.moyeotrip.entity.user.SignupState
 import kr.hanchae.moyeotrip.entity.user.User
@@ -24,6 +27,7 @@ import kr.hanchae.moyeotrip.exception.ErrorCode
 import kr.hanchae.moyeotrip.exception.InvalidRefreshTokenException
 import kr.hanchae.moyeotrip.exception.KakaoClientException
 import kr.hanchae.moyeotrip.exception.UserNotFoundException
+import kr.hanchae.moyeotrip.repository.NicknameCandidateRepository
 import kr.hanchae.moyeotrip.repository.UserAuthIdentityRepository
 import kr.hanchae.moyeotrip.repository.UserRepository
 import kr.hanchae.moyeotrip.utils.jwt.JwtUtil
@@ -36,10 +40,11 @@ import org.springframework.web.client.RestClientException
 class AuthService(
     private val userRepository: UserRepository,
     private val jwtUtil: JwtUtil,
-    private val firebaseAuthenticationService: FirebaseAuthenticationService,
+    private val firebaseAuthenticationClient: FirebaseAuthenticationClient,
     private val kakaoClient: KakaoClient,
     private val kakaoProperties: KakaoProperties,
     private val userAuthIdentityRepository: UserAuthIdentityRepository,
+    private val nicknameCandidateRepository: NicknameCandidateRepository,
 ) {
     fun createKakaoCustomToken(request: KakaoCustomTokenRequest): FirebaseCustomTokenResponse {
         val tokenInfo = getKakaoTokenInfo(request.accessToken)
@@ -47,7 +52,7 @@ class AuthService(
             throw BaseException(ErrorCode.INVALID_KAKAO_APP, ErrorCode.INVALID_KAKAO_APP.errorMessage)
         }
         return FirebaseCustomTokenResponse(
-            firebaseAuthenticationService.createKakaoCustomToken(tokenInfo.id.toString()),
+            firebaseAuthenticationClient.createKakaoCustomToken(tokenInfo.id.toString()),
         )
     }
 
@@ -55,7 +60,7 @@ class AuthService(
         request: FirebaseLoginRequest,
         expectedProvider: ProviderType? = null,
     ): FirebaseLoginResponse {
-        val identity = firebaseAuthenticationService.verifyIdToken(request.idToken)
+        val identity = firebaseAuthenticationClient.verifyIdToken(request.idToken)
         validateExpectedProvider(identity, expectedProvider)
         val user = findUser(identity)
         if (user == null) {
@@ -82,31 +87,36 @@ class AuthService(
         request: FirebaseSignupRequest,
         expectedProvider: ProviderType? = null,
     ): ServiceTokensResponse {
-        val identity = firebaseAuthenticationService.verifyIdToken(request.idToken)
+        val identity = firebaseAuthenticationClient.verifyIdToken(request.idToken)
         validateExpectedProvider(identity, expectedProvider)
 
-        if (userRepository.existsByInformationNickname(request.nickname)) {
-            throw AlreadyExistNicknameException()
-        }
         val existingUser = findUser(identity)
         if (existingUser != null) {
             if (existingUser.signupState == SignupState.SIGNUP_COMPLETE) {
                 throw AlreadyExistedProviderUserIdException()
             }
+        } else if (identity.email != null && userRepository.findByEmail(identity.email) != null) {
+            throw BaseException(ErrorCode.AUTH_IDENTITY_ALREADY_LINKED, "해당 이메일의 기존 계정에 로그인 수단을 연결해 주세요.")
+        }
+
+        val nicknameColor = validateNicknameSelection(request.nicknameSelectionToken, request.nickname)
+        val nickname = request.nickname
+        if (userRepository.existsByInformationNickname(nickname)) {
+            throw AlreadyExistNicknameException()
+        }
+        if (existingUser != null) {
             existingUser.changeSignupStateComplete(
-                UserInformation(nickname = request.nickname, gender = Gender.N),
+                UserInformation(nickname = nickname, nicknameColor = nicknameColor, gender = Gender.N),
             )
             request.fcmToken?.let(existingUser::changeFcmToken)
             return makeTokens(existingUser)
-        }
-        if (identity.email != null && userRepository.findByEmail(identity.email) != null) {
-            throw BaseException(ErrorCode.AUTH_IDENTITY_ALREADY_LINKED, "해당 이메일의 기존 계정에 로그인 수단을 연결해 주세요.")
         }
 
         val user =
             User.createFirebaseUser(
                 email = identity.email,
-                nickname = request.nickname,
+                nickname = nickname,
+                nicknameColor = nicknameColor,
                 userRole = UserRole.ROLE_USER,
             )
         user.addAuthIdentity(identity.providerType, identity.uid)
@@ -118,7 +128,7 @@ class AuthService(
         userId: Long,
         request: FirebaseLoginRequest,
     ): LinkedProvidersResponse {
-        val identity = firebaseAuthenticationService.verifyIdToken(request.idToken)
+        val identity = firebaseAuthenticationClient.verifyIdToken(request.idToken)
         return linkIdentity(userId, identity.providerType, identity.uid)
     }
 
@@ -178,6 +188,19 @@ class AuthService(
 
     private fun findUser(identity: FirebaseIdentity): User? =
         userAuthIdentityRepository.findByProviderTypeAndProviderUserId(identity.providerType, identity.uid)?.user
+
+    private fun validateNicknameSelection(
+        selectionToken: String,
+        nickname: String,
+    ): NicknameColor {
+        val candidates = nicknameCandidateRepository.consume(selectionToken)
+        val color =
+            candidates?.get(nickname) ?: throw BaseException(
+                ErrorCode.INVALID_NICKNAME_SELECTION,
+                ErrorCode.INVALID_NICKNAME_SELECTION.errorMessage,
+            )
+        return color
+    }
 
     private fun linkIdentity(
         userId: Long,

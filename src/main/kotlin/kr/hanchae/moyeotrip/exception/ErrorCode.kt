@@ -11,6 +11,7 @@ enum class ErrorCode(
     BAD_REQUEST(HttpStatus.BAD_REQUEST, 40000, "잘못된 요청입니다."),
     INVALID_REFRESH_TOKEN(HttpStatus.BAD_REQUEST, 40001, "유효하지 않은 RefreshToken 입니다."),
     INVALID_AUTH_PROVIDER(HttpStatus.BAD_REQUEST, 40002, "요청한 로그인 제공자와 Firebase 인증 정보가 일치하지 않습니다."),
+    INVALID_NICKNAME_SELECTION(HttpStatus.BAD_REQUEST, 40003, "닉네임 선택이 만료되었거나 발급된 후보와 일치하지 않습니다."),
 
     // UNAUTHORIZED는 40100부터 시작
     UNAUTHORIZED(HttpStatus.UNAUTHORIZED, 40100, "인증되지 않은 사용자입니다."),

@@ -9,9 +9,11 @@ import kr.hanchae.moyeotrip.controller.auth.request.RefreshAccessTokenRequest
 import kr.hanchae.moyeotrip.controller.auth.response.FirebaseCustomTokenResponse
 import kr.hanchae.moyeotrip.controller.auth.response.FirebaseLoginResponse
 import kr.hanchae.moyeotrip.controller.auth.response.LinkedProvidersResponse
+import kr.hanchae.moyeotrip.controller.auth.response.NicknameCandidatesResponse
 import kr.hanchae.moyeotrip.controller.auth.response.ServiceTokensResponse
 import kr.hanchae.moyeotrip.entity.user.ProviderType
 import kr.hanchae.moyeotrip.service.auth.AuthService
+import kr.hanchae.moyeotrip.service.auth.NicknameCandidateService
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.security.core.annotation.AuthenticationPrincipal
@@ -25,7 +27,11 @@ import org.springframework.web.bind.annotation.RestController
 @RequestMapping("/api/v1/auth")
 class AuthController(
     private val authService: AuthService,
+    private val nicknameCandidateService: NicknameCandidateService,
 ) : AuthAPISpec {
+    @PostMapping("/nickname-candidates")
+    override fun generateNicknameCandidates(): NicknameCandidatesResponse = nicknameCandidateService.generateCandidates()
+
     @PostMapping("/firebase/kakao/custom-token")
     override fun createKakaoCustomToken(
         @Valid @RequestBody request: KakaoCustomTokenRequest,

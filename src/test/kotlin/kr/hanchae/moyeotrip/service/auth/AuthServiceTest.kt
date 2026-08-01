@@ -1,11 +1,14 @@
 package kr.hanchae.moyeotrip.service.auth
 
+import kr.hanchae.moyeotrip.client.FirebaseAuthenticationClient
+import kr.hanchae.moyeotrip.client.FirebaseIdentity
 import kr.hanchae.moyeotrip.client.KakaoClient
 import kr.hanchae.moyeotrip.config.properties.KakaoProperties
 import kr.hanchae.moyeotrip.controller.auth.request.FirebaseLoginRequest
 import kr.hanchae.moyeotrip.controller.auth.request.FirebaseSignupRequest
 import kr.hanchae.moyeotrip.controller.auth.request.KakaoCustomTokenRequest
 import kr.hanchae.moyeotrip.controller.client.KakaoTokenInfoResponse
+import kr.hanchae.moyeotrip.entity.user.NicknameColor
 import kr.hanchae.moyeotrip.entity.user.ProviderType
 import kr.hanchae.moyeotrip.entity.user.SignupState
 import kr.hanchae.moyeotrip.entity.user.User
@@ -13,6 +16,7 @@ import kr.hanchae.moyeotrip.entity.user.UserAuthIdentity
 import kr.hanchae.moyeotrip.entity.user.UserRole
 import kr.hanchae.moyeotrip.exception.BaseException
 import kr.hanchae.moyeotrip.exception.ErrorCode
+import kr.hanchae.moyeotrip.repository.NicknameCandidateRepository
 import kr.hanchae.moyeotrip.repository.UserAuthIdentityRepository
 import kr.hanchae.moyeotrip.repository.UserRepository
 import kr.hanchae.moyeotrip.utils.jwt.JwtUtil
@@ -31,33 +35,36 @@ import org.mockito.Mockito.`when`
 class AuthServiceTest {
     private lateinit var userRepository: UserRepository
     private lateinit var jwtUtil: JwtUtil
-    private lateinit var firebaseAuthenticationService: FirebaseAuthenticationService
+    private lateinit var firebaseAuthenticationClient: FirebaseAuthenticationClient
     private lateinit var kakaoClient: KakaoClient
     private lateinit var userAuthIdentityRepository: UserAuthIdentityRepository
+    private lateinit var nicknameCandidateRepository: NicknameCandidateRepository
     private lateinit var authService: AuthService
 
     @BeforeEach
     fun setUp() {
         userRepository = mock(UserRepository::class.java)
         jwtUtil = mock(JwtUtil::class.java)
-        firebaseAuthenticationService = mock(FirebaseAuthenticationService::class.java)
+        firebaseAuthenticationClient = mock(FirebaseAuthenticationClient::class.java)
         kakaoClient = mock(KakaoClient::class.java)
         userAuthIdentityRepository = mock(UserAuthIdentityRepository::class.java)
+        nicknameCandidateRepository = mock(NicknameCandidateRepository::class.java)
         authService =
             AuthService(
                 userRepository,
                 jwtUtil,
-                firebaseAuthenticationService,
+                firebaseAuthenticationClient,
                 kakaoClient,
                 KakaoProperties(987654L),
                 userAuthIdentityRepository,
+                nicknameCandidateRepository,
             )
     }
 
     @Test
     fun `등록되지 않은 Firebase 사용자는 신규 사용자로 응답한다`() {
         val identity = FirebaseIdentity("firebase-uid", "user@example.com", ProviderType.EMAIL)
-        `when`(firebaseAuthenticationService.verifyIdToken("id-token")).thenReturn(identity)
+        `when`(firebaseAuthenticationClient.verifyIdToken("id-token")).thenReturn(identity)
         `when`(userAuthIdentityRepository.findByProviderTypeAndProviderUserId(ProviderType.EMAIL, "firebase-uid")).thenReturn(null)
         `when`(userRepository.findByEmail("user@example.com")).thenReturn(null)
 
@@ -71,7 +78,7 @@ class AuthServiceTest {
     @Test
     fun `Firebase 제공자가 요청한 로그인 방식과 다르면 거부한다`() {
         val identity = FirebaseIdentity("firebase-uid", "user@example.com", ProviderType.EMAIL)
-        `when`(firebaseAuthenticationService.verifyIdToken("id-token")).thenReturn(identity)
+        `when`(firebaseAuthenticationClient.verifyIdToken("id-token")).thenReturn(identity)
 
         val exception =
             assertThrows(BaseException::class.java) {
@@ -86,17 +93,25 @@ class AuthServiceTest {
     @Test
     fun `Firebase 회원가입은 완성된 사용자와 서비스 토큰을 생성한다`() {
         val identity = FirebaseIdentity("firebase-uid", "user@example.com", ProviderType.EMAIL)
-        `when`(firebaseAuthenticationService.verifyIdToken("id-token")).thenReturn(identity)
-        `when`(userRepository.existsByInformationNickname("모여트립")).thenReturn(false)
+        `when`(firebaseAuthenticationClient.verifyIdToken("id-token")).thenReturn(identity)
+        `when`(nicknameCandidateRepository.consume("selection-token"))
+            .thenReturn(
+                mapOf(
+                    "따스한 사슴 1234" to NicknameColor.RED,
+                    "빠른 거북이 9999" to NicknameColor.BLUE,
+                    "다정한 수달 5271" to NicknameColor.MINT,
+                ),
+            )
+        `when`(userRepository.existsByInformationNickname("따스한 사슴 1234")).thenReturn(false)
         `when`(userAuthIdentityRepository.findByProviderTypeAndProviderUserId(ProviderType.EMAIL, "firebase-uid")).thenReturn(null)
         `when`(userRepository.save(any(User::class.java))).thenAnswer { it.arguments[0] as User }
-        `when`(jwtUtil.generateAccessToken(0L, "모여트립")).thenReturn("access-token")
+        `when`(jwtUtil.generateAccessToken(0L, "따스한 사슴 1234")).thenReturn("access-token")
         `when`(jwtUtil.generateRotateId()).thenReturn("rotate-id")
         `when`(jwtUtil.generateRefreshToken(0L, "rotate-id")).thenReturn("refresh-token")
 
         val response =
             authService.signupWithFirebase(
-                FirebaseSignupRequest("id-token", "모여트립", "fcm-token"),
+                FirebaseSignupRequest("id-token", "selection-token", "따스한 사슴 1234", "fcm-token"),
                 ProviderType.EMAIL,
             )
 
@@ -104,7 +119,8 @@ class AuthServiceTest {
         assertEquals("refresh-token", response.refreshToken)
         val savedUser = org.mockito.ArgumentCaptor.forClass(User::class.java)
         verify(userRepository).save(savedUser.capture())
-        assertEquals("모여트립", savedUser.value.information?.nickname)
+        assertEquals("따스한 사슴 1234", savedUser.value.information?.nickname)
+        assertEquals(NicknameColor.RED, savedUser.value.information?.nicknameColor)
         assertEquals("fcm-token", savedUser.value.fcmToken)
         assertFalse(savedUser.value.signupState == SignupState.USER_INFO_REQUIRED)
         assertEquals(setOf(ProviderType.EMAIL), savedUser.value.linkedProviders())
@@ -113,7 +129,7 @@ class AuthServiceTest {
     @Test
     fun `카카오 액세스 토큰으로 Firebase 커스텀 토큰을 발급한다`() {
         `when`(kakaoClient.getTokenInfo("kakao-token")).thenReturn(KakaoTokenInfoResponse(12345L, 987654L, 3600L))
-        `when`(firebaseAuthenticationService.createKakaoCustomToken("12345")).thenReturn("firebase-custom-token")
+        `when`(firebaseAuthenticationClient.createKakaoCustomToken("12345")).thenReturn("firebase-custom-token")
 
         val response = authService.createKakaoCustomToken(KakaoCustomTokenRequest("kakao-token"))
 
@@ -136,7 +152,7 @@ class AuthServiceTest {
     fun `로그인 사용자는 Apple 인증 수단을 추가할 수 있다`() {
         val user = User(id = 7L, userRole = UserRole.ROLE_USER)
         val appleIdentity = UserAuthIdentity(user = user, providerType = ProviderType.APPLE, providerUserId = "apple-uid")
-        `when`(firebaseAuthenticationService.verifyIdToken("apple-token"))
+        `when`(firebaseAuthenticationClient.verifyIdToken("apple-token"))
             .thenReturn(FirebaseIdentity("apple-uid", "relay@privaterelay.appleid.com", ProviderType.APPLE))
         `when`(userRepository.findById(7L)).thenReturn(java.util.Optional.of(user))
         `when`(userAuthIdentityRepository.findByProviderTypeAndProviderUserId(ProviderType.APPLE, "apple-uid")).thenReturn(null)
@@ -155,10 +171,11 @@ class AuthServiceTest {
             User.createFirebaseUser(
                 email = "user@example.com",
                 nickname = "모여트립",
+                nicknameColor = NicknameColor.BLUE,
                 userRole = UserRole.ROLE_USER,
             )
         val appleIdentity = UserAuthIdentity(user = user, providerType = ProviderType.APPLE, providerUserId = "apple-uid")
-        `when`(firebaseAuthenticationService.verifyIdToken("apple-token"))
+        `when`(firebaseAuthenticationClient.verifyIdToken("apple-token"))
             .thenReturn(FirebaseIdentity("apple-uid", "relay@privaterelay.appleid.com", ProviderType.APPLE))
         `when`(userAuthIdentityRepository.findByProviderTypeAndProviderUserId(ProviderType.APPLE, "apple-uid"))
             .thenReturn(appleIdentity)
