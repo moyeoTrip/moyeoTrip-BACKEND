@@ -122,7 +122,8 @@ class AuthServiceTest {
         assertEquals("따스한 사슴 1234", savedUser.value.information?.nickname)
         assertEquals(NicknameColor.RED, savedUser.value.information?.nicknameColor)
         assertEquals("fcm-token", savedUser.value.fcmToken)
-        assertFalse(savedUser.value.signupState == SignupState.USER_INFO_REQUIRED)
+        assertEquals(SignupState.PROFILE_IMAGE_REQUIRED, savedUser.value.signupState)
+        assertEquals(SignupState.PROFILE_IMAGE_REQUIRED, response.signupState)
         assertEquals(setOf(ProviderType.EMAIL), savedUser.value.linkedProviders())
     }
 
@@ -174,6 +175,7 @@ class AuthServiceTest {
                 nicknameColor = NicknameColor.BLUE,
                 userRole = UserRole.ROLE_USER,
             )
+        user.selectProfileImage("user/profile/image/selected.png")
         val appleIdentity = UserAuthIdentity(user = user, providerType = ProviderType.APPLE, providerUserId = "apple-uid")
         `when`(firebaseAuthenticationClient.verifyIdToken("apple-token"))
             .thenReturn(FirebaseIdentity("apple-uid", "relay@privaterelay.appleid.com", ProviderType.APPLE))
@@ -186,6 +188,33 @@ class AuthServiceTest {
         val response = authService.loginWithFirebase(FirebaseLoginRequest("apple-token"), ProviderType.APPLE)
 
         assertFalse(response.isNewUser)
+        assertEquals(SignupState.SIGNUP_COMPLETE, response.signupState)
+        assertEquals("access-token", response.accessToken)
+        assertEquals("refresh-token", response.refreshToken)
+    }
+
+    @Test
+    fun `프로필 이미지를 선택하지 않은 사용자는 재로그인 시 토큰과 진행 상태를 받는다`() {
+        val user =
+            User.createFirebaseUser(
+                email = "user@example.com",
+                nickname = "따스한 사슴 1234",
+                nicknameColor = NicknameColor.BLUE,
+                userRole = UserRole.ROLE_USER,
+            )
+        val identity = UserAuthIdentity(user = user, providerType = ProviderType.EMAIL, providerUserId = "firebase-uid")
+        `when`(firebaseAuthenticationClient.verifyIdToken("id-token"))
+            .thenReturn(FirebaseIdentity("firebase-uid", "user@example.com", ProviderType.EMAIL))
+        `when`(userAuthIdentityRepository.findByProviderTypeAndProviderUserId(ProviderType.EMAIL, "firebase-uid"))
+            .thenReturn(identity)
+        `when`(jwtUtil.generateAccessToken(0L, "따스한 사슴 1234")).thenReturn("access-token")
+        `when`(jwtUtil.generateRotateId()).thenReturn("rotate-id")
+        `when`(jwtUtil.generateRefreshToken(0L, "rotate-id")).thenReturn("refresh-token")
+
+        val response = authService.loginWithFirebase(FirebaseLoginRequest("id-token"), ProviderType.EMAIL)
+
+        assertFalse(response.isNewUser)
+        assertEquals(SignupState.PROFILE_IMAGE_REQUIRED, response.signupState)
         assertEquals("access-token", response.accessToken)
         assertEquals("refresh-token", response.refreshToken)
     }

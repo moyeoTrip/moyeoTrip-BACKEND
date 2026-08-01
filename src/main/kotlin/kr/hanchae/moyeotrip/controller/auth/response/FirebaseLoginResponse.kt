@@ -2,6 +2,7 @@ package kr.hanchae.moyeotrip.controller.auth.response
 
 import io.swagger.v3.oas.annotations.media.Schema
 import kr.hanchae.moyeotrip.entity.user.ProviderType
+import kr.hanchae.moyeotrip.entity.user.SignupState
 
 data class FirebaseLoginResponse(
     @field:Schema(
@@ -25,6 +26,13 @@ data class FirebaseLoginResponse(
         accessMode = Schema.AccessMode.READ_ONLY,
     )
     val isNewUser: Boolean,
+    @field:Schema(
+        description = "회원가입 진행 상태. PROFILE_IMAGE_REQUIRED이면 발급된 서비스 토큰으로 프로필 이미지 생성·조회·선택을 이어서 진행해야 합니다.",
+        example = "SIGNUP_COMPLETE",
+        allowableValues = ["USER_INFO_REQUIRED", "PROFILE_IMAGE_REQUIRED", "SIGNUP_COMPLETE"],
+        requiredMode = Schema.RequiredMode.REQUIRED,
+    )
+    val signupState: SignupState,
     @field:Schema(
         description = "Firebase 토큰에서 판별한 로그인 제공자",
         example = "EMAIL",

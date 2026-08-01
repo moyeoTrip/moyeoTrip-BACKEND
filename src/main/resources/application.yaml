@@ -1,6 +1,21 @@
 spring:
   application:
     name: MoyeoTrip
+  ai:
+    model:
+      chat: none
+      embedding: none
+      image: openai
+      audio:
+        transcription: none
+        speech: none
+      moderation: none
+    openai:
+      image:
+        model: gpt-image-2
+        quality: low
+        n: 1
+        size: 1024x1024
   config:
     # Spring Boot does not load .env automatically. Treat the project-root .env as a properties file.
     import: optional:file:.env[.properties]

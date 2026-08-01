@@ -42,25 +42,9 @@ class User(
     var fcmToken: String? = null
         protected set
 
-    companion object {
-        fun createFirebaseUser(
-            email: String?,
-            nickname: String,
-            nicknameColor: NicknameColor,
-            userRole: UserRole,
-        ): User =
-            User(
-                email = email,
-                userRole = userRole,
-                signupState = SignupState.SIGNUP_COMPLETE,
-                userInformation =
-                    UserInformation(
-                        nickname = nickname,
-                        nicknameColor = nicknameColor,
-                        gender = Gender.N,
-                    ),
-            )
-    }
+    @Column(nullable = false)
+    var profileImageGenerationCount: Int = 0
+        protected set
 
     fun changeFcmToken(token: String) {
         this.fcmToken = token
@@ -77,8 +61,46 @@ class User(
 
     fun linkedProviders(): Set<ProviderType> = authIdentities.mapTo(linkedSetOf()) { it.providerType }
 
-    fun changeSignupStateComplete(userInformation: UserInformation) {
+    fun recordProfileImageGeneration() {
+        check(profileImageGenerationCount < MAX_PROFILE_IMAGE_GENERATION_COUNT) { "프로필 이미지 생성 횟수를 초과했습니다." }
+        checkNotNull(information) { "닉네임을 설정한 사용자만 프로필 이미지를 생성할 수 있습니다." }
+        profileImageGenerationCount++
+    }
+
+    fun setSignupInformation(userInformation: UserInformation) {
         this.information = userInformation
-        this.signupState = SignupState.SIGNUP_COMPLETE
+        this.signupState = SignupState.PROFILE_IMAGE_REQUIRED
+    }
+
+    fun selectProfileImage(fileName: String) {
+        checkNotNull(information) { "닉네임을 설정한 사용자만 프로필 이미지를 선택할 수 있습니다." }
+            .profileFileName = fileName
+        signupState = SignupState.SIGNUP_COMPLETE
+    }
+
+    fun canGenerateProfileImage(): Boolean = profileImageGenerationCount < MAX_PROFILE_IMAGE_GENERATION_COUNT
+
+    fun remainingProfileImageGenerationCount(): Int = MAX_PROFILE_IMAGE_GENERATION_COUNT - profileImageGenerationCount
+
+    companion object {
+        const val MAX_PROFILE_IMAGE_GENERATION_COUNT = 3
+
+        fun createFirebaseUser(
+            email: String?,
+            nickname: String,
+            nicknameColor: NicknameColor,
+            userRole: UserRole,
+        ): User =
+            User(
+                email = email,
+                userRole = userRole,
+                signupState = SignupState.PROFILE_IMAGE_REQUIRED,
+                userInformation =
+                    UserInformation(
+                        nickname = nickname,
+                        nicknameColor = nicknameColor,
+                        gender = Gender.N,
+                    ),
+            )
     }
 }

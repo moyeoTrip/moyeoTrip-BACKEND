@@ -53,7 +53,8 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-actuator")
     implementation("org.springframework.boot:spring-boot-starter-validation")
     implementation("org.springframework.boot:spring-boot-starter-flyway")
-    runtimeOnly("org.flywaydb:flyway-database-oracle")
+    implementation(platform("org.springframework.ai:spring-ai-bom:2.0.0"))
+    implementation("org.springframework.ai:spring-ai-starter-model-openai")
 
     // OAuth2 & JWT
     implementation("org.springframework.security:spring-security-oauth2-client")
@@ -76,6 +77,7 @@ dependencies {
     runtimeOnly("com.oracle.database.jdbc:ojdbc11:23.26.1.0.0")
     implementation("org.redisson:redisson-spring-boot-starter:4.3.1")
     implementation("io.awspring.cloud:spring-cloud-aws-starter-s3:4.0.2")
+    runtimeOnly("org.flywaydb:flyway-database-oracle")
 
     // Documents
     implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.3")
@@ -92,9 +94,6 @@ dependencies {
     testImplementation("org.springframework.boot:spring-boot-starter-webmvc-test")
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
-
-    //Utilities
-    implementation("commons-io:commons-io:2.21.0")
 
     //Firebase
     implementation("com.google.firebase:firebase-admin:9.8.0")

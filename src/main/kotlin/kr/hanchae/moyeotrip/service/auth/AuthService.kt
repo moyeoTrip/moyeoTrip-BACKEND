@@ -62,23 +62,30 @@ class AuthService(
     ): FirebaseLoginResponse {
         val identity = firebaseAuthenticationClient.verifyIdToken(request.idToken)
         validateExpectedProvider(identity, expectedProvider)
-        val user = findUser(identity)
-        if (user == null) {
-            return FirebaseLoginResponse(isNewUser = true, providerType = identity.providerType)
-        }
+        val user =
+            findUser(identity) ?: return FirebaseLoginResponse(
+                isNewUser = true,
+                signupState = SignupState.USER_INFO_REQUIRED,
+                providerType = identity.providerType,
+            )
 
         request.fcmToken
             ?.takeIf { it != user.fcmToken }
             ?.let(user::changeFcmToken)
 
         if (user.signupState == SignupState.USER_INFO_REQUIRED) {
-            return FirebaseLoginResponse(isNewUser = true, providerType = identity.providerType)
+            return FirebaseLoginResponse(
+                isNewUser = true,
+                signupState = SignupState.USER_INFO_REQUIRED,
+                providerType = identity.providerType,
+            )
         }
         val tokens = makeTokens(user)
         return FirebaseLoginResponse(
             accessToken = tokens.accessToken,
             refreshToken = tokens.refreshToken,
             isNewUser = false,
+            signupState = user.signupState,
             providerType = identity.providerType,
         )
     }
@@ -105,7 +112,7 @@ class AuthService(
             throw AlreadyExistNicknameException()
         }
         if (existingUser != null) {
-            existingUser.changeSignupStateComplete(
+            existingUser.setSignupInformation(
                 UserInformation(nickname = nickname, nicknameColor = nicknameColor, gender = Gender.N),
             )
             request.fcmToken?.let(existingUser::changeFcmToken)
@@ -230,6 +237,6 @@ class AuthService(
         val rotateId = jwtUtil.generateRotateId()
         val refreshToken = jwtUtil.generateRefreshToken(user.id, rotateId)
         jwtUtil.storeCachedRefreshTokenRotateId(user.id, rotateId)
-        return ServiceTokensResponse(accessToken, refreshToken)
+        return ServiceTokensResponse(accessToken, refreshToken, user.signupState)
     }
 }

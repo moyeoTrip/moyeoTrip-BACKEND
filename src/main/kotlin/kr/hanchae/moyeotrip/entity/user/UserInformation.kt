@@ -15,6 +15,6 @@ data class UserInformation(
     @Column(updatable = false, nullable = true)
     @Enumerated(EnumType.STRING)
     var gender: Gender,
-    @Column(updatable = false, nullable = true)
+    @Column(nullable = true)
     var profileFileName: String? = null,
 )

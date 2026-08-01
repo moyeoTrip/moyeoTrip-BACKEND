@@ -24,6 +24,7 @@ enum class ErrorCode(
 
     // 리소스 NOT FOUND는 40400부터 시작
     USER_NOT_FOUND(HttpStatus.NOT_FOUND, 40400, "해당 유저를 찾을 수 없습니다."),
+    PROFILE_IMAGE_NOT_FOUND(HttpStatus.NOT_FOUND, 40401, "선택할 수 있는 프로필 이미지를 찾을 수 없습니다."),
 
     // 리소스 충돌은 40900부터 시작
     ALREADY_EXIST_NICKNAME(HttpStatus.CONFLICT, 40900, "이미 사용중인 닉네임입니다."),
@@ -32,7 +33,11 @@ enum class ErrorCode(
     AUTH_IDENTITY_ALREADY_LINKED(HttpStatus.CONFLICT, 40903, "이미 다른 계정으로 가입이 되어있습니다"),
     AUTH_PROVIDER_ALREADY_LINKED(HttpStatus.CONFLICT, 40904, "해당 로그인 제공자가 이미 연결되어 있습니다."),
 
+    // 요청 한도 초과는 42900부터 시작
+    PROFILE_IMAGE_GENERATION_LIMIT(HttpStatus.TOO_MANY_REQUESTS, 42900, "프로필 이미지는 사용자당 최대 3번까지 생성할 수 있습니다."),
+
     // 서버에러는 50000부터 시작
     INTERNAL_SERVER_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, 50000, "서버에러입니다."),
     FIREBASE_AUTH_ERROR(HttpStatus.BAD_GATEWAY, 50200, "Firebase 인증 처리에 실패했습니다."),
+    PROFILE_IMAGE_GENERATION_FAILED(HttpStatus.BAD_GATEWAY, 50201, "프로필 이미지 생성에 실패했습니다."),
 }

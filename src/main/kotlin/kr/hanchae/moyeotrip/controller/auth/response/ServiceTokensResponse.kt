@@ -1,6 +1,7 @@
 package kr.hanchae.moyeotrip.controller.auth.response
 
 import io.swagger.v3.oas.annotations.media.Schema
+import kr.hanchae.moyeotrip.entity.user.SignupState
 
 data class ServiceTokensResponse(
     @field:Schema(
@@ -17,4 +18,11 @@ data class ServiceTokensResponse(
         accessMode = Schema.AccessMode.READ_ONLY,
     )
     val refreshToken: String,
+    @field:Schema(
+        description = "현재 회원가입 진행 상태. PROFILE_IMAGE_REQUIRED이면 프로필 설정 화면으로 이동해야 합니다.",
+        example = "PROFILE_IMAGE_REQUIRED",
+        allowableValues = ["USER_INFO_REQUIRED", "PROFILE_IMAGE_REQUIRED", "SIGNUP_COMPLETE"],
+        requiredMode = Schema.RequiredMode.REQUIRED,
+    )
+    val signupState: SignupState,
 )

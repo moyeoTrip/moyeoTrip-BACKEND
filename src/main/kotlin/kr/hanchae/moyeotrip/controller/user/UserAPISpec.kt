@@ -1,0 +1,173 @@
+package kr.hanchae.moyeotrip.controller.user
+
+import io.swagger.v3.oas.annotations.Operation
+import io.swagger.v3.oas.annotations.Parameter
+import io.swagger.v3.oas.annotations.media.Content
+import io.swagger.v3.oas.annotations.media.ExampleObject
+import io.swagger.v3.oas.annotations.media.Schema
+import io.swagger.v3.oas.annotations.parameters.RequestBody
+import io.swagger.v3.oas.annotations.responses.ApiResponse
+import io.swagger.v3.oas.annotations.responses.ApiResponses
+import io.swagger.v3.oas.annotations.security.SecurityRequirement
+import io.swagger.v3.oas.annotations.tags.Tag
+import kr.hanchae.moyeotrip.config.security.CustomUserDto
+import kr.hanchae.moyeotrip.config.swagger.SwaggerTag
+import kr.hanchae.moyeotrip.controller.user.request.ProfileImageSelectionRequest
+import kr.hanchae.moyeotrip.controller.user.response.ProfileImageCandidatesResponse
+import kr.hanchae.moyeotrip.controller.user.response.ProfileImageGenerationResponse
+import kr.hanchae.moyeotrip.controller.user.response.ProfileImageSelectionResponse
+import kr.hanchae.moyeotrip.exception.ErrorResponse
+
+@Tag(
+    name = SwaggerTag.USER,
+    description = "로그인 사용자의 프로필 이미지 등 사용자 정보 관리 API",
+)
+interface UserAPISpec {
+    @Operation(
+        summary = "AI 프로필 이미지 후보 생성",
+        description = """
+            로그인 사용자의 닉네임 형용사·동물·색상으로 1:1 AI 프로필 이미지 후보 한 장을 생성합니다.
+            생성된 이미지는 후보로만 영구 보관되며 현재 프로필 이미지가 자동으로 변경되지 않습니다.
+            프롬프트는 서버가 전적으로 구성하고, 귀여운 비사실적 의인화 동물의 상반신 구도로 생성합니다.
+            문자, 숫자, 로고와 워터마크는 금지합니다.
+            성공한 생성은 사용자당 평생 최대 3회이며 동시 요청도 하나씩 직렬화됩니다.
+            PROFILE_IMAGE_REQUIRED 상태의 사용자도 회원가입을 이어서 진행하기 위해 호출할 수 있습니다.
+        """,
+    )
+    @SecurityRequirement(name = "Authorization")
+    @ApiResponses(
+        value = [
+            ApiResponse(
+                responseCode = "200",
+                description = "후보 이미지 생성 및 보관 성공. 현재 프로필에는 아직 적용되지 않음",
+                content = [
+                    Content(
+                        schema = Schema(implementation = ProfileImageGenerationResponse::class),
+                        examples = [ExampleObject(value = UserSwaggerExamples.PROFILE_IMAGE_GENERATED)],
+                    ),
+                ],
+            ),
+            ApiResponse(
+                responseCode = "401",
+                description = "서비스 Access Token이 없거나 유효하지 않음",
+                content = [Content(schema = Schema(implementation = ErrorResponse::class))],
+            ),
+            ApiResponse(
+                responseCode = "404",
+                description = "로그인 사용자 없음",
+                content = [Content(schema = Schema(implementation = ErrorResponse::class))],
+            ),
+            ApiResponse(
+                responseCode = "409",
+                description = "닉네임 설정 전 단계라 이미지를 생성할 수 없음",
+                content = [Content(schema = Schema(implementation = ErrorResponse::class))],
+            ),
+            ApiResponse(
+                responseCode = "429",
+                description = "사용자당 최대 생성 횟수 3회를 모두 사용함",
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [ExampleObject(value = UserSwaggerExamples.GENERATION_LIMIT)],
+                    ),
+                ],
+            ),
+            ApiResponse(
+                responseCode = "502",
+                description = "OpenAI GPT Image 이미지 생성 실패 또는 빈 이미지 응답",
+                content = [Content(schema = Schema(implementation = ErrorResponse::class))],
+            ),
+        ],
+    )
+    fun generateProfileImage(
+        @Parameter(hidden = true) principal: CustomUserDto,
+    ): ProfileImageGenerationResponse
+
+    @Operation(
+        summary = "생성한 프로필 이미지 후보 조회",
+        description = """
+            현재 사용자가 지금까지 생성한 이미지 후보를 생성 순서대로 반환합니다.
+            각 후보의 selected 값으로 현재 프로필 적용 여부를 알 수 있습니다.
+            앱을 종료하거나 회원가입을 중단했다가 다시 로그인한 경우에도 기존 후보를 조회할 수 있습니다.
+        """,
+    )
+    @SecurityRequirement(name = "Authorization")
+    @ApiResponses(
+        value = [
+            ApiResponse(
+                responseCode = "200",
+                description = "후보 목록 조회 성공",
+                content = [
+                    Content(
+                        schema = Schema(implementation = ProfileImageCandidatesResponse::class),
+                        examples = [ExampleObject(value = UserSwaggerExamples.PROFILE_IMAGE_CANDIDATES)],
+                    ),
+                ],
+            ),
+            ApiResponse(responseCode = "401", description = "인증 실패"),
+            ApiResponse(responseCode = "404", description = "로그인 사용자 없음"),
+            ApiResponse(responseCode = "409", description = "닉네임 설정 전 단계"),
+        ],
+    )
+    fun getProfileImages(
+        @Parameter(hidden = true) principal: CustomUserDto,
+    ): ProfileImageCandidatesResponse
+
+    @Operation(
+        summary = "프로필 이미지 후보 선택",
+        description = """
+            현재 사용자가 생성한 후보 중 하나를 실제 프로필 이미지로 선택합니다.
+            다른 사용자의 이미지 ID는 선택할 수 없습니다.
+            PROFILE_IMAGE_REQUIRED 상태에서는 이 API가 성공한 시점에 회원가입이 SIGNUP_COMPLETE로 전환됩니다.
+            이후 다른 후보를 다시 선택해도 생성 횟수는 차감되지 않으며 기존 후보 이미지도 삭제되지 않습니다.
+        """,
+    )
+    @SecurityRequirement(name = "Authorization")
+    @ApiResponses(
+        value = [
+            ApiResponse(
+                responseCode = "200",
+                description = "프로필 이미지 선택 및 적용 성공",
+                content = [
+                    Content(
+                        schema = Schema(implementation = ProfileImageSelectionResponse::class),
+                        examples = [ExampleObject(value = UserSwaggerExamples.PROFILE_IMAGE_SELECTED)],
+                    ),
+                ],
+            ),
+            ApiResponse(responseCode = "400", description = "이미지 ID 형식 오류"),
+            ApiResponse(responseCode = "401", description = "인증 실패"),
+            ApiResponse(
+                responseCode = "404",
+                description = "사용자 또는 본인이 생성한 후보 이미지가 존재하지 않음",
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [ExampleObject(value = UserSwaggerExamples.PROFILE_IMAGE_NOT_FOUND)],
+                    ),
+                ],
+            ),
+            ApiResponse(responseCode = "409", description = "닉네임 설정 전 단계"),
+        ],
+    )
+    fun selectProfileImage(
+        @Parameter(hidden = true) principal: CustomUserDto,
+        @RequestBody(
+            description = "선택할 본인 소유의 프로필 이미지 후보 ID",
+            required = true,
+        ) request: ProfileImageSelectionRequest,
+    ): ProfileImageSelectionResponse
+}
+
+private object UserSwaggerExamples {
+    const val PROFILE_IMAGE_GENERATED =
+        """{"candidate":{"profileImageId":12,"profileImageUrl":"https://cdn.example.com/user/profile/image/generated.png","selected":false},"generationCount":1,"remainingGenerationCount":2,"signupState":"PROFILE_IMAGE_REQUIRED"}"""
+    const val PROFILE_IMAGE_CANDIDATES =
+        """{"candidates":[{"profileImageId":12,"profileImageUrl":"https://cdn.example.com/user/profile/image/first.png","selected":false},{"profileImageId":15,"profileImageUrl":"https://cdn.example.com/user/profile/image/second.png","selected":true}],"generationCount":2,"remainingGenerationCount":1,"signupState":"SIGNUP_COMPLETE"}"""
+    const val PROFILE_IMAGE_SELECTED =
+        """{"selectedImage":{"profileImageId":15,"profileImageUrl":"https://cdn.example.com/user/profile/image/second.png","selected":true},"signupState":"SIGNUP_COMPLETE"}"""
+    const val PROFILE_IMAGE_NOT_FOUND =
+        """{"code":40401,"errorMessage":"선택할 수 있는 프로필 이미지를 찾을 수 없습니다."}"""
+    const val GENERATION_LIMIT =
+        """{"code":42900,"errorMessage":"프로필 이미지는 사용자당 최대 3번까지 생성할 수 있습니다."}"""
+}

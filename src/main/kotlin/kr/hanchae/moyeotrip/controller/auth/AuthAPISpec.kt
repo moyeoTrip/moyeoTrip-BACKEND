@@ -122,14 +122,18 @@ interface AuthAPISpec {
 
     @Operation(
         summary = "Firebase 제공자 자동 판별 로그인",
-        description = "Firebase ID Token의 sign_in_provider를 읽어 EMAIL, APPLE, KAKAO 중 하나로 판별합니다. 미가입이면 토큰 없이 isNewUser=true를 반환합니다.",
+        description = """
+            Firebase ID Token의 sign_in_provider를 읽어 EMAIL, APPLE, KAKAO 중 하나로 판별합니다.
+            미가입이면 토큰 없이 isNewUser=true를 반환합니다.
+            프로필 선택 전 사용자는 서비스 토큰과 PROFILE_IMAGE_REQUIRED 상태를 반환합니다.
+        """,
     )
     @SecurityRequirements
     @ApiResponses(
         value = [
             ApiResponse(
                 responseCode = "200",
-                description = "로그인 결과. 기존 회원은 서비스 JWT, 신규 회원은 isNewUser=true 반환",
+                description = "로그인 결과. 기존 사용자에게는 서비스 JWT와 회원가입 진행 상태를 반환",
                 content = [
                     Content(
                         schema = Schema(implementation = FirebaseLoginResponse::class),
@@ -137,7 +141,9 @@ interface AuthAPISpec {
                             ExampleObject(
                                 name = "기존 회원",
                                 value = AuthSwaggerExamples.LOGIN_EXISTING,
-                            ), ExampleObject(name = "신규 회원", value = AuthSwaggerExamples.LOGIN_NEW),
+                            ),
+                            ExampleObject(name = "프로필 선택 필요", value = AuthSwaggerExamples.LOGIN_PROFILE_REQUIRED),
+                            ExampleObject(name = "신규 회원", value = AuthSwaggerExamples.LOGIN_NEW),
                         ],
                     ),
                 ],
@@ -283,13 +289,19 @@ interface AuthAPISpec {
         @RequestBody(description = "Firebase Apple 로그인 ID Token", required = true) request: FirebaseLoginRequest,
     ): FirebaseLoginResponse
 
-    @Operation(summary = "Firebase 제공자 자동 판별 회원가입", description = "Firebase 제공자를 자동 판별하고, 닉네임 후보 API에서 발급한 선택 토큰을 검증한 뒤 회원과 인증 수단을 등록합니다.")
+    @Operation(
+        summary = "Firebase 제공자 자동 판별 회원가입",
+        description = """
+            Firebase 제공자를 자동 판별하고 닉네임과 인증 수단을 등록합니다.
+            응답의 PROFILE_IMAGE_REQUIRED에 따라 프로필 이미지 생성·선택 단계를 이어서 진행해야 합니다.
+        """,
+    )
     @SecurityRequirements
     @ApiResponses(
         value = [
             ApiResponse(
                 responseCode = "201",
-                description = "회원가입 완료",
+                description = "닉네임 등록 완료 및 프로필 이미지 선택 단계 진입",
                 content = [
                     Content(
                         schema = Schema(implementation = ServiceTokensResponse::class),
@@ -344,7 +356,7 @@ interface AuthAPISpec {
         value = [
             ApiResponse(
                 responseCode = "201",
-                description = "카카오 회원가입 완료",
+                description = "카카오 회원 등록 및 프로필 이미지 선택 단계 진입",
                 content = [
                     Content(
                         schema = Schema(implementation = ServiceTokensResponse::class),
@@ -390,14 +402,14 @@ interface AuthAPISpec {
 
     @Operation(
         summary = "이메일 회원가입",
-        description = "클라이언트에서 Firebase 이메일 계정을 생성한 후 받은 ID Token으로 모여트립 회원가입을 완료합니다. 비밀번호는 서버에 전달하거나 저장하지 않습니다.",
+        description = "클라이언트에서 Firebase 이메일 계정을 생성한 후 받은 ID Token으로 닉네임 등록을 완료하고 프로필 이미지 선택 단계로 진입합니다. 비밀번호는 서버에 전달하거나 저장하지 않습니다.",
     )
     @SecurityRequirements
     @ApiResponses(
         value = [
             ApiResponse(
                 responseCode = "201",
-                description = "이메일 회원가입 완료",
+                description = "이메일 회원 등록 및 프로필 이미지 선택 단계 진입",
                 content = [
                     Content(
                         schema = Schema(implementation = ServiceTokensResponse::class),
@@ -441,13 +453,13 @@ interface AuthAPISpec {
         @RequestBody(description = "이메일 Firebase ID Token과 서버가 발급한 닉네임 선택 정보", required = true) request: FirebaseSignupRequest,
     ): ResponseEntity<ServiceTokensResponse>
 
-    @Operation(summary = "Apple 회원가입", description = "Firebase Apple 로그인으로 받은 ID Token을 이용해 모여트립 회원가입을 완료합니다.")
+    @Operation(summary = "Apple 회원가입", description = "Firebase Apple 로그인으로 받은 ID Token을 이용해 닉네임을 등록하고 프로필 이미지 선택 단계로 진입합니다.")
     @SecurityRequirements
     @ApiResponses(
         value = [
             ApiResponse(
                 responseCode = "201",
-                description = "Apple 회원가입 완료",
+                description = "Apple 회원 등록 및 프로필 이미지 선택 단계 진입",
                 content = [
                     Content(
                         schema = Schema(implementation = ServiceTokensResponse::class),
@@ -697,12 +709,27 @@ private object AuthSwaggerExamples {
     const val NICKNAME_CANDIDATES =
         """{"selectionToken":"550e8400-e29b-41d4-a716-446655440000","candidates":[{"nickname":"따스한 사슴 1234","adjective":"따스한","animal":"사슴","color":"RED","description":"처음 만난 사람에게도 다정하게 말을 건네요"},{"nickname":"빠른 거북이 9999","adjective":"빠른","animal":"거북이","color":"BLUE","description":"빠른 템포로 여행을 알차게 즐겨요"},{"nickname":"다정한 수달 5271","adjective":"다정한","animal":"수달","color":"MINT","description":"함께하는 사람을 세심하게 살피고 마음을 나눠요"}],"expiresInSeconds":600}"""
     const val CUSTOM_TOKEN = """{"customToken":"eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9..."}"""
-    const val SERVICE_TOKENS = """{"accessToken":"eyJhbGciOiJIUzI1NiJ9.access...","refreshToken":"eyJhbGciOiJIUzI1NiJ9.refresh..."}"""
-    const val LOGIN_EXISTING = """{"accessToken":"access-token","refreshToken":"refresh-token","isNewUser":false,"providerType":"EMAIL"}"""
-    const val LOGIN_NEW = """{"accessToken":null,"refreshToken":null,"isNewUser":true,"providerType":"APPLE"}"""
-    const val LOGIN_KAKAO = """{"accessToken":"access-token","refreshToken":"refresh-token","isNewUser":false,"providerType":"KAKAO"}"""
-    const val LOGIN_EMAIL = """{"accessToken":"access-token","refreshToken":"refresh-token","isNewUser":false,"providerType":"EMAIL"}"""
-    const val LOGIN_APPLE = """{"accessToken":"access-token","refreshToken":"refresh-token","isNewUser":false,"providerType":"APPLE"}"""
+    const val SERVICE_TOKENS =
+        """{"accessToken":"eyJhbGciOiJIUzI1NiJ9.access...","refreshToken":"eyJhbGciOiJIUzI1NiJ9.refresh...",""" +
+            """"signupState":"PROFILE_IMAGE_REQUIRED"}"""
+    const val LOGIN_EXISTING =
+        """{"accessToken":"access-token","refreshToken":"refresh-token","isNewUser":false,""" +
+            """"signupState":"SIGNUP_COMPLETE","providerType":"EMAIL"}"""
+    const val LOGIN_PROFILE_REQUIRED =
+        """{"accessToken":"access-token","refreshToken":"refresh-token","isNewUser":false,""" +
+            """"signupState":"PROFILE_IMAGE_REQUIRED","providerType":"EMAIL"}"""
+    const val LOGIN_NEW =
+        """{"accessToken":null,"refreshToken":null,"isNewUser":true,""" +
+            """"signupState":"USER_INFO_REQUIRED","providerType":"APPLE"}"""
+    const val LOGIN_KAKAO =
+        """{"accessToken":"access-token","refreshToken":"refresh-token","isNewUser":false,""" +
+            """"signupState":"SIGNUP_COMPLETE","providerType":"KAKAO"}"""
+    const val LOGIN_EMAIL =
+        """{"accessToken":"access-token","refreshToken":"refresh-token","isNewUser":false,""" +
+            """"signupState":"SIGNUP_COMPLETE","providerType":"EMAIL"}"""
+    const val LOGIN_APPLE =
+        """{"accessToken":"access-token","refreshToken":"refresh-token","isNewUser":false,""" +
+            """"signupState":"SIGNUP_COMPLETE","providerType":"APPLE"}"""
     const val LINKED_PROVIDERS = """{"providers":["EMAIL","APPLE","KAKAO"]}"""
     const val BAD_REQUEST = """{"code":40000,"errorMessage":"잘못된 요청입니다."}"""
     const val INVALID_REFRESH_TOKEN = """{"code":40001,"errorMessage":"유효하지 않은 RefreshToken 입니다."}"""
