@@ -134,12 +134,6 @@ class JwtUtil(
         .build()
         .parseSignedClaims(token)
         .payload
-
-    fun removeCachedRefreshToken(userId: Long) {
-        redissonClient
-            .getBucket<String>(getRefreshTokenCacheKey(userId))
-            .delete()
-    }
 }
 
 fun String.isBearerToken(): Boolean = this.startsWith("Bearer ")

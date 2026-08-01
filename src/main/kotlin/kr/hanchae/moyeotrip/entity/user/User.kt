@@ -26,6 +26,7 @@ class User(
     val userRole: UserRole,
     @Column(unique = true, updatable = false)
     val email: String? = null,
+    @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     var signupState: SignupState = SignupState.USER_INFO_REQUIRED,
     userInformation: UserInformation? = null,
