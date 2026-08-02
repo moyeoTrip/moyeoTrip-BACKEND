@@ -97,12 +97,6 @@ class AuthController(
         @Valid @RequestBody request: FirebaseLoginRequest,
     ): LinkedProvidersResponse = authService.linkFirebaseIdentity(principal.username.toLong(), request)
 
-    @PostMapping("/providers/google")
-    override fun linkGoogleProvider(
-        @AuthenticationPrincipal principal: CustomUserDto,
-        @Valid @RequestBody request: FirebaseLoginRequest,
-    ): LinkedProvidersResponse = authService.linkFirebaseIdentity(principal.username.toLong(), request, ProviderType.GOOGLE)
-
     @PostMapping("/providers/kakao")
     override fun linkKakaoProvider(
         @AuthenticationPrincipal principal: CustomUserDto,
