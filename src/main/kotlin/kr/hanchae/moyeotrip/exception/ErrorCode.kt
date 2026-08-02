@@ -25,6 +25,7 @@ enum class ErrorCode(
     // 리소스 NOT FOUND는 40400부터 시작
     USER_NOT_FOUND(HttpStatus.NOT_FOUND, 40400, "해당 유저를 찾을 수 없습니다."),
     PROFILE_IMAGE_NOT_FOUND(HttpStatus.NOT_FOUND, 40401, "선택할 수 있는 프로필 이미지를 찾을 수 없습니다."),
+    RESOURCE_NOT_FOUND(HttpStatus.NOT_FOUND, 40402, "요청한 리소스를 찾을 수 없습니다."),
 
     // 리소스 충돌은 40900부터 시작
     ALREADY_EXIST_NICKNAME(HttpStatus.CONFLICT, 40900, "이미 사용중인 닉네임입니다."),

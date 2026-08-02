@@ -52,8 +52,8 @@ class SecurityConfig(
 
 val PERMITTED_URL_PATTERNS =
     arrayOf(
-        "/health",
-        "/ready",
+        "/actuator/health",
+        "/actuator/health/**",
         "/swagger-ui/**",
         "/api-docs/**",
         "/api/v1/auth/**",

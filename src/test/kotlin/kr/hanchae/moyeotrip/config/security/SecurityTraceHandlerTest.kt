@@ -80,4 +80,10 @@ class SecurityTraceHandlerTest {
         assertTrue(trace.cause?.contains("authentication required") == true)
         assertTrue(response.contentAsString.contains("40100"))
     }
+
+    @Test
+    fun `Kubernetes Actuator health probe 경로는 인증 없이 허용한다`() {
+        assertTrue(PERMITTED_URL_PATTERNS.contains("/actuator/health"))
+        assertTrue(PERMITTED_URL_PATTERNS.contains("/actuator/health/**"))
+    }
 }

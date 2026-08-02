@@ -36,6 +36,8 @@ spec:
           env:
             - name: APP_NAME
               value: moyeo-trip-api
+            - name: SPRING_PROFILES_ACTIVE
+              value: prod
             - name: AWS_SECRET_ACCESS_KEY
               valueFrom:
                 secretKeyRef:
