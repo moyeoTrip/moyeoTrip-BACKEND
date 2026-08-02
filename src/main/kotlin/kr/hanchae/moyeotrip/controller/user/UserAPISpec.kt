@@ -24,6 +24,40 @@ import kr.hanchae.moyeotrip.exception.ErrorResponse
 )
 interface UserAPISpec {
     @Operation(
+        summary = "회원 탈퇴",
+        description = """
+            로그인한 사용자의 서비스 계정을 즉시 영구 삭제합니다(하드 삭제).
+            사용자 정보와 연결된 로그인 수단, 생성한 프로필 이미지 후보의 DB 레코드가 함께 삭제됩니다.
+            DB 삭제가 커밋된 뒤 객체 저장소의 프로필 이미지와 Refresh Token 캐시도 정리됩니다.
+            카카오·Apple·Google 등 외부 제공자의 계정 자체는 삭제하지 않습니다.
+            성공 이후 기존 Access Token으로 요청하면 사용자를 찾을 수 없어 인증되지 않으며,
+            기존 Refresh Token도 더 이상 갱신에 사용할 수 없습니다. 삭제한 데이터는 복구할 수 없습니다.
+        """,
+    )
+    @SecurityRequirement(name = "Authorization")
+    @ApiResponses(
+        value = [
+            ApiResponse(
+                responseCode = "204",
+                description = "회원 탈퇴 및 서비스 계정 영구 삭제 성공. 응답 본문 없음",
+            ),
+            ApiResponse(
+                responseCode = "401",
+                description = "서비스 Access Token이 없거나 유효하지 않음",
+                content = [Content(schema = Schema(implementation = ErrorResponse::class))],
+            ),
+            ApiResponse(
+                responseCode = "404",
+                description = "이미 탈퇴했거나 로그인 사용자가 존재하지 않음",
+                content = [Content(schema = Schema(implementation = ErrorResponse::class))],
+            ),
+        ],
+    )
+    fun withdraw(
+        @Parameter(hidden = true) principal: CustomUserDto,
+    )
+
+    @Operation(
         summary = "AI 프로필 이미지 후보 생성",
         description = """
             로그인 사용자의 닉네임 형용사·동물·색상으로 1:1 AI 프로필 이미지 후보 한 장을 생성합니다.

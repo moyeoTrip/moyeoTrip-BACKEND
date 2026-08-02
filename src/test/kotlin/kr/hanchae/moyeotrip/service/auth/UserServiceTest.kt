@@ -11,9 +11,11 @@ import kr.hanchae.moyeotrip.entity.user.UserProfileImage
 import kr.hanchae.moyeotrip.entity.user.UserRole
 import kr.hanchae.moyeotrip.exception.BaseException
 import kr.hanchae.moyeotrip.exception.ErrorCode
+import kr.hanchae.moyeotrip.exception.UserNotFoundException
 import kr.hanchae.moyeotrip.repository.ObjectStorageRepository
 import kr.hanchae.moyeotrip.repository.UserProfileImageRepository
 import kr.hanchae.moyeotrip.repository.UserRepository
+import kr.hanchae.moyeotrip.utils.jwt.JwtUtil
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
@@ -22,8 +24,11 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito.mock
+import org.mockito.Mockito.never
+import org.mockito.Mockito.verify
 import org.mockito.Mockito.verifyNoInteractions
 import org.mockito.Mockito.`when`
+import org.springframework.transaction.support.TransactionSynchronizationManager
 import java.util.Optional
 
 class UserServiceTest {
@@ -32,6 +37,7 @@ class UserServiceTest {
     private val profileImageGenerationClient = mock(ProfileImageGenerationClient::class.java)
     private val userProfileImageRepository = mock(UserProfileImageRepository::class.java)
     private val promptFactory = ProfileImagePromptFactory()
+    private val jwtUtil = mock(JwtUtil::class.java)
     private val service =
         UserService(
             userRepository,
@@ -39,6 +45,7 @@ class UserServiceTest {
             profileImageGenerationClient,
             promptFactory,
             userProfileImageRepository,
+            jwtUtil,
         )
 
     @Test
@@ -120,6 +127,44 @@ class UserServiceTest {
         verifyNoInteractions(profileImageGenerationClient)
         verifyNoInteractions(objectStorageRepository)
         verifyNoInteractions(userProfileImageRepository)
+    }
+
+    @Test
+    fun `회원 탈퇴는 사용자를 삭제하고 커밋 후 이미지와 Refresh Token을 정리한다`() {
+        val user = profileImageRequiredUser()
+        val firstImage = UserProfileImage(id = 12L, user = user, fileName = "user/profile/image/first.png")
+        val secondImage = UserProfileImage(id = 13L, user = user, fileName = "user/profile/image/second.png")
+        `when`(userRepository.findByIdForUpdate(7L)).thenReturn(user)
+        `when`(userProfileImageRepository.findAllByUserIdOrderByCreatedDateTimeAsc(7L))
+            .thenReturn(listOf(firstImage, secondImage))
+        TransactionSynchronizationManager.initSynchronization()
+
+        try {
+            service.withdraw(7L)
+
+            verify(userRepository).delete(user)
+            verify(objectStorageRepository, never()).delete(firstImage.fileName)
+            verify(jwtUtil, never()).deleteCachedRefreshTokenRotateId(7L)
+
+            TransactionSynchronizationManager.getSynchronizations().single().afterCommit()
+
+            verify(objectStorageRepository).delete(firstImage.fileName)
+            verify(objectStorageRepository).delete(secondImage.fileName)
+            verify(jwtUtil).deleteCachedRefreshTokenRotateId(7L)
+        } finally {
+            TransactionSynchronizationManager.clearSynchronization()
+        }
+    }
+
+    @Test
+    fun `존재하지 않는 사용자의 회원 탈퇴는 거부한다`() {
+        `when`(userRepository.findByIdForUpdate(404L)).thenReturn(null)
+
+        assertThrows(UserNotFoundException::class.java) { service.withdraw(404L) }
+
+        verify(userRepository, never()).delete(any(User::class.java))
+        verifyNoInteractions(objectStorageRepository)
+        verifyNoInteractions(jwtUtil)
     }
 
     private fun profileImageRequiredUser(): User =

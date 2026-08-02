@@ -66,6 +66,10 @@ class JwtUtil(
             ).set(rotateId, Duration.ofMillis(jwtProperties.refreshTokenExpirationTime))
     }
 
+    fun deleteCachedRefreshTokenRotateId(userId: Long) {
+        redissonClient.getBucket<String>(getRefreshTokenCacheKey(userId)).delete()
+    }
+
     companion object {
         private const val REFRESH_TOKEN_CACHE_PREFIX = "MoyeoTrip:refresh-token-cache:"
 

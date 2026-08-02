@@ -14,6 +14,7 @@ import kr.hanchae.moyeotrip.exception.UserNotFoundException
 import kr.hanchae.moyeotrip.repository.ObjectStorageRepository
 import kr.hanchae.moyeotrip.repository.UserProfileImageRepository
 import kr.hanchae.moyeotrip.repository.UserRepository
+import kr.hanchae.moyeotrip.utils.jwt.JwtUtil
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -27,6 +28,7 @@ class UserService(
     private val profileImageGenerationClient: ProfileImageGenerationClient,
     private val profileImagePromptFactory: ProfileImagePromptFactory,
     private val userProfileImageRepository: UserProfileImageRepository,
+    private val jwtUtil: JwtUtil,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -96,6 +98,18 @@ class UserService(
         )
     }
 
+    @Transactional
+    fun withdraw(userId: Long) {
+        val user = userRepository.findByIdForUpdate(userId) ?: throw UserNotFoundException(userId)
+        val profileImageKeys =
+            userProfileImageRepository
+                .findAllByUserIdOrderByCreatedDateTimeAsc(userId)
+                .map(UserProfileImage::fileName)
+
+        userRepository.delete(user)
+        scheduleWithdrawalCleanupAfterCommit(userId, profileImageKeys)
+    }
+
     private fun requireProfileSetupStarted(user: User) {
         if (user.information == null) {
             throw BaseException(ErrorCode.USER_INFO_REQUIRED, ErrorCode.USER_INFO_REQUIRED.errorMessage)
@@ -122,6 +136,35 @@ class UserService(
                 }
             },
         )
+    }
+
+    private fun scheduleWithdrawalCleanupAfterCommit(
+        userId: Long,
+        profileImageKeys: List<String>,
+    ) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            cleanupWithdrawalResources(userId, profileImageKeys)
+            return
+        }
+        TransactionSynchronizationManager.registerSynchronization(
+            object : TransactionSynchronization {
+                override fun afterCommit() {
+                    cleanupWithdrawalResources(userId, profileImageKeys)
+                }
+            },
+        )
+    }
+
+    private fun cleanupWithdrawalResources(
+        userId: Long,
+        profileImageKeys: List<String>,
+    ) {
+        profileImageKeys.forEach(::deleteQuietly)
+        try {
+            jwtUtil.deleteCachedRefreshTokenRotateId(userId)
+        } catch (exception: Exception) {
+            log.warn("탈퇴 사용자의 Refresh Token 캐시 정리에 실패했습니다. userId={}", userId, exception)
+        }
     }
 
     private fun deleteQuietly(key: String) {

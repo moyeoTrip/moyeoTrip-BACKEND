@@ -7,12 +7,15 @@ import kr.hanchae.moyeotrip.controller.user.response.ProfileImageCandidatesRespo
 import kr.hanchae.moyeotrip.controller.user.response.ProfileImageGenerationResponse
 import kr.hanchae.moyeotrip.controller.user.response.ProfileImageSelectionResponse
 import kr.hanchae.moyeotrip.service.auth.UserService
+import org.springframework.http.HttpStatus
 import org.springframework.security.core.annotation.AuthenticationPrincipal
+import org.springframework.web.bind.annotation.DeleteMapping
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.PutMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
+import org.springframework.web.bind.annotation.ResponseStatus
 import org.springframework.web.bind.annotation.RestController
 
 @RestController
@@ -20,6 +23,14 @@ import org.springframework.web.bind.annotation.RestController
 class UserController(
     private val userService: UserService,
 ) : UserAPISpec {
+    @DeleteMapping
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    override fun withdraw(
+        @AuthenticationPrincipal principal: CustomUserDto,
+    ) {
+        userService.withdraw(principal.username.toLong())
+    }
+
     @PostMapping("/profile-images")
     override fun generateProfileImage(
         @AuthenticationPrincipal principal: CustomUserDto,
