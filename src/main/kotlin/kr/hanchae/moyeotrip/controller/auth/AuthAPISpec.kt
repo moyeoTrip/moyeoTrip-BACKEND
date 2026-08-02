@@ -635,29 +635,6 @@ interface AuthAPISpec {
         @RequestBody(description = "새로 연결할 Firebase 계정의 ID Token", required = true) request: FirebaseLoginRequest,
     ): LinkedProvidersResponse
 
-    @Operation(
-        summary = "Google 인증 수단 연결",
-        description = "현재 사용자에게 Firebase Google 계정을 추가합니다. 연결 후 해당 Google 계정으로 동일 사용자에 로그인할 수 있습니다.",
-    )
-    @SecurityRequirement(name = "Authorization")
-    @ApiResponses(
-        value = [
-            ApiResponse(
-                responseCode = "200",
-                description = "Google 인증 수단 연결 완료",
-                content = [Content(schema = Schema(implementation = LinkedProvidersResponse::class))],
-            ),
-            ApiResponse(responseCode = "400", description = "Google 제공자가 아닌 Firebase ID Token"),
-            ApiResponse(responseCode = "401", description = "서비스 JWT 또는 Firebase ID Token이 유효하지 않음"),
-            ApiResponse(responseCode = "404", description = "로그인 사용자 없음"),
-            ApiResponse(responseCode = "409", description = "Google 계정이 이미 현재 또는 다른 사용자에게 연결됨"),
-        ],
-    )
-    fun linkGoogleProvider(
-        @Parameter(hidden = true) principal: CustomUserDto,
-        @RequestBody(description = "연결할 Google 계정의 Firebase ID Token", required = true) request: FirebaseLoginRequest,
-    ): LinkedProvidersResponse
-
     @Operation(summary = "카카오 인증 수단 연결", description = "로그인된 사용자에게 카카오 계정을 추가합니다. 카카오 토큰의 app_id까지 검증하며, 연결 후 카카오로 동일 계정에 로그인할 수 있습니다.")
     @SecurityRequirement(name = "Authorization")
     @ApiResponses(
