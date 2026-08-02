@@ -5,7 +5,9 @@ import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.stereotype.Repository
 
 @Repository
-interface UserProfileImageRepository : JpaRepository<UserProfileImage, Long> {
+interface UserProfileImageRepository :
+    JpaRepository<UserProfileImage, Long>,
+    UserProfileImageCustomRepository {
     fun findByIdAndUserId(
         id: Long,
         userId: Long,

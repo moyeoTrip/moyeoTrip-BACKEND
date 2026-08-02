@@ -103,8 +103,7 @@ class UserService(
         val user = userRepository.findByIdForUpdate(userId) ?: throw UserNotFoundException(userId)
         val profileImageKeys =
             userProfileImageRepository
-                .findAllByUserIdOrderByCreatedDateTimeAsc(userId)
-                .map(UserProfileImage::fileName)
+                .findFileNamesByUserIdOrderByCreatedDateTimeAsc(userId)
 
         userRepository.delete(user)
         scheduleWithdrawalCleanupAfterCommit(userId, profileImageKeys)

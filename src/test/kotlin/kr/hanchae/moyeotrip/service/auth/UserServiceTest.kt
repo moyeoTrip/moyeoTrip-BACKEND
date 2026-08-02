@@ -132,24 +132,24 @@ class UserServiceTest {
     @Test
     fun `회원 탈퇴는 사용자를 삭제하고 커밋 후 이미지와 Refresh Token을 정리한다`() {
         val user = profileImageRequiredUser()
-        val firstImage = UserProfileImage(id = 12L, user = user, fileName = "user/profile/image/first.png")
-        val secondImage = UserProfileImage(id = 13L, user = user, fileName = "user/profile/image/second.png")
+        val firstImageKey = "user/profile/image/first.png"
+        val secondImageKey = "user/profile/image/second.png"
         `when`(userRepository.findByIdForUpdate(7L)).thenReturn(user)
-        `when`(userProfileImageRepository.findAllByUserIdOrderByCreatedDateTimeAsc(7L))
-            .thenReturn(listOf(firstImage, secondImage))
+        `when`(userProfileImageRepository.findFileNamesByUserIdOrderByCreatedDateTimeAsc(7L))
+            .thenReturn(listOf(firstImageKey, secondImageKey))
         TransactionSynchronizationManager.initSynchronization()
 
         try {
             service.withdraw(7L)
 
             verify(userRepository).delete(user)
-            verify(objectStorageRepository, never()).delete(firstImage.fileName)
+            verify(objectStorageRepository, never()).delete(firstImageKey)
             verify(jwtUtil, never()).deleteCachedRefreshTokenRotateId(7L)
 
             TransactionSynchronizationManager.getSynchronizations().single().afterCommit()
 
-            verify(objectStorageRepository).delete(firstImage.fileName)
-            verify(objectStorageRepository).delete(secondImage.fileName)
+            verify(objectStorageRepository).delete(firstImageKey)
+            verify(objectStorageRepository).delete(secondImageKey)
             verify(jwtUtil).deleteCachedRefreshTokenRotateId(7L)
         } finally {
             TransactionSynchronizationManager.clearSynchronization()
