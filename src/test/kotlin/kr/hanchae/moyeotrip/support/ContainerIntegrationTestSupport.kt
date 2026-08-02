@@ -6,28 +6,25 @@ import org.junit.jupiter.api.parallel.ExecutionMode
 import org.junit.jupiter.api.parallel.ResourceAccessMode
 import org.junit.jupiter.api.parallel.ResourceLock
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection
-import org.testcontainers.junit.jupiter.Container
-import org.testcontainers.junit.jupiter.Testcontainers
 import org.testcontainers.oracle.OracleContainer
 import org.testcontainers.utility.DockerImageName
 
-@Testcontainers
 @Execution(ExecutionMode.SAME_THREAD)
 @ResourceLock(value = "moyeotrip-shared-testcontainers", mode = ResourceAccessMode.READ_WRITE)
 abstract class ContainerIntegrationTestSupport {
     companion object {
         @JvmStatic
-        @Container
         @ServiceConnection
         val oracle: OracleContainer =
             OracleContainer(DockerImageName.parse("gvenzl/oracle-free:23.26.1-faststart"))
                 .withReuse(true)
+                .apply { start() }
 
         @JvmStatic
-        @Container
         @ServiceConnection
         val redis: RedisContainer =
             RedisContainer(DockerImageName.parse("redis:8-alpine"))
                 .withReuse(true)
+                .apply { start() }
     }
 }
