@@ -13,6 +13,7 @@ import jakarta.persistence.OneToMany
 import jakarta.persistence.Table
 import kr.hanchae.moyeotrip.entity.BaseModifiableEntity
 import java.time.LocalDate
+import kotlin.math.roundToInt
 
 @Entity
 @Table(
@@ -46,6 +47,15 @@ class User(
     @Column(nullable = false)
     var profileImageGenerationCount: Int = 0
         protected set
+
+    @Column
+    var mannerRating: Double? = null
+        protected set
+
+    fun updateMannerRating(rating: Double) {
+        require(rating in 0.0..5.0)
+        mannerRating = (rating * 10).roundToInt() / 10.0
+    }
 
     fun changeFcmToken(token: String) {
         this.fcmToken = token
