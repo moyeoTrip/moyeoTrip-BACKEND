@@ -11,7 +11,6 @@ import kr.hanchae.moyeotrip.controller.auth.response.FirebaseLoginResponse
 import kr.hanchae.moyeotrip.controller.auth.response.LinkedProvidersResponse
 import kr.hanchae.moyeotrip.controller.auth.response.NicknameCandidatesResponse
 import kr.hanchae.moyeotrip.controller.auth.response.ServiceTokensResponse
-import kr.hanchae.moyeotrip.entity.user.ProviderType
 import kr.hanchae.moyeotrip.service.auth.AuthService
 import kr.hanchae.moyeotrip.service.auth.NicknameCandidateService
 import org.springframework.http.HttpStatus
@@ -37,71 +36,21 @@ class AuthController(
         @Valid @RequestBody request: KakaoCustomTokenRequest,
     ): FirebaseCustomTokenResponse = authService.createKakaoCustomToken(request)
 
-    @PostMapping("/login/firebase")
-    override fun loginWithFirebase(
+    @PostMapping("/login")
+    override fun login(
         @Valid @RequestBody request: FirebaseLoginRequest,
     ): FirebaseLoginResponse = authService.loginWithFirebase(request)
 
-    @PostMapping("/login/kakao")
-    override fun loginWithKakao(
-        @Valid @RequestBody request: FirebaseLoginRequest,
-    ): FirebaseLoginResponse = authService.loginWithFirebase(request, ProviderType.KAKAO)
-
-    @PostMapping("/login/email")
-    override fun loginWithEmail(
-        @Valid @RequestBody request: FirebaseLoginRequest,
-    ): FirebaseLoginResponse = authService.loginWithFirebase(request, ProviderType.EMAIL)
-
-    @PostMapping("/login/apple")
-    override fun loginWithApple(
-        @Valid @RequestBody request: FirebaseLoginRequest,
-    ): FirebaseLoginResponse = authService.loginWithFirebase(request, ProviderType.APPLE)
-
-    @PostMapping("/login/google")
-    override fun loginWithGoogle(
-        @Valid @RequestBody request: FirebaseLoginRequest,
-    ): FirebaseLoginResponse = authService.loginWithFirebase(request, ProviderType.GOOGLE)
-
-    @PostMapping("/signup/firebase")
-    override fun signupWithFirebase(
+    @PostMapping("/signup")
+    override fun signup(
         @Valid @RequestBody request: FirebaseSignupRequest,
     ): ResponseEntity<ServiceTokensResponse> = ResponseEntity.status(HttpStatus.CREATED).body(authService.signupWithFirebase(request))
 
-    @PostMapping("/user/kakao")
-    override fun signupWithKakao(
-        @Valid @RequestBody request: FirebaseSignupRequest,
-    ): ResponseEntity<ServiceTokensResponse> =
-        ResponseEntity.status(HttpStatus.CREATED).body(authService.signupWithFirebase(request, ProviderType.KAKAO))
-
-    @PostMapping("/signup/email")
-    override fun signupWithEmail(
-        @Valid @RequestBody request: FirebaseSignupRequest,
-    ): ResponseEntity<ServiceTokensResponse> =
-        ResponseEntity.status(HttpStatus.CREATED).body(authService.signupWithFirebase(request, ProviderType.EMAIL))
-
-    @PostMapping("/signup/apple")
-    override fun signupWithApple(
-        @Valid @RequestBody request: FirebaseSignupRequest,
-    ): ResponseEntity<ServiceTokensResponse> =
-        ResponseEntity.status(HttpStatus.CREATED).body(authService.signupWithFirebase(request, ProviderType.APPLE))
-
-    @PostMapping("/signup/google")
-    override fun signupWithGoogle(
-        @Valid @RequestBody request: FirebaseSignupRequest,
-    ): ResponseEntity<ServiceTokensResponse> =
-        ResponseEntity.status(HttpStatus.CREATED).body(authService.signupWithFirebase(request, ProviderType.GOOGLE))
-
-    @PostMapping("/providers/firebase")
-    override fun linkFirebaseProvider(
+    @PostMapping("/providers")
+    override fun linkProvider(
         @AuthenticationPrincipal principal: CustomUserDto,
         @Valid @RequestBody request: FirebaseLoginRequest,
     ): LinkedProvidersResponse = authService.linkFirebaseIdentity(principal.username.toLong(), request)
-
-    @PostMapping("/providers/kakao")
-    override fun linkKakaoProvider(
-        @AuthenticationPrincipal principal: CustomUserDto,
-        @Valid @RequestBody request: KakaoCustomTokenRequest,
-    ): LinkedProvidersResponse = authService.linkKakaoIdentity(principal.username.toLong(), request)
 
     @GetMapping("/providers")
     override fun getLinkedProviders(

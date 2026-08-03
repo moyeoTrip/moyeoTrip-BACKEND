@@ -6,6 +6,8 @@ import io.swagger.v3.oas.annotations.tags.Tag
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import org.springframework.web.bind.annotation.GetMapping
+import org.springframework.web.bind.annotation.PostMapping
 
 class AuthAPISpecTest {
     @Test
@@ -17,11 +19,38 @@ class AuthAPISpecTest {
     fun `모든 인증 API에 operation과 응답 문서가 존재한다`() {
         val methods = AuthAPISpec::class.java.declaredMethods
 
-        assertEquals(16, methods.size)
+        assertEquals(7, methods.size)
         methods.forEach { method ->
             assertTrue(method.isAnnotationPresent(Operation::class.java), "${method.name}에 @Operation이 없습니다.")
             assertTrue(method.isAnnotationPresent(ApiResponses::class.java), "${method.name}에 @ApiResponses가 없습니다.")
         }
+    }
+
+    @Test
+    fun `공통 인증 API와 Kakao Custom Token API만 공개한다`() {
+        val postPaths =
+            AuthController::class.java.declaredMethods
+                .mapNotNull { it.getAnnotation(PostMapping::class.java) }
+                .flatMap { it.value.toList() }
+                .toSet()
+        val getPaths =
+            AuthController::class.java.declaredMethods
+                .mapNotNull { it.getAnnotation(GetMapping::class.java) }
+                .flatMap { it.value.toList() }
+                .toSet()
+
+        assertEquals(
+            setOf(
+                "/nickname-candidates",
+                "/firebase/kakao/custom-token",
+                "/login",
+                "/signup",
+                "/providers",
+                "/refresh",
+            ),
+            postPaths,
+        )
+        assertEquals(setOf("/providers"), getPaths)
     }
 
     @Test

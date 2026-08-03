@@ -5,7 +5,9 @@ import jakarta.validation.constraints.NotBlank
 
 data class FirebaseLoginRequest(
     @field:Schema(
-        description = "Firebase Authentication SDK가 발급한 ID Token. Firebase Custom Token 자체가 아닙니다.",
+        description =
+            "이메일·Google·Apple 또는 Kakao Firebase 로그인을 완료한 뒤 발급받은 Firebase ID Token. " +
+                "Kakao Custom Token 자체가 아니며, 서버가 이 토큰에서 제공자를 자동 판별합니다.",
         example = "eyJhbGciOiJSUzI1NiIsImtpZCI6IjEyMzQ1Njc4OTAifQ...",
         requiredMode = Schema.RequiredMode.REQUIRED,
         accessMode = Schema.AccessMode.WRITE_ONLY,

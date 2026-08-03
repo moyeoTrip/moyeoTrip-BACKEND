@@ -55,12 +55,8 @@ class AuthService(
         )
     }
 
-    fun loginWithFirebase(
-        request: FirebaseLoginRequest,
-        expectedProvider: ProviderType? = null,
-    ): FirebaseLoginResponse {
+    fun loginWithFirebase(request: FirebaseLoginRequest): FirebaseLoginResponse {
         val identity = firebaseAuthenticationClient.verifyIdToken(request.idToken)
-        validateExpectedProvider(identity, expectedProvider)
         val user =
             findUser(identity) ?: return FirebaseLoginResponse(
                 isNewUser = true,
@@ -89,12 +85,8 @@ class AuthService(
         )
     }
 
-    fun signupWithFirebase(
-        request: FirebaseSignupRequest,
-        expectedProvider: ProviderType? = null,
-    ): ServiceTokensResponse {
+    fun signupWithFirebase(request: FirebaseSignupRequest): ServiceTokensResponse {
         val identity = firebaseAuthenticationClient.verifyIdToken(request.idToken)
-        validateExpectedProvider(identity, expectedProvider)
 
         val existingUser = findUser(identity)
         if (existingUser != null) {
@@ -140,22 +132,9 @@ class AuthService(
     fun linkFirebaseIdentity(
         userId: Long,
         request: FirebaseLoginRequest,
-        expectedProvider: ProviderType? = null,
     ): LinkedProvidersResponse {
         val identity = firebaseAuthenticationClient.verifyIdToken(request.idToken)
-        validateExpectedProvider(identity, expectedProvider)
         return linkIdentity(userId, identity.providerType, identity.uid)
-    }
-
-    fun linkKakaoIdentity(
-        userId: Long,
-        request: KakaoCustomTokenRequest,
-    ): LinkedProvidersResponse {
-        val tokenInfo = getKakaoTokenInfo(request.accessToken)
-        if (tokenInfo.appId != kakaoProperties.appId) {
-            throw BaseException(ErrorCode.INVALID_KAKAO_APP, ErrorCode.INVALID_KAKAO_APP.errorMessage)
-        }
-        return linkIdentity(userId, ProviderType.KAKAO, tokenInfo.id.toString())
     }
 
     @Transactional(readOnly = true)
@@ -191,15 +170,6 @@ class AuthService(
         } catch (exception: IllegalStateException) {
             throw KakaoClientException(exception.message)
         }
-
-    private fun validateExpectedProvider(
-        identity: FirebaseIdentity,
-        expectedProvider: ProviderType?,
-    ) {
-        if (expectedProvider != null && identity.providerType != expectedProvider) {
-            throw BaseException(ErrorCode.INVALID_AUTH_PROVIDER, ErrorCode.INVALID_AUTH_PROVIDER.errorMessage)
-        }
-    }
 
     private fun findUser(identity: FirebaseIdentity): User? =
         userAuthIdentityRepository.findByProviderTypeAndProviderUserId(identity.providerType, identity.uid)?.user
