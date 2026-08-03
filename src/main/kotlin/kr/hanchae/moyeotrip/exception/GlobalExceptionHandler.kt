@@ -1,5 +1,6 @@
 package kr.hanchae.moyeotrip.exception
 
+import kr.hanchae.moyeotrip.logging.SentryExceptionReporter
 import kr.hanchae.moyeotrip.logging.TraceManager
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
@@ -13,19 +14,27 @@ import org.springframework.web.servlet.resource.NoResourceFoundException
 @RestControllerAdvice
 class GlobalExceptionHandler(
     private val traceManager: TraceManager,
+    private val sentryExceptionReporter: SentryExceptionReporter,
 ) {
     @ExceptionHandler(BaseException::class)
-    fun handleBaseException(exception: BaseException): ResponseEntity<ErrorResponse> =
-        ResponseEntity
+    fun handleBaseException(exception: BaseException): ResponseEntity<ErrorResponse> {
+        captureBadRequest(
+            exception = exception,
+            httpStatus = exception.errorCode.httpStatus,
+            errorCode = exception.errorCode.code,
+        )
+        return ResponseEntity
             .status(exception.errorCode.httpStatus)
             .contentType(MediaType.APPLICATION_JSON)
             .body(ErrorResponse.of(exception.errorCode, exception.message))
             .apply {
                 traceManager.doErrorLog(exception)
             }
+    }
 
     @ExceptionHandler(MethodArgumentNotValidException::class)
     fun handleValidationException(exception: MethodArgumentNotValidException): ResponseEntity<ErrorResponse> {
+        sentryExceptionReporter.capture(exception, HttpStatus.BAD_REQUEST, ErrorCode.BAD_REQUEST.code)
         val message =
             exception.bindingResult.fieldErrors
                 .firstOrNull()
@@ -40,14 +49,16 @@ class GlobalExceptionHandler(
     }
 
     @ExceptionHandler(HttpMessageNotReadableException::class)
-    fun handleUnreadableRequest(exception: HttpMessageNotReadableException): ResponseEntity<ErrorResponse> =
-        ResponseEntity
+    fun handleUnreadableRequest(exception: HttpMessageNotReadableException): ResponseEntity<ErrorResponse> {
+        sentryExceptionReporter.capture(exception, HttpStatus.BAD_REQUEST, ErrorCode.BAD_REQUEST.code)
+        return ResponseEntity
             .status(HttpStatus.BAD_REQUEST)
             .contentType(MediaType.APPLICATION_JSON)
             .body(ErrorResponse.of(ErrorCode.BAD_REQUEST, ErrorCode.BAD_REQUEST.errorMessage))
             .apply {
                 traceManager.doErrorLog(exception)
             }
+    }
 
     @ExceptionHandler(NoResourceFoundException::class)
     fun handleNoResourceFound(exception: NoResourceFoundException): ResponseEntity<ErrorResponse> =
@@ -60,12 +71,24 @@ class GlobalExceptionHandler(
             }
 
     @ExceptionHandler(Exception::class)
-    fun handleUnexpectedException(exception: Exception): ResponseEntity<ErrorResponse> =
-        ResponseEntity
+    fun handleUnexpectedException(exception: Exception): ResponseEntity<ErrorResponse> {
+        sentryExceptionReporter.capture(exception, HttpStatus.INTERNAL_SERVER_ERROR, ErrorCode.INTERNAL_SERVER_ERROR.code)
+        return ResponseEntity
             .status(HttpStatus.INTERNAL_SERVER_ERROR)
             .contentType(MediaType.APPLICATION_JSON)
             .body(ErrorResponse.of(ErrorCode.INTERNAL_SERVER_ERROR, ErrorCode.INTERNAL_SERVER_ERROR.errorMessage))
             .apply {
                 traceManager.doErrorLog(exception)
             }
+    }
+
+    private fun captureBadRequest(
+        exception: Throwable,
+        httpStatus: HttpStatus,
+        errorCode: Int,
+    ) {
+        if (httpStatus == HttpStatus.BAD_REQUEST) {
+            sentryExceptionReporter.capture(exception, httpStatus, errorCode)
+        }
+    }
 }
