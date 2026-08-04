@@ -9,7 +9,9 @@ import java.time.LocalDate
 
 data class FirebaseSignupRequest(
     @field:Schema(
-        description = "회원가입에 사용할 Firebase ID Token. 토큰의 로그인 제공자가 호출한 가입 API와 일치해야 합니다.",
+        description =
+            "회원가입에 사용할 Firebase ID Token. 이메일·Google·Apple·Kakao를 서버가 토큰에서 자동 판별하며 " +
+                "Kakao Custom Token 자체는 허용하지 않습니다.",
         example = "eyJhbGciOiJSUzI1NiIsImtpZCI6IjEyMzQ1Njc4OTAifQ...",
         requiredMode = Schema.RequiredMode.REQUIRED,
         accessMode = Schema.AccessMode.WRITE_ONLY,

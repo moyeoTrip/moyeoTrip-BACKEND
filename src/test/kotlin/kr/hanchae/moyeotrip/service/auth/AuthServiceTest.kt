@@ -6,6 +6,7 @@ import kr.hanchae.moyeotrip.client.KakaoClient
 import kr.hanchae.moyeotrip.config.properties.KakaoProperties
 import kr.hanchae.moyeotrip.controller.auth.request.FirebaseLoginRequest
 import kr.hanchae.moyeotrip.controller.auth.request.FirebaseSignupRequest
+import kr.hanchae.moyeotrip.controller.auth.request.KakaoAuthorizationCodeRequest
 import kr.hanchae.moyeotrip.controller.auth.request.KakaoCustomTokenRequest
 import kr.hanchae.moyeotrip.controller.client.KakaoTokenInfoResponse
 import kr.hanchae.moyeotrip.entity.user.Gender
@@ -32,6 +33,8 @@ import org.mockito.Mockito.mock
 import org.mockito.Mockito.verify
 import org.mockito.Mockito.verifyNoInteractions
 import org.mockito.Mockito.`when`
+import org.springframework.http.HttpStatus
+import org.springframework.web.client.HttpClientErrorException
 import java.time.LocalDate
 
 class AuthServiceTest {
@@ -57,7 +60,12 @@ class AuthServiceTest {
                 jwtUtil,
                 firebaseAuthenticationClient,
                 kakaoClient,
-                KakaoProperties(987654L),
+                KakaoProperties(
+                    appId = 987654L,
+                    restApiKey = "rest-api-key",
+                    clientSecret = "client-secret",
+                    allowedRedirectUris = listOf("https://moyeotrip.github.io/moyeoTrip-Web/auth/kakao/callback"),
+                ),
                 userAuthIdentityRepository,
                 nicknameCandidateRepository,
             )
@@ -70,26 +78,11 @@ class AuthServiceTest {
         `when`(userAuthIdentityRepository.findByProviderTypeAndProviderUserId(ProviderType.EMAIL, "firebase-uid")).thenReturn(null)
         `when`(userRepository.findByEmail("user@example.com")).thenReturn(null)
 
-        val response = authService.loginWithFirebase(FirebaseLoginRequest("id-token"), ProviderType.EMAIL)
+        val response = authService.loginWithFirebase(FirebaseLoginRequest("id-token"))
 
         assertTrue(response.isNewUser)
         assertEquals(ProviderType.EMAIL, response.providerType)
         assertEquals(null, response.accessToken)
-    }
-
-    @Test
-    fun `Firebase 제공자가 요청한 로그인 방식과 다르면 거부한다`() {
-        val identity = FirebaseIdentity("firebase-uid", "user@example.com", ProviderType.EMAIL)
-        `when`(firebaseAuthenticationClient.verifyIdToken("id-token")).thenReturn(identity)
-
-        val exception =
-            assertThrows(BaseException::class.java) {
-                authService.loginWithFirebase(FirebaseLoginRequest("id-token"), ProviderType.APPLE)
-            }
-
-        assertEquals(ErrorCode.INVALID_AUTH_PROVIDER, exception.errorCode)
-        verifyNoInteractions(userRepository)
-        verifyNoInteractions(userAuthIdentityRepository)
     }
 
     @Test
@@ -121,7 +114,6 @@ class AuthServiceTest {
                     birthDate = LocalDate.of(1998, 4, 12),
                     fcmToken = "fcm-token",
                 ),
-                ProviderType.EMAIL,
             )
 
         assertEquals("access-token", response.accessToken)
@@ -161,6 +153,47 @@ class AuthServiceTest {
     }
 
     @Test
+    fun `Web 카카오 인가 코드는 액세스 토큰 교환과 앱 검증 후 Firebase 토큰으로 변환한다`() {
+        val redirectUri = "https://moyeotrip.github.io/moyeoTrip-Web/auth/kakao/callback"
+        `when`(kakaoClient.exchangeAuthorizationCode("authorization-code", redirectUri)).thenReturn("kakao-access-token")
+        `when`(kakaoClient.getTokenInfo("kakao-access-token")).thenReturn(KakaoTokenInfoResponse(12345L, 987654L, 3600L))
+        `when`(firebaseAuthenticationClient.createKakaoCustomToken("12345")).thenReturn("firebase-custom-token")
+
+        val response = authService.createKakaoCustomToken(KakaoAuthorizationCodeRequest("authorization-code", redirectUri))
+
+        assertEquals("firebase-custom-token", response.customToken)
+        verify(kakaoClient).exchangeAuthorizationCode("authorization-code", redirectUri)
+    }
+
+    @Test
+    fun `허용 목록에 없는 Web 카카오 redirect URI는 교환 전에 거부한다`() {
+        val exception =
+            assertThrows(BaseException::class.java) {
+                authService.createKakaoCustomToken(
+                    KakaoAuthorizationCodeRequest("authorization-code", "https://attacker.example/callback"),
+                )
+            }
+
+        assertEquals(ErrorCode.INVALID_KAKAO_REDIRECT_URI, exception.errorCode)
+        verifyNoInteractions(kakaoClient)
+    }
+
+    @Test
+    fun `Kakao가 인가 코드를 거부하면 안전한 인증 오류로 변환한다`() {
+        val redirectUri = "https://moyeotrip.github.io/moyeoTrip-Web/auth/kakao/callback"
+        `when`(kakaoClient.exchangeAuthorizationCode("expired-code", redirectUri))
+            .thenThrow(HttpClientErrorException(HttpStatus.BAD_REQUEST, "response containing credentials"))
+
+        val exception =
+            assertThrows(BaseException::class.java) {
+                authService.createKakaoCustomToken(KakaoAuthorizationCodeRequest("expired-code", redirectUri))
+            }
+
+        assertEquals(ErrorCode.INVALID_KAKAO_AUTHORIZATION_CODE, exception.errorCode)
+        assertEquals(ErrorCode.INVALID_KAKAO_AUTHORIZATION_CODE.errorMessage, exception.message)
+    }
+
+    @Test
     fun `로그인 사용자는 Apple 인증 수단을 추가할 수 있다`() {
         val user = User(id = 7L, userRole = UserRole.ROLE_USER)
         val appleIdentity = UserAuthIdentity(user = user, providerType = ProviderType.APPLE, providerUserId = "apple-uid")
@@ -189,9 +222,27 @@ class AuthServiceTest {
         `when`(userAuthIdentityRepository.existsByUserIdAndProviderType(7L, ProviderType.GOOGLE)).thenReturn(false)
         `when`(userAuthIdentityRepository.findAllByUserId(7L)).thenReturn(listOf(googleIdentity))
 
-        val response = authService.linkFirebaseIdentity(7L, FirebaseLoginRequest("google-token"), ProviderType.GOOGLE)
+        val response = authService.linkFirebaseIdentity(7L, FirebaseLoginRequest("google-token"))
 
         assertEquals(setOf(ProviderType.GOOGLE), response.providers)
+        verify(userAuthIdentityRepository).save(any(UserAuthIdentity::class.java))
+    }
+
+    @Test
+    fun `Firebase ID Token으로 변환한 Kakao 인증 수단을 추가할 수 있다`() {
+        val user = User(id = 7L, userRole = UserRole.ROLE_USER)
+        val kakaoIdentity = UserAuthIdentity(user = user, providerType = ProviderType.KAKAO, providerUserId = "12345")
+        `when`(firebaseAuthenticationClient.verifyIdToken("kakao-firebase-token"))
+            .thenReturn(FirebaseIdentity("12345", null, ProviderType.KAKAO))
+        `when`(userRepository.findById(7L)).thenReturn(java.util.Optional.of(user))
+        `when`(userAuthIdentityRepository.findByProviderTypeAndProviderUserId(ProviderType.KAKAO, "12345"))
+            .thenReturn(null)
+        `when`(userAuthIdentityRepository.existsByUserIdAndProviderType(7L, ProviderType.KAKAO)).thenReturn(false)
+        `when`(userAuthIdentityRepository.findAllByUserId(7L)).thenReturn(listOf(kakaoIdentity))
+
+        val response = authService.linkFirebaseIdentity(7L, FirebaseLoginRequest("kakao-firebase-token"))
+
+        assertEquals(setOf(ProviderType.KAKAO), response.providers)
         verify(userAuthIdentityRepository).save(any(UserAuthIdentity::class.java))
     }
 
@@ -214,7 +265,7 @@ class AuthServiceTest {
         `when`(jwtUtil.generateRotateId()).thenReturn("rotate-id")
         `when`(jwtUtil.generateRefreshToken(0L, "rotate-id")).thenReturn("refresh-token")
 
-        val response = authService.loginWithFirebase(FirebaseLoginRequest("apple-token"), ProviderType.APPLE)
+        val response = authService.loginWithFirebase(FirebaseLoginRequest("apple-token"))
 
         assertFalse(response.isNewUser)
         assertEquals(SignupState.SIGNUP_COMPLETE, response.signupState)
@@ -240,7 +291,7 @@ class AuthServiceTest {
         `when`(jwtUtil.generateRotateId()).thenReturn("rotate-id")
         `when`(jwtUtil.generateRefreshToken(0L, "rotate-id")).thenReturn("refresh-token")
 
-        val response = authService.loginWithFirebase(FirebaseLoginRequest("id-token"), ProviderType.EMAIL)
+        val response = authService.loginWithFirebase(FirebaseLoginRequest("id-token"))
 
         assertFalse(response.isNewUser)
         assertEquals(SignupState.PROFILE_IMAGE_REQUIRED, response.signupState)
@@ -249,18 +300,19 @@ class AuthServiceTest {
     }
 
     @Test
-    fun `다른 사용자에게 연결된 인증 수단은 가져올 수 없다`() {
+    fun `다른 사용자에게 연결된 카카오 인증 수단은 가져올 수 없다`() {
         val currentUser = User(id = 7L, userRole = UserRole.ROLE_USER)
         val owner = User(id = 8L, userRole = UserRole.ROLE_USER)
         val existingIdentity = UserAuthIdentity(user = owner, providerType = ProviderType.KAKAO, providerUserId = "12345")
+        `when`(firebaseAuthenticationClient.verifyIdToken("kakao-firebase-token"))
+            .thenReturn(FirebaseIdentity("12345", null, ProviderType.KAKAO))
         `when`(userRepository.findById(7L)).thenReturn(java.util.Optional.of(currentUser))
-        `when`(kakaoClient.getTokenInfo("kakao-token")).thenReturn(KakaoTokenInfoResponse(12345L, 987654L, 3600L))
         `when`(userAuthIdentityRepository.findByProviderTypeAndProviderUserId(ProviderType.KAKAO, "12345"))
             .thenReturn(existingIdentity)
 
         val exception =
             assertThrows(BaseException::class.java) {
-                authService.linkKakaoIdentity(7L, KakaoCustomTokenRequest("kakao-token"))
+                authService.linkFirebaseIdentity(7L, FirebaseLoginRequest("kakao-firebase-token"))
             }
 
         assertEquals(ErrorCode.AUTH_IDENTITY_ALREADY_LINKED, exception.errorCode)

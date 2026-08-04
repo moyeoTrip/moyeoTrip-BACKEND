@@ -53,6 +53,7 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-actuator")
     implementation("org.springframework.boot:spring-boot-starter-validation")
     implementation("org.springframework.boot:spring-boot-starter-flyway")
+    implementation("io.sentry:sentry-spring-boot-4-starter:8.48.0")
     implementation(platform("org.springframework.ai:spring-ai-bom:2.0.0"))
     implementation("org.springframework.ai:spring-ai-starter-model-openai")
 

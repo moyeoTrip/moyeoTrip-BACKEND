@@ -10,14 +10,16 @@ enum class ErrorCode(
     // 요청을 잘못했을 때는 40000부터 시작
     BAD_REQUEST(HttpStatus.BAD_REQUEST, 40000, "잘못된 요청입니다."),
     INVALID_REFRESH_TOKEN(HttpStatus.BAD_REQUEST, 40001, "유효하지 않은 RefreshToken 입니다."),
-    INVALID_AUTH_PROVIDER(HttpStatus.BAD_REQUEST, 40002, "요청한 로그인 제공자와 Firebase 인증 정보가 일치하지 않습니다."),
+    INVALID_AUTH_PROVIDER(HttpStatus.BAD_REQUEST, 40002, "지원하지 않거나 유효하지 않은 Firebase 로그인 제공자입니다."),
     INVALID_NICKNAME_SELECTION(HttpStatus.BAD_REQUEST, 40003, "닉네임 선택이 만료되었거나 발급된 후보와 일치하지 않습니다."),
+    INVALID_KAKAO_REDIRECT_URI(HttpStatus.BAD_REQUEST, 40004, "허용되지 않은 카카오 redirect URI입니다."),
 
     // UNAUTHORIZED는 40100부터 시작
     UNAUTHORIZED(HttpStatus.UNAUTHORIZED, 40100, "인증되지 않은 사용자입니다."),
     INVALID_FIREBASE_TOKEN(HttpStatus.UNAUTHORIZED, 40101, "유효하지 않은 Firebase ID 토큰입니다."),
     KAKAO_CLIENT_EXCEPTION(HttpStatus.UNAUTHORIZED, 40102, "유효하지 않은 카카오 액세스 토큰입니다."),
     INVALID_KAKAO_APP(HttpStatus.UNAUTHORIZED, 40103, "다른 카카오 애플리케이션에서 발급된 액세스 토큰입니다."),
+    INVALID_KAKAO_AUTHORIZATION_CODE(HttpStatus.UNAUTHORIZED, 40104, "유효하지 않거나 만료된 카카오 인가 코드입니다."),
 
     // FORBIDDEN는 40300부터 시작
     FORBIDDEN(HttpStatus.FORBIDDEN, 40300, "접근 권한이 없습니다."),
@@ -53,4 +55,5 @@ enum class ErrorCode(
     INTERNAL_SERVER_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, 50000, "서버에러입니다."),
     FIREBASE_AUTH_ERROR(HttpStatus.BAD_GATEWAY, 50200, "Firebase 인증 처리에 실패했습니다."),
     PROFILE_IMAGE_GENERATION_FAILED(HttpStatus.BAD_GATEWAY, 50201, "프로필 이미지 생성에 실패했습니다."),
+    KAKAO_AUTH_UNAVAILABLE(HttpStatus.BAD_GATEWAY, 50202, "카카오 인증 서버와 통신하지 못했습니다."),
 }

@@ -6,6 +6,7 @@ import kr.hanchae.moyeotrip.client.KakaoClient
 import kr.hanchae.moyeotrip.config.properties.KakaoProperties
 import kr.hanchae.moyeotrip.controller.auth.request.FirebaseLoginRequest
 import kr.hanchae.moyeotrip.controller.auth.request.FirebaseSignupRequest
+import kr.hanchae.moyeotrip.controller.auth.request.KakaoAuthorizationCodeRequest
 import kr.hanchae.moyeotrip.controller.auth.request.KakaoCustomTokenRequest
 import kr.hanchae.moyeotrip.controller.auth.request.RefreshAccessTokenRequest
 import kr.hanchae.moyeotrip.controller.auth.response.FirebaseCustomTokenResponse
@@ -33,6 +34,8 @@ import kr.hanchae.moyeotrip.utils.jwt.JwtUtil
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.client.RestClientException
+import org.springframework.web.client.RestClientResponseException
+import java.net.URI
 
 @Service
 @Transactional
@@ -45,8 +48,17 @@ class AuthService(
     private val userAuthIdentityRepository: UserAuthIdentityRepository,
     private val nicknameCandidateRepository: NicknameCandidateRepository,
 ) {
-    fun createKakaoCustomToken(request: KakaoCustomTokenRequest): FirebaseCustomTokenResponse {
-        val tokenInfo = getKakaoTokenInfo(request.accessToken)
+    fun createKakaoCustomToken(request: KakaoCustomTokenRequest): FirebaseCustomTokenResponse = createKakaoCustomToken(request.accessToken)
+
+    fun createKakaoCustomToken(request: KakaoAuthorizationCodeRequest): FirebaseCustomTokenResponse {
+        validateKakaoWebConfiguration()
+        validateKakaoRedirectUri(request.redirectUri)
+        val accessToken = exchangeKakaoAuthorizationCode(request.code, request.redirectUri)
+        return createKakaoCustomToken(accessToken)
+    }
+
+    private fun createKakaoCustomToken(accessToken: String): FirebaseCustomTokenResponse {
+        val tokenInfo = getKakaoTokenInfo(accessToken)
         if (tokenInfo.appId != kakaoProperties.appId) {
             throw BaseException(ErrorCode.INVALID_KAKAO_APP, ErrorCode.INVALID_KAKAO_APP.errorMessage)
         }
@@ -55,12 +67,51 @@ class AuthService(
         )
     }
 
-    fun loginWithFirebase(
-        request: FirebaseLoginRequest,
-        expectedProvider: ProviderType? = null,
-    ): FirebaseLoginResponse {
+    private fun validateKakaoWebConfiguration() {
+        if (kakaoProperties.restApiKey.isBlank() || kakaoProperties.allowedRedirectUris.none { it.isNotBlank() }) {
+            throw BaseException(ErrorCode.KAKAO_AUTH_UNAVAILABLE, ErrorCode.KAKAO_AUTH_UNAVAILABLE.errorMessage)
+        }
+    }
+
+    private fun validateKakaoRedirectUri(redirectUri: String) {
+        val uri = runCatching { URI.create(redirectUri) }.getOrNull()
+        val isLoopback = uri?.host == "localhost" || uri?.host == "127.0.0.1" || uri?.host == "::1"
+        val isAllowedScheme = uri?.scheme == "https" || (uri?.scheme == "http" && isLoopback)
+        val isCleanAbsoluteUri =
+            uri?.isAbsolute == true &&
+                isAllowedScheme &&
+                uri.host != null &&
+                uri.userInfo == null &&
+                uri.query == null &&
+                uri.fragment == null
+        val allowedRedirectUris = kakaoProperties.allowedRedirectUris.map(String::trim)
+        if (!isCleanAbsoluteUri || redirectUri !in allowedRedirectUris) {
+            throw BaseException(ErrorCode.INVALID_KAKAO_REDIRECT_URI, ErrorCode.INVALID_KAKAO_REDIRECT_URI.errorMessage)
+        }
+    }
+
+    private fun exchangeKakaoAuthorizationCode(
+        code: String,
+        redirectUri: String,
+    ): String =
+        try {
+            kakaoClient.exchangeAuthorizationCode(code, redirectUri)
+        } catch (exception: RestClientResponseException) {
+            val errorCode =
+                if (exception.statusCode.is4xxClientError) {
+                    ErrorCode.INVALID_KAKAO_AUTHORIZATION_CODE
+                } else {
+                    ErrorCode.KAKAO_AUTH_UNAVAILABLE
+                }
+            throw BaseException(errorCode, errorCode.errorMessage)
+        } catch (exception: RestClientException) {
+            throw BaseException(ErrorCode.KAKAO_AUTH_UNAVAILABLE, ErrorCode.KAKAO_AUTH_UNAVAILABLE.errorMessage)
+        } catch (exception: IllegalStateException) {
+            throw BaseException(ErrorCode.KAKAO_AUTH_UNAVAILABLE, ErrorCode.KAKAO_AUTH_UNAVAILABLE.errorMessage)
+        }
+
+    fun loginWithFirebase(request: FirebaseLoginRequest): FirebaseLoginResponse {
         val identity = firebaseAuthenticationClient.verifyIdToken(request.idToken)
-        validateExpectedProvider(identity, expectedProvider)
         val user =
             findUser(identity) ?: return FirebaseLoginResponse(
                 isNewUser = true,
@@ -89,12 +140,8 @@ class AuthService(
         )
     }
 
-    fun signupWithFirebase(
-        request: FirebaseSignupRequest,
-        expectedProvider: ProviderType? = null,
-    ): ServiceTokensResponse {
+    fun signupWithFirebase(request: FirebaseSignupRequest): ServiceTokensResponse {
         val identity = firebaseAuthenticationClient.verifyIdToken(request.idToken)
-        validateExpectedProvider(identity, expectedProvider)
 
         val existingUser = findUser(identity)
         if (existingUser != null) {
@@ -140,22 +187,9 @@ class AuthService(
     fun linkFirebaseIdentity(
         userId: Long,
         request: FirebaseLoginRequest,
-        expectedProvider: ProviderType? = null,
     ): LinkedProvidersResponse {
         val identity = firebaseAuthenticationClient.verifyIdToken(request.idToken)
-        validateExpectedProvider(identity, expectedProvider)
         return linkIdentity(userId, identity.providerType, identity.uid)
-    }
-
-    fun linkKakaoIdentity(
-        userId: Long,
-        request: KakaoCustomTokenRequest,
-    ): LinkedProvidersResponse {
-        val tokenInfo = getKakaoTokenInfo(request.accessToken)
-        if (tokenInfo.appId != kakaoProperties.appId) {
-            throw BaseException(ErrorCode.INVALID_KAKAO_APP, ErrorCode.INVALID_KAKAO_APP.errorMessage)
-        }
-        return linkIdentity(userId, ProviderType.KAKAO, tokenInfo.id.toString())
     }
 
     @Transactional(readOnly = true)
@@ -187,19 +221,10 @@ class AuthService(
         try {
             kakaoClient.getTokenInfo(accessToken)
         } catch (exception: RestClientException) {
-            throw KakaoClientException(exception.message)
+            throw KakaoClientException(ErrorCode.KAKAO_CLIENT_EXCEPTION.errorMessage)
         } catch (exception: IllegalStateException) {
-            throw KakaoClientException(exception.message)
+            throw KakaoClientException(ErrorCode.KAKAO_CLIENT_EXCEPTION.errorMessage)
         }
-
-    private fun validateExpectedProvider(
-        identity: FirebaseIdentity,
-        expectedProvider: ProviderType?,
-    ) {
-        if (expectedProvider != null && identity.providerType != expectedProvider) {
-            throw BaseException(ErrorCode.INVALID_AUTH_PROVIDER, ErrorCode.INVALID_AUTH_PROVIDER.errorMessage)
-        }
-    }
 
     private fun findUser(identity: FirebaseIdentity): User? =
         userAuthIdentityRepository.findByProviderTypeAndProviderUserId(identity.providerType, identity.uid)?.user

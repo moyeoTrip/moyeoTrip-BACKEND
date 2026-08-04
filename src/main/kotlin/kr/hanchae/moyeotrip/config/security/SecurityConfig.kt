@@ -3,6 +3,7 @@ package kr.hanchae.moyeotrip.config.security
 import kr.hanchae.moyeotrip.utils.jwt.JwtUtil
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
+import org.springframework.http.HttpMethod
 import org.springframework.security.authentication.AuthenticationManager
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration
 import org.springframework.security.config.annotation.web.builders.HttpSecurity
@@ -29,6 +30,7 @@ class SecurityConfig(
     @Bean
     fun filterChain(http: HttpSecurity): SecurityFilterChain =
         http
+            .cors { }
             .csrf { it.disable() }
             .formLogin { it.disable() }
             .httpBasic { it.disable() }
@@ -38,6 +40,8 @@ class SecurityConfig(
                 UsernamePasswordAuthenticationFilter::class.java,
             ).authorizeHttpRequests {
                 it
+                    .requestMatchers(HttpMethod.OPTIONS, "/**")
+                    .permitAll()
                     .requestMatchers("/api/v1/auth/providers", "/api/v1/auth/providers/**")
                     .authenticated()
                     .requestMatchers(*PERMITTED_URL_PATTERNS)

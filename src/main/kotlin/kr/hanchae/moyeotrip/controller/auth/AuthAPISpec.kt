@@ -15,6 +15,7 @@ import kr.hanchae.moyeotrip.config.security.CustomUserDto
 import kr.hanchae.moyeotrip.config.swagger.SwaggerTag
 import kr.hanchae.moyeotrip.controller.auth.request.FirebaseLoginRequest
 import kr.hanchae.moyeotrip.controller.auth.request.FirebaseSignupRequest
+import kr.hanchae.moyeotrip.controller.auth.request.KakaoAuthorizationCodeRequest
 import kr.hanchae.moyeotrip.controller.auth.request.KakaoCustomTokenRequest
 import kr.hanchae.moyeotrip.controller.auth.request.RefreshAccessTokenRequest
 import kr.hanchae.moyeotrip.controller.auth.response.FirebaseCustomTokenResponse
@@ -27,7 +28,7 @@ import org.springframework.http.ResponseEntity
 
 @Tag(
     name = SwaggerTag.AUTH,
-    description = "Firebase 기반 이메일·Google·Apple·카카오 로그인, 회원가입, 인증 수단 연결 및 서비스 JWT 재발급 API",
+    description = "Firebase ID Token으로 EMAIL·GOOGLE·APPLE·KAKAO를 통합 처리하는 로그인, 회원가입, 인증 수단 연결 및 서비스 JWT 재발급 API",
 )
 interface AuthAPISpec {
     @Operation(
@@ -121,11 +122,86 @@ interface AuthAPISpec {
     ): FirebaseCustomTokenResponse
 
     @Operation(
-        summary = "Firebase 제공자 자동 판별 로그인",
+        summary = "카카오 Web 인가 코드를 Firebase Custom Token으로 교환",
         description = """
-            Firebase ID Token의 sign_in_provider를 읽어 EMAIL, GOOGLE, APPLE, KAKAO 중 하나로 판별합니다.
-            미가입이면 토큰 없이 isNewUser=true를 반환합니다.
-            프로필 선택 전 사용자는 서비스 토큰과 PROFILE_IMAGE_REQUIRED 상태를 반환합니다.
+            Kakao JavaScript SDK v2의 `Kakao.Auth.authorize()`가 redirect URI로 전달한 인가 코드를 처리합니다.
+            서버가 Kakao REST API 키와 선택적 client secret으로 인가 코드를 access token으로 교환하고,
+            토큰의 app_id를 검증한 뒤 Firebase Custom Token을 반환합니다.
+
+            redirectUri는 인가 요청에 사용한 값, Kakao Developers에 등록한 값, 서버의 허용 목록 값과 정확히 같아야 합니다.
+            REST API 키와 client secret을 Web 클라이언트에 전달하지 마세요. 인가 코드는 일회성이며 재사용할 수 없습니다.
+        """,
+    )
+    @SecurityRequirements
+    @ApiResponses(
+        value = [
+            ApiResponse(
+                responseCode = "200",
+                description = "Firebase Custom Token 발급 성공",
+                content = [
+                    Content(
+                        schema = Schema(implementation = FirebaseCustomTokenResponse::class),
+                        examples = [ExampleObject(value = AuthSwaggerExamples.CUSTOM_TOKEN)],
+                    ),
+                ],
+            ),
+            ApiResponse(
+                responseCode = "400",
+                description = "요청 검증 실패 또는 허용되지 않은 redirect URI",
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [ExampleObject(value = AuthSwaggerExamples.INVALID_KAKAO_REDIRECT_URI)],
+                    ),
+                ],
+            ),
+            ApiResponse(
+                responseCode = "401",
+                description = "유효하지 않거나 만료된 인가 코드, 또는 다른 Kakao 앱에서 발급된 토큰",
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [ExampleObject(value = AuthSwaggerExamples.INVALID_KAKAO_AUTHORIZATION_CODE)],
+                    ),
+                ],
+            ),
+            ApiResponse(
+                responseCode = "502",
+                description = "Kakao 인증 서버 통신 또는 Firebase Custom Token 발급 실패",
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [ExampleObject(value = AuthSwaggerExamples.KAKAO_AUTH_UNAVAILABLE)],
+                    ),
+                ],
+            ),
+        ],
+    )
+    fun createKakaoCustomTokenFromAuthorizationCode(
+        @RequestBody(
+            description = "Kakao JS SDK v2가 발급한 일회성 인가 코드와 인가 요청에 사용한 redirect URI",
+            required = true,
+        ) request: KakaoAuthorizationCodeRequest,
+    ): FirebaseCustomTokenResponse
+
+    @Operation(
+        summary = "통합 로그인",
+        description = """
+            EMAIL, GOOGLE, APPLE, KAKAO가 공통으로 사용하는 단일 로그인 API입니다.
+            요청에 providerType을 보내지 마세요. 서버가 검증된 Firebase ID Token의 sign_in_provider를 읽어 제공자를 판별합니다.
+
+            **일반 로그인 흐름**
+            1. FE에서 Firebase SDK로 이메일·Google·Apple 로그인을 완료합니다.
+            2. Firebase SDK가 발급한 ID Token을 이 API의 idToken으로 전달합니다.
+
+            **Kakao 로그인 흐름**
+            1. Kakao SDK의 Access Token을 /api/v1/auth/firebase/kakao/custom-token에 전달합니다.
+            2. 응답받은 Custom Token으로 Firebase signInWithCustomToken을 호출합니다.
+            3. Firebase ID Token을 발급받아 이 API의 idToken으로 전달합니다.
+
+            Custom Token 자체를 이 API에 보내면 안 됩니다. Firebase ID Token의 서명·만료·폐기 여부를 검증한 뒤,
+            미가입 인증 수단이면 isNewUser=true와 USER_INFO_REQUIRED를 반환합니다.
+            가입된 사용자는 서비스 JWT와 현재 회원가입 진행 상태를 반환합니다.
         """,
     )
     @SecurityRequirements
@@ -170,161 +246,25 @@ interface AuthAPISpec {
             ),
         ],
     )
-    fun loginWithFirebase(
-        @RequestBody(description = "Firebase SDK가 발급한 ID Token과 선택적 FCM Token", required = true)
+    fun login(
+        @RequestBody(description = "로그인 완료 후 Firebase SDK가 발급한 ID Token과 선택적 FCM Token. Kakao Custom Token 자체는 허용하지 않습니다.", required = true)
         request: FirebaseLoginRequest,
     ): FirebaseLoginResponse
 
-    @Operation(summary = "카카오 로그인", description = "Firebase Custom Token 로그인 이후 발급된 ID Token만 허용합니다. 다른 Firebase 제공자의 토큰은 거부합니다.")
-    @SecurityRequirements
-    @ApiResponses(
-        value = [
-            ApiResponse(
-                responseCode = "200",
-                description = "카카오 로그인 결과",
-                content = [
-                    Content(
-                        schema = Schema(implementation = FirebaseLoginResponse::class),
-                        examples = [ExampleObject(value = AuthSwaggerExamples.LOGIN_KAKAO)],
-                    ),
-                ],
-            ), ApiResponse(
-                responseCode = "400",
-                description = "카카오 제공자 불일치",
-                content = [
-                    Content(
-                        schema = Schema(implementation = ErrorResponse::class),
-                        examples = [ExampleObject(value = AuthSwaggerExamples.INVALID_PROVIDER)],
-                    ),
-                ],
-            ), ApiResponse(
-                responseCode = "401",
-                description = "유효하지 않은 Firebase ID Token",
-                content = [
-                    Content(
-                        schema = Schema(implementation = ErrorResponse::class),
-                        examples = [ExampleObject(value = AuthSwaggerExamples.INVALID_FIREBASE_TOKEN)],
-                    ),
-                ],
-            ),
-        ],
-    )
-    fun loginWithKakao(
-        @RequestBody(description = "카카오 Custom Token 로그인으로 받은 Firebase ID Token", required = true) request: FirebaseLoginRequest,
-    ): FirebaseLoginResponse
-
-    @Operation(summary = "이메일 로그인", description = "Firebase Email/Password 또는 Email Link 로그인으로 받은 ID Token을 검증합니다.")
-    @SecurityRequirements
-    @ApiResponses(
-        value = [
-            ApiResponse(
-                responseCode = "200",
-                description = "이메일 로그인 결과",
-                content = [
-                    Content(
-                        schema = Schema(implementation = FirebaseLoginResponse::class),
-                        examples = [ExampleObject(value = AuthSwaggerExamples.LOGIN_EMAIL)],
-                    ),
-                ],
-            ), ApiResponse(
-                responseCode = "400",
-                description = "이메일 제공자 불일치",
-                content = [
-                    Content(
-                        schema = Schema(implementation = ErrorResponse::class),
-                        examples = [ExampleObject(value = AuthSwaggerExamples.INVALID_PROVIDER)],
-                    ),
-                ],
-            ), ApiResponse(
-                responseCode = "401",
-                description = "유효하지 않은 Firebase ID Token",
-                content = [
-                    Content(
-                        schema = Schema(implementation = ErrorResponse::class),
-                        examples = [ExampleObject(value = AuthSwaggerExamples.INVALID_FIREBASE_TOKEN)],
-                    ),
-                ],
-            ),
-        ],
-    )
-    fun loginWithEmail(
-        @RequestBody(description = "Firebase 이메일 로그인 ID Token", required = true) request: FirebaseLoginRequest,
-    ): FirebaseLoginResponse
-
-    @Operation(summary = "Apple 로그인", description = "Firebase Sign in with Apple로 받은 ID Token을 검증합니다.")
-    @SecurityRequirements
-    @ApiResponses(
-        value = [
-            ApiResponse(
-                responseCode = "200",
-                description = "Apple 로그인 결과",
-                content = [
-                    Content(
-                        schema = Schema(implementation = FirebaseLoginResponse::class),
-                        examples = [ExampleObject(value = AuthSwaggerExamples.LOGIN_APPLE)],
-                    ),
-                ],
-            ), ApiResponse(
-                responseCode = "400",
-                description = "Apple 제공자 불일치",
-                content = [
-                    Content(
-                        schema = Schema(implementation = ErrorResponse::class),
-                        examples = [ExampleObject(value = AuthSwaggerExamples.INVALID_PROVIDER)],
-                    ),
-                ],
-            ), ApiResponse(
-                responseCode = "401",
-                description = "유효하지 않은 Firebase ID Token",
-                content = [
-                    Content(
-                        schema = Schema(implementation = ErrorResponse::class),
-                        examples = [ExampleObject(value = AuthSwaggerExamples.INVALID_FIREBASE_TOKEN)],
-                    ),
-                ],
-            ),
-        ],
-    )
-    fun loginWithApple(
-        @RequestBody(description = "Firebase Apple 로그인 ID Token", required = true) request: FirebaseLoginRequest,
-    ): FirebaseLoginResponse
-
-    @Operation(summary = "Google 로그인", description = "Firebase Google 로그인으로 받은 ID Token의 google.com 제공자를 검증합니다.")
-    @SecurityRequirements
-    @ApiResponses(
-        value = [
-            ApiResponse(
-                responseCode = "200",
-                description = "Google 로그인 결과",
-                content = [
-                    Content(
-                        schema = Schema(implementation = FirebaseLoginResponse::class),
-                        examples = [ExampleObject(value = AuthSwaggerExamples.LOGIN_GOOGLE)],
-                    ),
-                ],
-            ),
-            ApiResponse(
-                responseCode = "400",
-                description = "Google 제공자 불일치",
-                content = [Content(schema = Schema(implementation = ErrorResponse::class))],
-            ),
-            ApiResponse(
-                responseCode = "401",
-                description = "유효하지 않은 Firebase ID Token",
-                content = [Content(schema = Schema(implementation = ErrorResponse::class))],
-            ),
-        ],
-    )
-    fun loginWithGoogle(
-        @RequestBody(description = "Firebase Google 로그인 ID Token", required = true) request: FirebaseLoginRequest,
-    ): FirebaseLoginResponse
-
     @Operation(
-        summary = "Firebase 제공자 자동 판별 회원가입",
+        summary = "통합 회원가입",
         description = """
-            Firebase 제공자를 자동 판별하고 선택한 닉네임, 성별, 생년월일로 사용자를 생성합니다.
-            클라이언트 흐름은 로그인 방식 → 닉네임 → 성별·생년월일 → 사용자 생성 순서입니다.
-            응답의 PROFILE_IMAGE_REQUIRED에 따라 프로필 이미지 생성·선택 단계를 이어서 진행해야 합니다.
+            EMAIL, GOOGLE, APPLE, KAKAO가 공통으로 사용하는 단일 회원가입 API입니다.
+            providerType은 요청하지 않으며, 서버가 검증된 Firebase ID Token에서 실제 제공자를 판별해 저장합니다.
+
+            **FE 호출 순서**
+            1. /api/v1/auth/login에서 isNewUser=true와 USER_INFO_REQUIRED를 확인합니다.
+            2. /api/v1/auth/nickname-candidates에서 후보와 selectionToken을 발급받습니다.
+            3. 선택한 닉네임·성별·생년월일과 Firebase ID Token을 이 API에 전달합니다.
+            4. 응답의 PROFILE_IMAGE_REQUIRED에 따라 프로필 이미지 생성·선택 단계를 이어갑니다.
+
+            Kakao도 Custom Token으로 Firebase 로그인한 뒤 받은 Firebase ID Token을 사용합니다.
+            이미 다른 사용자에게 연결된 인증 수단이나 기존 이메일 계정을 자동 병합하지 않습니다.
         """,
     )
     @SecurityRequirements
@@ -377,202 +317,31 @@ interface AuthAPISpec {
             ),
         ],
     )
-    fun signupWithFirebase(
+    fun signup(
         @RequestBody(
-            description = "Firebase ID Token, 닉네임 선택 토큰, 선택한 닉네임, 성별, 생년월일과 선택적 FCM Token",
+            description = "모든 제공자가 공통으로 사용하는 회원가입 정보. idToken에는 Firebase ID Token을 전달하며 Kakao Custom Token 자체는 허용하지 않습니다.",
             required = true,
         ) request: FirebaseSignupRequest,
     ): ResponseEntity<ServiceTokensResponse>
 
     @Operation(
-        summary = "카카오 회원가입",
-        description = "카카오 Custom Token 로그인의 Firebase ID Token과 닉네임·성별·생년월일로 신규 회원을 생성합니다.",
-    )
-    @SecurityRequirements
-    @ApiResponses(
-        value = [
-            ApiResponse(
-                responseCode = "201",
-                description = "카카오 회원 등록 및 프로필 이미지 선택 단계 진입",
-                content = [
-                    Content(
-                        schema = Schema(implementation = ServiceTokensResponse::class),
-                        examples = [ExampleObject(value = AuthSwaggerExamples.SERVICE_TOKENS)],
-                    ),
-                ],
-            ), ApiResponse(
-                responseCode = "400",
-                description = "요청 검증 실패 또는 카카오 제공자 불일치",
-                content = [
-                    Content(
-                        schema = Schema(implementation = ErrorResponse::class),
-                        examples = [
-                            ExampleObject(name = "요청 검증 실패", value = AuthSwaggerExamples.BAD_REQUEST),
-                            ExampleObject(name = "닉네임 선택 오류", value = AuthSwaggerExamples.INVALID_NICKNAME_SELECTION),
-                        ],
-                    ),
-                ],
-            ), ApiResponse(
-                responseCode = "401",
-                description = "유효하지 않은 Firebase ID Token",
-                content = [
-                    Content(
-                        schema = Schema(implementation = ErrorResponse::class),
-                        examples = [ExampleObject(value = AuthSwaggerExamples.INVALID_FIREBASE_TOKEN)],
-                    ),
-                ],
-            ), ApiResponse(
-                responseCode = "409",
-                description = "닉네임 또는 인증 수단 중복",
-                content = [
-                    Content(
-                        schema = Schema(implementation = ErrorResponse::class),
-                        examples = [ExampleObject(value = AuthSwaggerExamples.DUPLICATE_NICKNAME)],
-                    ),
-                ],
-            ),
-        ],
-    )
-    fun signupWithKakao(
-        @RequestBody(description = "카카오 Firebase ID Token, 닉네임 선택 정보, 성별과 생년월일", required = true) request: FirebaseSignupRequest,
-    ): ResponseEntity<ServiceTokensResponse>
+        summary = "로그인 제공자 추가",
+        description = """
+            현재 로그인된 사용자에게 EMAIL, GOOGLE, APPLE 또는 KAKAO 인증 수단을 추가하는 단일 API입니다.
+            Authorization 헤더에는 현재 사용자의 서비스 Access Token을,
+            요청 본문의 idToken에는 새로 연결할 계정의 Firebase ID Token을 전달합니다.
 
-    @Operation(
-        summary = "이메일 회원가입",
-        description = "클라이언트에서 Firebase 이메일 계정을 생성한 후 받은 ID Token과 닉네임·성별·생년월일로 사용자를 생성하고 프로필 이미지 선택 단계로 진입합니다. 비밀번호는 서버에 전달하거나 저장하지 않습니다.",
-    )
-    @SecurityRequirements
-    @ApiResponses(
-        value = [
-            ApiResponse(
-                responseCode = "201",
-                description = "이메일 회원 등록 및 프로필 이미지 선택 단계 진입",
-                content = [
-                    Content(
-                        schema = Schema(implementation = ServiceTokensResponse::class),
-                        examples = [ExampleObject(value = AuthSwaggerExamples.SERVICE_TOKENS)],
-                    ),
-                ],
-            ), ApiResponse(
-                responseCode = "400",
-                description = "요청 검증 실패 또는 이메일 제공자 불일치",
-                content = [
-                    Content(
-                        schema = Schema(implementation = ErrorResponse::class),
-                        examples = [
-                            ExampleObject(name = "요청 검증 실패", value = AuthSwaggerExamples.BAD_REQUEST),
-                            ExampleObject(name = "닉네임 선택 오류", value = AuthSwaggerExamples.INVALID_NICKNAME_SELECTION),
-                        ],
-                    ),
-                ],
-            ), ApiResponse(
-                responseCode = "401",
-                description = "유효하지 않은 Firebase ID Token",
-                content = [
-                    Content(
-                        schema = Schema(implementation = ErrorResponse::class),
-                        examples = [ExampleObject(value = AuthSwaggerExamples.INVALID_FIREBASE_TOKEN)],
-                    ),
-                ],
-            ), ApiResponse(
-                responseCode = "409",
-                description = "닉네임, 이메일 또는 인증 수단 중복",
-                content = [
-                    Content(
-                        schema = Schema(implementation = ErrorResponse::class),
-                        examples = [ExampleObject(value = AuthSwaggerExamples.IDENTITY_LINKED)],
-                    ),
-                ],
-            ),
-        ],
-    )
-    fun signupWithEmail(
-        @RequestBody(description = "이메일 Firebase ID Token, 닉네임 선택 정보, 성별과 생년월일", required = true) request: FirebaseSignupRequest,
-    ): ResponseEntity<ServiceTokensResponse>
+            **EMAIL·Google·Apple 연결**
+            FE에서 새 제공자로 Firebase 로그인을 완료하고 발급받은 ID Token을 전달합니다.
 
-    @Operation(
-        summary = "Apple 회원가입",
-        description = "Firebase Apple 로그인으로 받은 ID Token과 닉네임·성별·생년월일로 사용자를 생성한 뒤 프로필 이미지 선택 단계로 진입합니다.",
-    )
-    @SecurityRequirements
-    @ApiResponses(
-        value = [
-            ApiResponse(
-                responseCode = "201",
-                description = "Apple 회원 등록 및 프로필 이미지 선택 단계 진입",
-                content = [
-                    Content(
-                        schema = Schema(implementation = ServiceTokensResponse::class),
-                        examples = [ExampleObject(value = AuthSwaggerExamples.SERVICE_TOKENS)],
-                    ),
-                ],
-            ), ApiResponse(
-                responseCode = "400",
-                description = "요청 검증 실패 또는 Apple 제공자 불일치",
-                content = [
-                    Content(
-                        schema = Schema(implementation = ErrorResponse::class),
-                        examples = [
-                            ExampleObject(name = "요청 검증 실패", value = AuthSwaggerExamples.BAD_REQUEST),
-                            ExampleObject(name = "닉네임 선택 오류", value = AuthSwaggerExamples.INVALID_NICKNAME_SELECTION),
-                        ],
-                    ),
-                ],
-            ), ApiResponse(
-                responseCode = "401",
-                description = "유효하지 않은 Firebase ID Token",
-                content = [
-                    Content(
-                        schema = Schema(implementation = ErrorResponse::class),
-                        examples = [ExampleObject(value = AuthSwaggerExamples.INVALID_FIREBASE_TOKEN)],
-                    ),
-                ],
-            ), ApiResponse(
-                responseCode = "409",
-                description = "닉네임, 이메일 또는 인증 수단 중복",
-                content = [
-                    Content(
-                        schema = Schema(implementation = ErrorResponse::class),
-                        examples = [ExampleObject(value = AuthSwaggerExamples.IDENTITY_LINKED)],
-                    ),
-                ],
-            ),
-        ],
-    )
-    fun signupWithApple(
-        @RequestBody(description = "Apple Firebase ID Token, 닉네임 선택 정보, 성별과 생년월일", required = true) request: FirebaseSignupRequest,
-    ): ResponseEntity<ServiceTokensResponse>
+            **Kakao 연결**
+            1. Kakao Access Token을 /api/v1/auth/firebase/kakao/custom-token에서 Custom Token으로 교환합니다.
+            2. Firebase signInWithCustomToken으로 로그인합니다.
+            3. 발급받은 Firebase ID Token을 이 API에 전달합니다.
 
-    @Operation(
-        summary = "Google 회원가입",
-        description = "Firebase Google ID Token과 닉네임·성별·생년월일로 사용자를 생성하고 프로필 이미지 선택 단계로 진입합니다.",
-    )
-    @SecurityRequirements
-    @ApiResponses(
-        value = [
-            ApiResponse(
-                responseCode = "201",
-                description = "Google 회원 등록 및 프로필 이미지 선택 단계 진입",
-                content = [
-                    Content(
-                        schema = Schema(implementation = ServiceTokensResponse::class),
-                        examples = [ExampleObject(value = AuthSwaggerExamples.SERVICE_TOKENS)],
-                    ),
-                ],
-            ),
-            ApiResponse(responseCode = "400", description = "요청 검증 실패 또는 Google 제공자 불일치"),
-            ApiResponse(responseCode = "401", description = "유효하지 않은 Firebase ID Token"),
-            ApiResponse(responseCode = "409", description = "닉네임, 이메일 또는 인증 수단 중복"),
-        ],
-    )
-    fun signupWithGoogle(
-        @RequestBody(description = "Google Firebase ID Token, 닉네임 선택 정보, 성별과 생년월일", required = true)
-        request: FirebaseSignupRequest,
-    ): ResponseEntity<ServiceTokensResponse>
-
-    @Operation(
-        summary = "Firebase 인증 수단 연결",
-        description = "로그인된 사용자에게 Firebase EMAIL, GOOGLE 또는 APPLE 인증 수단을 추가합니다. 연결 후 해당 수단으로 동일 계정에 로그인할 수 있습니다.",
+            서버는 Firebase 토큰에서 제공자를 직접 판별합니다. 같은 제공자를 현재 사용자에게 중복 연결하거나,
+            이미 다른 사용자에게 연결된 제공자 계정을 가져오는 요청은 거부합니다.
+        """,
     )
     @SecurityRequirement(name = "Authorization")
     @ApiResponses(
@@ -601,7 +370,10 @@ interface AuthAPISpec {
                 content = [
                     Content(
                         schema = Schema(implementation = ErrorResponse::class),
-                        examples = [ExampleObject(value = AuthSwaggerExamples.UNAUTHORIZED)],
+                        examples = [
+                            ExampleObject(name = "서비스 인증 실패", value = AuthSwaggerExamples.UNAUTHORIZED),
+                            ExampleObject(name = "연결할 Firebase 토큰 검증 실패", value = AuthSwaggerExamples.INVALID_FIREBASE_TOKEN),
+                        ],
                     ),
                 ],
             ), ApiResponse(
@@ -630,66 +402,9 @@ interface AuthAPISpec {
             ),
         ],
     )
-    fun linkFirebaseProvider(
+    fun linkProvider(
         @Parameter(hidden = true) principal: CustomUserDto,
-        @RequestBody(description = "새로 연결할 Firebase 계정의 ID Token", required = true) request: FirebaseLoginRequest,
-    ): LinkedProvidersResponse
-
-    @Operation(summary = "카카오 인증 수단 연결", description = "로그인된 사용자에게 카카오 계정을 추가합니다. 카카오 토큰의 app_id까지 검증하며, 연결 후 카카오로 동일 계정에 로그인할 수 있습니다.")
-    @SecurityRequirement(name = "Authorization")
-    @ApiResponses(
-        value = [
-            ApiResponse(
-                responseCode = "200",
-                description = "카카오 연결 완료",
-                content = [
-                    Content(
-                        schema = Schema(implementation = LinkedProvidersResponse::class),
-                        examples = [ExampleObject(value = AuthSwaggerExamples.LINKED_PROVIDERS)],
-                    ),
-                ],
-            ), ApiResponse(
-                responseCode = "400",
-                description = "요청 본문 검증 실패",
-                content = [
-                    Content(
-                        schema = Schema(implementation = ErrorResponse::class),
-                        examples = [ExampleObject(value = AuthSwaggerExamples.BAD_REQUEST)],
-                    ),
-                ],
-            ), ApiResponse(
-                responseCode = "401",
-                description = "서비스 JWT, 카카오 토큰 또는 카카오 app_id 검증 실패",
-                content = [
-                    Content(
-                        schema = Schema(implementation = ErrorResponse::class),
-                        examples = [ExampleObject(value = AuthSwaggerExamples.UNAUTHORIZED)],
-                    ),
-                ],
-            ), ApiResponse(
-                responseCode = "404",
-                description = "로그인 사용자 없음",
-                content = [
-                    Content(
-                        schema = Schema(implementation = ErrorResponse::class),
-                        examples = [ExampleObject(value = AuthSwaggerExamples.USER_NOT_FOUND)],
-                    ),
-                ],
-            ), ApiResponse(
-                responseCode = "409",
-                description = "카카오 제공자 중복 또는 다른 사용자에게 이미 연결됨",
-                content = [
-                    Content(
-                        schema = Schema(implementation = ErrorResponse::class),
-                        examples = [ExampleObject(value = AuthSwaggerExamples.IDENTITY_LINKED)],
-                    ),
-                ],
-            ),
-        ],
-    )
-    fun linkKakaoProvider(
-        @Parameter(hidden = true) principal: CustomUserDto,
-        @RequestBody(description = "새로 연결할 카카오 계정의 access token", required = true) request: KakaoCustomTokenRequest,
+        @RequestBody(description = "새로 연결할 계정으로 Firebase 로그인한 뒤 발급받은 ID Token", required = true) request: FirebaseLoginRequest,
     ): LinkedProvidersResponse
 
     @Operation(summary = "연결된 로그인 제공자 조회", description = "현재 로그인 사용자에게 연결된 EMAIL, APPLE, KAKAO, GOOGLE 제공자 목록을 반환합니다.")
@@ -788,26 +503,17 @@ private object AuthSwaggerExamples {
     const val LOGIN_NEW =
         """{"accessToken":null,"refreshToken":null,"isNewUser":true,""" +
             """"signupState":"USER_INFO_REQUIRED","providerType":"APPLE"}"""
-    const val LOGIN_KAKAO =
-        """{"accessToken":"access-token","refreshToken":"refresh-token","isNewUser":false,""" +
-            """"signupState":"SIGNUP_COMPLETE","providerType":"KAKAO"}"""
-    const val LOGIN_EMAIL =
-        """{"accessToken":"access-token","refreshToken":"refresh-token","isNewUser":false,""" +
-            """"signupState":"SIGNUP_COMPLETE","providerType":"EMAIL"}"""
-    const val LOGIN_APPLE =
-        """{"accessToken":"access-token","refreshToken":"refresh-token","isNewUser":false,""" +
-            """"signupState":"SIGNUP_COMPLETE","providerType":"APPLE"}"""
-    const val LOGIN_GOOGLE =
-        """{"accessToken":"access-token","refreshToken":"refresh-token","isNewUser":false,""" +
-            """"signupState":"SIGNUP_COMPLETE","providerType":"GOOGLE"}"""
     const val LINKED_PROVIDERS = """{"providers":["EMAIL","APPLE","KAKAO","GOOGLE"]}"""
     const val BAD_REQUEST = """{"code":40000,"errorMessage":"잘못된 요청입니다."}"""
     const val INVALID_REFRESH_TOKEN = """{"code":40001,"errorMessage":"유효하지 않은 RefreshToken 입니다."}"""
-    const val INVALID_PROVIDER = """{"code":40002,"errorMessage":"요청한 로그인 제공자와 Firebase 인증 정보가 일치하지 않습니다."}"""
+    const val INVALID_PROVIDER = """{"code":40002,"errorMessage":"지원하지 않거나 유효하지 않은 Firebase 로그인 제공자입니다."}"""
     const val INVALID_NICKNAME_SELECTION = """{"code":40003,"errorMessage":"닉네임 선택이 만료되었거나 발급된 후보와 일치하지 않습니다."}"""
     const val UNAUTHORIZED = """{"code":40100,"errorMessage":"인증되지 않은 사용자입니다."}"""
     const val INVALID_FIREBASE_TOKEN = """{"code":40101,"errorMessage":"유효하지 않은 Firebase ID 토큰입니다."}"""
     const val INVALID_KAKAO_APP = """{"code":40103,"errorMessage":"다른 카카오 애플리케이션에서 발급된 액세스 토큰입니다."}"""
+    const val INVALID_KAKAO_REDIRECT_URI = """{"code":40004,"errorMessage":"허용되지 않은 카카오 redirect URI입니다."}"""
+    const val INVALID_KAKAO_AUTHORIZATION_CODE = """{"code":40104,"errorMessage":"유효하지 않거나 만료된 카카오 인가 코드입니다."}"""
+    const val KAKAO_AUTH_UNAVAILABLE = """{"code":50202,"errorMessage":"카카오 인증 서버와 통신하지 못했습니다."}"""
     const val USER_NOT_FOUND = """{"code":40400,"errorMessage":"해당 유저를 찾을 수 없습니다."}"""
     const val DUPLICATE_NICKNAME = """{"code":40900,"errorMessage":"이미 사용중인 닉네임입니다."}"""
     const val IDENTITY_LINKED = """{"code":40903,"errorMessage":"이미 다른 사용자에게 연결된 로그인 수단입니다."}"""

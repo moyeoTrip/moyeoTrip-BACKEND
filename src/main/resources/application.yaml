@@ -41,6 +41,29 @@ server:
   forward-headers-strategy: framework
   shutdown: graceful
 
+kakao:
+  allowed-redirect-uris: https://moyeo-trip.jayden-bin.cc/
+
+moyeotrip:
+  web:
+    cors:
+      allowed-origins: http://localhost:4173,http://127.0.0.1:4173,http://localhost:5173,http://127.0.0.1:5173,https://moyeo-trip.jayden-bin.cc
+      max-age-seconds: 3600
+
+sentry:
+  environment: ${SPRING_PROFILES_ACTIVE:local}
+  sample-rate: 1.0
+  traces-sample-rate: 1.0
+  send-default-pii: false
+  max-request-body-size: none
+  # ControllerAdvice에서 선별한 400/500만 명시적으로 전송하고, 처리되지 않은 예외만 SDK가 보조 수집한다.
+  exception-resolver-order: 2147483647
+  logging:
+    # 모든 4xx를 기록하는 기존 error logger와 분리해 Sentry 전송 대상을 상태 코드로 제어한다.
+    enabled: false
+  in-app-includes:
+    - kr.hanchae.moyeotrip
+
 management:
   server:
     port: 8888
