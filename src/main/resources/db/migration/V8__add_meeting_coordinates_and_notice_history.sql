@@ -1,6 +1,6 @@
 -- 기존 기본값 5.0은 평가가 없는 사용자에게 부여된 값이므로 null로 전환한다.
-UPDATE users SET manner_rating = NULL;
 ALTER TABLE users MODIFY (manner_rating FLOAT(53) DEFAULT NULL NULL);
+UPDATE users SET manner_rating = NULL;
 
 -- null은 참가비가 아직 정해지지 않았음을 의미한다.
 ALTER TABLE chat_rooms MODIFY (participation_fee NUMBER(19, 0) NULL);
