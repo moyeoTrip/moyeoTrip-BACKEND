@@ -21,11 +21,17 @@ enum class ErrorCode(
 
     // FORBIDDEN는 40300부터 시작
     FORBIDDEN(HttpStatus.FORBIDDEN, 40300, "접근 권한이 없습니다."),
+    CHAT_ROOM_NOT_PARTICIPANT(HttpStatus.FORBIDDEN, 40301, "사용자가 채팅방에 참여하고 있지 않습니다."),
 
     // 리소스 NOT FOUND는 40400부터 시작
     USER_NOT_FOUND(HttpStatus.NOT_FOUND, 40400, "해당 유저를 찾을 수 없습니다."),
     PROFILE_IMAGE_NOT_FOUND(HttpStatus.NOT_FOUND, 40401, "선택할 수 있는 프로필 이미지를 찾을 수 없습니다."),
     RESOURCE_NOT_FOUND(HttpStatus.NOT_FOUND, 40402, "요청한 리소스를 찾을 수 없습니다."),
+    TRAVEL_COURSE_NOT_FOUND(HttpStatus.NOT_FOUND, 40403, "관리자가 등록한 여행 코스를 찾을 수 없습니다."),
+    CHAT_JOIN_APPLICATION_NOT_FOUND(HttpStatus.NOT_FOUND, 40404, "참가 신청을 찾을 수 없습니다."),
+    CHAT_ROOM_NOT_FOUND(HttpStatus.NOT_FOUND, 40405, "채팅방을 찾을 수 없습니다."),
+    CHAT_ROOM_MEMBER_NOT_FOUND(HttpStatus.NOT_FOUND, 40406, "채팅방 멤버를 찾을 수 없습니다."),
+    CHAT_ROOM_NO_MESSAGES(HttpStatus.NOT_FOUND, 40407, "채팅방에 메시지가 없습니다."),
 
     // 리소스 충돌은 40900부터 시작
     ALREADY_EXIST_NICKNAME(HttpStatus.CONFLICT, 40900, "이미 사용중인 닉네임입니다."),
@@ -33,6 +39,12 @@ enum class ErrorCode(
     USER_INFO_REQUIRED(HttpStatus.CONFLICT, 40902, "추가 정보 입력이 필요합니다.(닉네임, 성별, 생년월일)"),
     AUTH_IDENTITY_ALREADY_LINKED(HttpStatus.CONFLICT, 40903, "이미 다른 계정으로 가입이 되어있습니다"),
     AUTH_PROVIDER_ALREADY_LINKED(HttpStatus.CONFLICT, 40904, "해당 로그인 제공자가 이미 연결되어 있습니다."),
+    CHAT_ROOM_CLOSED(HttpStatus.CONFLICT, 40905, "모집이 종료된 채팅방입니다."),
+    CHAT_ROOM_ALREADY_JOINED(HttpStatus.CONFLICT, 40906, "이미 참가했거나 대기 중인 채팅방입니다."),
+    CHAT_ROOM_NOT_JOINED(HttpStatus.CONFLICT, 40907, "참가하거나 대기 중인 채팅방이 아닙니다."),
+    INVALID_TRAVEL_COURSE_SELECTION(HttpStatus.CONFLICT, 40909, "관리 코스 하나 또는 직접 구성한 코스 중 하나만 선택해야 합니다."),
+    INVALID_CHAT_ROOM_STATUS(HttpStatus.CONFLICT, 40910, "변경할 수 없는 여행 상태입니다."),
+    CHAT_DISABLED(HttpStatus.CONFLICT, 40911, "종료된 방에서는 채팅할 수 없습니다."),
 
     // 요청 한도 초과는 42900부터 시작
     PROFILE_IMAGE_GENERATION_LIMIT(HttpStatus.TOO_MANY_REQUESTS, 42900, "프로필 이미지는 사용자당 최대 3번까지 생성할 수 있습니다."),

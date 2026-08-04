@@ -11,18 +11,13 @@ import jakarta.persistence.Id
 import jakarta.persistence.JoinColumn
 import jakarta.persistence.ManyToOne
 import jakarta.persistence.Table
-import jakarta.persistence.UniqueConstraint
 import kr.hanchae.moyeotrip.entity.BaseTimeEntity
 import kr.hanchae.moyeotrip.entity.user.User
 
 @Entity
-@Table(
-    name = "chat_room_participants",
-    uniqueConstraints = [UniqueConstraint(name = "uk_chat_participant_room_user", columnNames = ["chat_room_id", "user_id"])],
-)
-class ChatRoomParticipant(
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+@Table(name = "chat_room_join_applications")
+class ChatRoomJoinApplication(
+    @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
     val id: Long = 0L,
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "chat_room_id", nullable = false, updatable = false)
@@ -30,18 +25,25 @@ class ChatRoomParticipant(
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "user_id", nullable = false, updatable = false)
     val user: User,
+    @Column(name = "application_message", nullable = false, length = 500)
+    val applicationMessage: String,
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
-    val role: ChatParticipantRole,
-    @Column(name = "last_read_message_id", nullable = false)
-    var lastReadMessageId: Long = 0L,
+    var status: JoinApplicationStatus = JoinApplicationStatus.PENDING,
 ) : BaseTimeEntity() {
-    fun readThrough(messageId: Long) { // 사용자 읽은 내용 업데이트
-        if (messageId > lastReadMessageId) lastReadMessageId = messageId
+    fun moveToWaitlist() {
+        check(status == JoinApplicationStatus.PENDING)
+        status = JoinApplicationStatus.WAITLISTED
+    }
+
+    fun reject() {
+        check(status == JoinApplicationStatus.PENDING)
+        status = JoinApplicationStatus.REJECTED
     }
 }
 
-enum class ChatParticipantRole {
-    HOST,
-    MEMBER,
+enum class JoinApplicationStatus {
+    PENDING,
+    WAITLISTED,
+    REJECTED,
 }

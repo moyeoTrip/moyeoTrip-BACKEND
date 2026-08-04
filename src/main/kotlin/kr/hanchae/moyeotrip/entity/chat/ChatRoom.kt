@@ -13,7 +13,6 @@ import jakarta.persistence.ManyToOne
 import jakarta.persistence.Table
 import kr.hanchae.moyeotrip.entity.BaseModifiableEntity
 import kr.hanchae.moyeotrip.entity.user.User
-import java.math.BigDecimal
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
@@ -52,8 +51,8 @@ class ChatRoom(
     val meetingLongitude: Double,
     @Column(name = "meeting_datetime", nullable = false)
     val meetingDateTime: LocalDateTime,
-    @Column(name = "participation_fee", nullable = false, precision = 12, scale = 0)
-    val participationFee: BigDecimal,
+    @Column(name = "participation_fee")
+    val participationFee: Long? = null,
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     var status: ChatRoomStatus = ChatRoomStatus.RECRUITING,
@@ -62,13 +61,13 @@ class ChatRoom(
     var chatClosedDateTime: LocalDateTime? = null
         protected set
 
-    @Column(name = "deletion_scheduled_datetime")
-    var deletionScheduledDateTime: LocalDateTime? = null
+    @Column(name = "deletion_scheduled_date")
+    var deletionScheduledDate: LocalDate? = null
         protected set
 
     init {
         require(recruitmentDeadlineDate <= startDate)
-        require(participationFee.signum() >= 0)
+        participationFee?.let { require(it >= 0) }
         require(meetingLatitude in -90.0..90.0)
         require(meetingLongitude in -180.0..180.0)
         require(meetingDateTime.toLocalDate() <= startDate)
@@ -84,16 +83,19 @@ class ChatRoom(
     fun cancel(now: LocalDateTime) {
         status = ChatRoomStatus.CANCELLED
         chatClosedDateTime = now
-        deletionScheduledDateTime = now.plusDays(14)
+        deletionScheduledDate = now.toLocalDate().plusDays(14)
     }
 
     fun confirm() {
         status = ChatRoomStatus.CONFIRMED
         chatClosedDateTime = null
-        deletionScheduledDateTime = null
+        deletionScheduledDate = null
     }
 
     fun canChat(): Boolean = chatClosedDateTime == null && status != ChatRoomStatus.CANCELLED
+
+    fun canAcceptJoinApplication(today: LocalDate = LocalDate.now()): Boolean =
+        status != ChatRoomStatus.CANCELLED && today < startDate.minusDays(1)
 
     fun dDay(today: LocalDate = LocalDate.now()): Long = ChronoUnit.DAYS.between(today, startDate)
 }
