@@ -41,3 +41,27 @@ out/
 
 ### Environment ###
 .env
+.env.*
+!.env.example
+*.pem
+*.p12
+*.jks
+*.keystore
+service-account*.json
+firebase-adminsdk*.json
+
+### macOS ###
+.DS_Store
+._*
+
+### Editors ###
+*.swp
+*.swo
+*~
+
+### Logs and runtime ###
+*.log
+logs/
+log/
+hs_err_pid*
+replay_pid*

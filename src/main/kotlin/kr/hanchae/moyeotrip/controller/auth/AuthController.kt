@@ -4,6 +4,7 @@ import jakarta.validation.Valid
 import kr.hanchae.moyeotrip.config.security.CustomUserDto
 import kr.hanchae.moyeotrip.controller.auth.request.FirebaseLoginRequest
 import kr.hanchae.moyeotrip.controller.auth.request.FirebaseSignupRequest
+import kr.hanchae.moyeotrip.controller.auth.request.KakaoAuthorizationCodeRequest
 import kr.hanchae.moyeotrip.controller.auth.request.KakaoCustomTokenRequest
 import kr.hanchae.moyeotrip.controller.auth.request.RefreshAccessTokenRequest
 import kr.hanchae.moyeotrip.controller.auth.response.FirebaseCustomTokenResponse
@@ -34,6 +35,11 @@ class AuthController(
     @PostMapping("/firebase/kakao/custom-token")
     override fun createKakaoCustomToken(
         @Valid @RequestBody request: KakaoCustomTokenRequest,
+    ): FirebaseCustomTokenResponse = authService.createKakaoCustomToken(request)
+
+    @PostMapping("/firebase/kakao/authorization-code/custom-token")
+    override fun createKakaoCustomTokenFromAuthorizationCode(
+        @Valid @RequestBody request: KakaoAuthorizationCodeRequest,
     ): FirebaseCustomTokenResponse = authService.createKakaoCustomToken(request)
 
     @PostMapping("/login")

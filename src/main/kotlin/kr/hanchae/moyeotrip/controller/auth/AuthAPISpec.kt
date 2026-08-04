@@ -15,6 +15,7 @@ import kr.hanchae.moyeotrip.config.security.CustomUserDto
 import kr.hanchae.moyeotrip.config.swagger.SwaggerTag
 import kr.hanchae.moyeotrip.controller.auth.request.FirebaseLoginRequest
 import kr.hanchae.moyeotrip.controller.auth.request.FirebaseSignupRequest
+import kr.hanchae.moyeotrip.controller.auth.request.KakaoAuthorizationCodeRequest
 import kr.hanchae.moyeotrip.controller.auth.request.KakaoCustomTokenRequest
 import kr.hanchae.moyeotrip.controller.auth.request.RefreshAccessTokenRequest
 import kr.hanchae.moyeotrip.controller.auth.response.FirebaseCustomTokenResponse
@@ -118,6 +119,69 @@ interface AuthAPISpec {
     fun createKakaoCustomToken(
         @RequestBody(description = "카카오 SDK가 발급한 access token", required = true)
         request: KakaoCustomTokenRequest,
+    ): FirebaseCustomTokenResponse
+
+    @Operation(
+        summary = "카카오 Web 인가 코드를 Firebase Custom Token으로 교환",
+        description = """
+            Kakao JavaScript SDK v2의 `Kakao.Auth.authorize()`가 redirect URI로 전달한 인가 코드를 처리합니다.
+            서버가 Kakao REST API 키와 선택적 client secret으로 인가 코드를 access token으로 교환하고,
+            토큰의 app_id를 검증한 뒤 Firebase Custom Token을 반환합니다.
+
+            redirectUri는 인가 요청에 사용한 값, Kakao Developers에 등록한 값, 서버의 허용 목록 값과 정확히 같아야 합니다.
+            REST API 키와 client secret을 Web 클라이언트에 전달하지 마세요. 인가 코드는 일회성이며 재사용할 수 없습니다.
+        """,
+    )
+    @SecurityRequirements
+    @ApiResponses(
+        value = [
+            ApiResponse(
+                responseCode = "200",
+                description = "Firebase Custom Token 발급 성공",
+                content = [
+                    Content(
+                        schema = Schema(implementation = FirebaseCustomTokenResponse::class),
+                        examples = [ExampleObject(value = AuthSwaggerExamples.CUSTOM_TOKEN)],
+                    ),
+                ],
+            ),
+            ApiResponse(
+                responseCode = "400",
+                description = "요청 검증 실패 또는 허용되지 않은 redirect URI",
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [ExampleObject(value = AuthSwaggerExamples.INVALID_KAKAO_REDIRECT_URI)],
+                    ),
+                ],
+            ),
+            ApiResponse(
+                responseCode = "401",
+                description = "유효하지 않거나 만료된 인가 코드, 또는 다른 Kakao 앱에서 발급된 토큰",
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [ExampleObject(value = AuthSwaggerExamples.INVALID_KAKAO_AUTHORIZATION_CODE)],
+                    ),
+                ],
+            ),
+            ApiResponse(
+                responseCode = "502",
+                description = "Kakao 인증 서버 통신 또는 Firebase Custom Token 발급 실패",
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [ExampleObject(value = AuthSwaggerExamples.KAKAO_AUTH_UNAVAILABLE)],
+                    ),
+                ],
+            ),
+        ],
+    )
+    fun createKakaoCustomTokenFromAuthorizationCode(
+        @RequestBody(
+            description = "Kakao JS SDK v2가 발급한 일회성 인가 코드와 인가 요청에 사용한 redirect URI",
+            required = true,
+        ) request: KakaoAuthorizationCodeRequest,
     ): FirebaseCustomTokenResponse
 
     @Operation(
@@ -447,6 +511,9 @@ private object AuthSwaggerExamples {
     const val UNAUTHORIZED = """{"code":40100,"errorMessage":"인증되지 않은 사용자입니다."}"""
     const val INVALID_FIREBASE_TOKEN = """{"code":40101,"errorMessage":"유효하지 않은 Firebase ID 토큰입니다."}"""
     const val INVALID_KAKAO_APP = """{"code":40103,"errorMessage":"다른 카카오 애플리케이션에서 발급된 액세스 토큰입니다."}"""
+    const val INVALID_KAKAO_REDIRECT_URI = """{"code":40004,"errorMessage":"허용되지 않은 카카오 redirect URI입니다."}"""
+    const val INVALID_KAKAO_AUTHORIZATION_CODE = """{"code":40104,"errorMessage":"유효하지 않거나 만료된 카카오 인가 코드입니다."}"""
+    const val KAKAO_AUTH_UNAVAILABLE = """{"code":50202,"errorMessage":"카카오 인증 서버와 통신하지 못했습니다."}"""
     const val USER_NOT_FOUND = """{"code":40400,"errorMessage":"해당 유저를 찾을 수 없습니다."}"""
     const val DUPLICATE_NICKNAME = """{"code":40900,"errorMessage":"이미 사용중인 닉네임입니다."}"""
     const val IDENTITY_LINKED = """{"code":40903,"errorMessage":"이미 다른 사용자에게 연결된 로그인 수단입니다."}"""

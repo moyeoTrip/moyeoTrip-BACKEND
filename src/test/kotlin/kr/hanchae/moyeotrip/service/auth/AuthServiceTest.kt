@@ -6,6 +6,7 @@ import kr.hanchae.moyeotrip.client.KakaoClient
 import kr.hanchae.moyeotrip.config.properties.KakaoProperties
 import kr.hanchae.moyeotrip.controller.auth.request.FirebaseLoginRequest
 import kr.hanchae.moyeotrip.controller.auth.request.FirebaseSignupRequest
+import kr.hanchae.moyeotrip.controller.auth.request.KakaoAuthorizationCodeRequest
 import kr.hanchae.moyeotrip.controller.auth.request.KakaoCustomTokenRequest
 import kr.hanchae.moyeotrip.controller.client.KakaoTokenInfoResponse
 import kr.hanchae.moyeotrip.entity.user.Gender
@@ -30,7 +31,10 @@ import org.junit.jupiter.api.Test
 import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito.mock
 import org.mockito.Mockito.verify
+import org.mockito.Mockito.verifyNoInteractions
 import org.mockito.Mockito.`when`
+import org.springframework.http.HttpStatus
+import org.springframework.web.client.HttpClientErrorException
 import java.time.LocalDate
 
 class AuthServiceTest {
@@ -56,7 +60,12 @@ class AuthServiceTest {
                 jwtUtil,
                 firebaseAuthenticationClient,
                 kakaoClient,
-                KakaoProperties(987654L),
+                KakaoProperties(
+                    appId = 987654L,
+                    restApiKey = "rest-api-key",
+                    clientSecret = "client-secret",
+                    allowedRedirectUris = listOf("https://moyeotrip.github.io/moyeoTrip-Web/auth/kakao/callback"),
+                ),
                 userAuthIdentityRepository,
                 nicknameCandidateRepository,
             )
@@ -141,6 +150,47 @@ class AuthServiceTest {
             }
 
         assertEquals(ErrorCode.INVALID_KAKAO_APP, exception.errorCode)
+    }
+
+    @Test
+    fun `Web 카카오 인가 코드는 액세스 토큰 교환과 앱 검증 후 Firebase 토큰으로 변환한다`() {
+        val redirectUri = "https://moyeotrip.github.io/moyeoTrip-Web/auth/kakao/callback"
+        `when`(kakaoClient.exchangeAuthorizationCode("authorization-code", redirectUri)).thenReturn("kakao-access-token")
+        `when`(kakaoClient.getTokenInfo("kakao-access-token")).thenReturn(KakaoTokenInfoResponse(12345L, 987654L, 3600L))
+        `when`(firebaseAuthenticationClient.createKakaoCustomToken("12345")).thenReturn("firebase-custom-token")
+
+        val response = authService.createKakaoCustomToken(KakaoAuthorizationCodeRequest("authorization-code", redirectUri))
+
+        assertEquals("firebase-custom-token", response.customToken)
+        verify(kakaoClient).exchangeAuthorizationCode("authorization-code", redirectUri)
+    }
+
+    @Test
+    fun `허용 목록에 없는 Web 카카오 redirect URI는 교환 전에 거부한다`() {
+        val exception =
+            assertThrows(BaseException::class.java) {
+                authService.createKakaoCustomToken(
+                    KakaoAuthorizationCodeRequest("authorization-code", "https://attacker.example/callback"),
+                )
+            }
+
+        assertEquals(ErrorCode.INVALID_KAKAO_REDIRECT_URI, exception.errorCode)
+        verifyNoInteractions(kakaoClient)
+    }
+
+    @Test
+    fun `Kakao가 인가 코드를 거부하면 안전한 인증 오류로 변환한다`() {
+        val redirectUri = "https://moyeotrip.github.io/moyeoTrip-Web/auth/kakao/callback"
+        `when`(kakaoClient.exchangeAuthorizationCode("expired-code", redirectUri))
+            .thenThrow(HttpClientErrorException(HttpStatus.BAD_REQUEST, "response containing credentials"))
+
+        val exception =
+            assertThrows(BaseException::class.java) {
+                authService.createKakaoCustomToken(KakaoAuthorizationCodeRequest("expired-code", redirectUri))
+            }
+
+        assertEquals(ErrorCode.INVALID_KAKAO_AUTHORIZATION_CODE, exception.errorCode)
+        assertEquals(ErrorCode.INVALID_KAKAO_AUTHORIZATION_CODE.errorMessage, exception.message)
     }
 
     @Test
