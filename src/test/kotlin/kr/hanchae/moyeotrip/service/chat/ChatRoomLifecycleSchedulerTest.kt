@@ -43,7 +43,7 @@ class ChatRoomLifecycleSchedulerTest {
 
         assertEquals(ChatRoomStatus.CANCELLED, room.status)
         assertNotNull(room.chatClosedDateTime)
-        assertEquals(14L, ChronoUnit.DAYS.between(room.chatClosedDateTime!!, room.deletionScheduledDateTime!!))
+        assertEquals(14L, ChronoUnit.DAYS.between(room.chatClosedDateTime!!.toLocalDate(), room.deletionScheduledDate!!))
         verify(messageRepository).save(any(ChatMessage::class.java))
     }
 
