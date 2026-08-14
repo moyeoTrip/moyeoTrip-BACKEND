@@ -47,6 +47,7 @@ import kr.hanchae.moyeotrip.repository.TourismContentRepository
 import kr.hanchae.moyeotrip.repository.TravelCoursePlaceRepository
 import kr.hanchae.moyeotrip.repository.TravelCourseRepository
 import kr.hanchae.moyeotrip.repository.UserRepository
+import kr.hanchae.moyeotrip.service.notification.NotificationService
 import org.springframework.data.domain.PageRequest
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -66,6 +67,7 @@ class ChatRoomService(
     private val userRepository: UserRepository,
     private val objectStorageRepository: ObjectStorageRepository,
     private val noticeRepository: ChatRoomNoticeRepository,
+    private val notificationService: NotificationService,
 ) {
     @Transactional
     fun createRoom(
@@ -97,6 +99,7 @@ class ChatRoomService(
             participantRepository.saveAndFlush(ChatRoomParticipant(chatRoom = room, user = host, role = ChatParticipantRole.HOST))
         val openingMessage = saveSystemMessage(room, "${host.nickname()}님이 모임을 개설했어요.")
         hostParticipant.readThrough(openingMessage.id)
+        notificationService.notifyRoomCreated(room)
     }
 
     @Transactional(readOnly = true)
@@ -145,6 +148,12 @@ class ChatRoomService(
     fun getManagedCourses(): List<TravelCourseResponse> =
         courseRepository
             .findAllByTypeOrderByCreatedDateTimeDesc(TravelCourseType.MANAGED)
+            .map { it.toResponse(editable = false) }
+
+    @Transactional(readOnly = true)
+    fun getPopularManagedCourses(): List<TravelCourseResponse> =
+        courseRepository
+            .findPopularManagedCourses(PageRequest.of(0, POPULAR_COURSE_LIMIT))
             .map { it.toResponse(editable = false) }
 
     @Transactional(readOnly = true)
@@ -367,6 +376,7 @@ class ChatRoomService(
                     ),
                 )
         participant.readThrough(message.id)
+        notificationService.notifyMessage(message)
         return message.toResponse()
     }
 
@@ -623,6 +633,7 @@ class ChatRoomService(
 
     companion object {
         private const val SYSTEM_NICKNAME = "시스템"
+        private const val POPULAR_COURSE_LIMIT = 3
         private val ACTIVE_APPLICATION_STATUSES = listOf(JoinApplicationStatus.PENDING, JoinApplicationStatus.WAITLISTED)
     }
 }

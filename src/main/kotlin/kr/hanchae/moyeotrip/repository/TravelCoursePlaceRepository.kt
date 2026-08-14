@@ -3,4 +3,6 @@ package kr.hanchae.moyeotrip.repository
 import kr.hanchae.moyeotrip.entity.tour.TravelCoursePlace
 import org.springframework.data.jpa.repository.JpaRepository
 
-interface TravelCoursePlaceRepository : JpaRepository<TravelCoursePlace, Long>
+interface TravelCoursePlaceRepository : JpaRepository<TravelCoursePlace, Long> {
+    fun deleteAllByCourseId(courseId: Long)
+}

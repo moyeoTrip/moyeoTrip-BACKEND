@@ -22,6 +22,10 @@ class TravelCourseController(
     @GetMapping("/managed")
     fun getManagedCourses(): List<TravelCourseResponse> = chatRoomService.getManagedCourses()
 
+    @Operation(summary = "인기 관리 여행 코스 TOP 3", description = "해당 코스로 만들어진 채팅방 수를 기준으로 집계합니다.")
+    @GetMapping("/managed/popular")
+    fun getPopularManagedCourses(): List<TravelCourseResponse> = chatRoomService.getPopularManagedCourses()
+
     @Operation(summary = "채팅방 여행 코스 조회", description = "해당 채팅방 참가자만 조회할 수 있습니다.")
     @GetMapping("/chat-rooms/{roomId}")
     fun getRoomCourse(

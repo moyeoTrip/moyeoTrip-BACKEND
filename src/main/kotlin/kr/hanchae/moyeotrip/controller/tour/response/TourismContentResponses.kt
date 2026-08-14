@@ -1,5 +1,7 @@
 package kr.hanchae.moyeotrip.controller.tour.response
 
+import com.fasterxml.jackson.databind.JsonNode
+
 data class TourismContentTypeResponse(
     val contentTypeId: Int,
     val contentTypeName: String,
@@ -41,4 +43,8 @@ data class TourismContentDetailResponse(
     val firstThumbnailUrl: String?,
     val longitude: Double?,
     val latitude: Double?,
+    val introDetails: JsonNode,
+    val additionalDetails: JsonNode,
+    val contentImages: JsonNode,
+    val menuImages: JsonNode,
 )
