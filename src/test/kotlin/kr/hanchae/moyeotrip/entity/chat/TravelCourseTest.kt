@@ -1,5 +1,7 @@
 package kr.hanchae.moyeotrip.entity.chat
 
+import kr.hanchae.moyeotrip.entity.tour.TravelCourse
+import kr.hanchae.moyeotrip.entity.tour.TravelCourseType
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
 

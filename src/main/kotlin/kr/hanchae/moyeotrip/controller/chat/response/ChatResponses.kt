@@ -4,7 +4,7 @@ import kr.hanchae.moyeotrip.entity.chat.ChatMessageType
 import kr.hanchae.moyeotrip.entity.chat.ChatParticipantRole
 import kr.hanchae.moyeotrip.entity.chat.ChatRoomStatus
 import kr.hanchae.moyeotrip.entity.chat.JoinApplicationStatus
-import kr.hanchae.moyeotrip.entity.chat.TravelCourseType
+import kr.hanchae.moyeotrip.entity.tour.TravelCourseType
 import kr.hanchae.moyeotrip.entity.user.Gender
 import java.time.LocalDate
 import java.time.LocalDateTime

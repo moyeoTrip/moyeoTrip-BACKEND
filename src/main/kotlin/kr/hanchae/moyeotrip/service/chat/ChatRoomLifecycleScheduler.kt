@@ -3,7 +3,7 @@ package kr.hanchae.moyeotrip.service.chat
 import kr.hanchae.moyeotrip.entity.chat.ChatMessage
 import kr.hanchae.moyeotrip.entity.chat.ChatMessageType
 import kr.hanchae.moyeotrip.entity.chat.ChatRoomStatus
-import kr.hanchae.moyeotrip.entity.chat.TravelCourseType
+import kr.hanchae.moyeotrip.entity.tour.TravelCourseType
 import kr.hanchae.moyeotrip.repository.ChatMessageRepository
 import kr.hanchae.moyeotrip.repository.ChatRoomParticipantRepository
 import kr.hanchae.moyeotrip.repository.ChatRoomRepository

@@ -12,6 +12,7 @@ import jakarta.persistence.JoinColumn
 import jakarta.persistence.ManyToOne
 import jakarta.persistence.Table
 import kr.hanchae.moyeotrip.entity.BaseModifiableEntity
+import kr.hanchae.moyeotrip.entity.tour.TravelCourse
 import kr.hanchae.moyeotrip.entity.user.User
 import java.time.LocalDate
 import java.time.LocalDateTime

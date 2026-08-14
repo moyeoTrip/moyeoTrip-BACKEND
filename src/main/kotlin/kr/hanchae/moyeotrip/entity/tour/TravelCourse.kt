@@ -1,4 +1,4 @@
-package kr.hanchae.moyeotrip.entity.chat
+package kr.hanchae.moyeotrip.entity.tour
 
 import jakarta.persistence.Column
 import jakarta.persistence.Entity

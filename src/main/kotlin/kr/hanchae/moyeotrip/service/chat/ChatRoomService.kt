@@ -31,8 +31,8 @@ import kr.hanchae.moyeotrip.entity.chat.ChatRoomNotice
 import kr.hanchae.moyeotrip.entity.chat.ChatRoomParticipant
 import kr.hanchae.moyeotrip.entity.chat.ChatRoomStatus
 import kr.hanchae.moyeotrip.entity.chat.JoinApplicationStatus
-import kr.hanchae.moyeotrip.entity.chat.TravelCourse
-import kr.hanchae.moyeotrip.entity.chat.TravelCourseType
+import kr.hanchae.moyeotrip.entity.tour.TravelCourse
+import kr.hanchae.moyeotrip.entity.tour.TravelCourseType
 import kr.hanchae.moyeotrip.entity.user.User
 import kr.hanchae.moyeotrip.exception.BaseException
 import kr.hanchae.moyeotrip.exception.ErrorCode
