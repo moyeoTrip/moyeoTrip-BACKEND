@@ -16,9 +16,6 @@ spring:
         quality: low
         n: 1
         size: 1024x1024
-  config:
-    # Spring Boot does not load .env automatically. Treat the project-root .env as a properties file.
-    import: optional:file:.env[.properties]
   # DB / JPA / Hikari 공통 설정은 모든 profile 에서 로드 — Spring 의 `application-{profile}.yml` 자동 매핑은
   profiles:
     include:
@@ -78,3 +75,7 @@ springdoc:
     enabled: true
   api-docs:
     path: /api-docs
+
+client:
+  tour:
+    tour-api-key: ${TOUR_API_KEY}
