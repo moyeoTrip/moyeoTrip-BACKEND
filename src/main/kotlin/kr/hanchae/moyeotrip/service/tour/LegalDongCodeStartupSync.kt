@@ -13,6 +13,7 @@ class LegalDongCodeStartupSync(
     private val legalDongCodeSyncService: LegalDongCodeSyncService,
     private val classificationCodeSyncService: TourClassificationCodeSyncService,
     private val tourismContentSyncService: TourismContentSyncService,
+    private val tourismContentDetailSyncService: TourismContentDetailSyncService,
 ) : ApplicationRunner {
     override fun run(args: ApplicationArguments) {
         if (!properties.syncOnStartup) return
@@ -30,11 +31,13 @@ class LegalDongCodeStartupSync(
             return
         }
         val legalDongCount = legalDongCodeSyncService.syncGyeongsangbukdo()
-        val classificationCount = classificationCodeSyncService.sync()
-        val tourismContentCount = tourismContentSyncService.syncGyeongsangbukdo()
         logger.info("경상북도 법정동 코드 {}건을 동기화했습니다.", legalDongCount)
+        val classificationCount = classificationCodeSyncService.sync()
         logger.info("관광 분류체계 코드 {}건을 동기화했습니다.", classificationCount)
+        val tourismContentCount = tourismContentSyncService.syncGyeongsangbukdo()
         logger.info("경상북도 관광정보 {}건을 동기화했습니다.", tourismContentCount)
+        val tourismContentDetailCount = tourismContentDetailSyncService.syncAll()
+        logger.info("경상북도 관광 상세정보 {}건을 동기화했습니다.", tourismContentDetailCount)
     }
 
     companion object {

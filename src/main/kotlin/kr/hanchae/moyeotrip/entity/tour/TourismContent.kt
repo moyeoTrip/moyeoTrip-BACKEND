@@ -5,6 +5,7 @@ import jakarta.persistence.Entity
 import jakarta.persistence.GeneratedValue
 import jakarta.persistence.GenerationType
 import jakarta.persistence.Id
+import jakarta.persistence.Lob
 import jakarta.persistence.Table
 import jakarta.persistence.UniqueConstraint
 import kr.hanchae.moyeotrip.entity.BaseModifiableEntity
@@ -33,6 +34,15 @@ class TourismContent(
     var zipcode: String? = null,
     @Column(length = 300)
     var telephone: String? = null,
+    @Column(name = "telephone_name", length = 300)
+    var telephoneName: String? = null,
+    @Column(name = "homepage", length = 2000)
+    var homepage: String? = null,
+    @Column(name = "book_tour", length = 10)
+    var bookTour: String? = null,
+    @Lob
+    @Column(name = "overview", columnDefinition = "CLOB")
+    var overview: String? = null,
     @Column(name = "first_image_url", length = 1000)
     var firstImageUrl: String? = null,
     @Column(name = "first_thumbnail_url", length = 1000)
@@ -60,6 +70,18 @@ class TourismContent(
     @Column(name = "level3_code", length = 9)
     var level3Code: String? = null,
 ) : BaseModifiableEntity() {
+    fun updateCommonDetail(
+        telephoneName: String?,
+        homepage: String?,
+        bookTour: String?,
+        overview: String?,
+    ) {
+        this.telephoneName = telephoneName
+        this.homepage = homepage
+        this.bookTour = bookTour
+        this.overview = overview
+    }
+
     fun update(
         contentTypeId: Int,
         title: String,

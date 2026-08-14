@@ -79,9 +79,8 @@ class TourApiClient(
                 .retrieve()
                 .body(TourAreaBasedApiResponse::class.java)
                 ?: throw IllegalStateException("한국관광공사 지역기반 관광정보 응답이 비어 있습니다.")
-        val tourResponse =
-            response.response
-                ?: throw IllegalStateException(response.openApiServiceResponse?.errorMessage() ?: "알 수 없는 공공데이터포털 오류입니다.")
+        val errorMessage = response.openApiServiceResponse?.errorMessage() ?: "알 수 없는 공공데이터포털 오류입니다."
+        val tourResponse = response.response ?: throw IllegalStateException(errorMessage)
         check(tourResponse.header.resultCode == SUCCESS_RESULT_CODE) {
             "한국관광공사 지역기반 관광정보 조회에 실패했습니다: ${tourResponse.header.resultMsg}"
         }
@@ -90,6 +89,27 @@ class TourApiClient(
             items = body.items?.item.orEmpty(),
             totalCount = body.totalCount,
         )
+    }
+
+    fun getCommonDetail(contentId: Long): TourCommonDetailItem? {
+        val uri = createCommonDetailUri(contentId)
+        val response =
+            restClient
+                .get()
+                .uri(uri)
+                .retrieve()
+                .body(TourCommonDetailApiResponse::class.java)
+                ?: throw IllegalStateException("한국관광공사 상세정보 응답이 비어 있습니다.")
+
+        val tourResponse =
+            response.response
+                ?: throw IllegalStateException(response.openApiServiceResponse?.errorMessage() ?: "알 수 없는 공공데이터포털 오류입니다.")
+        check(tourResponse.header.resultCode == SUCCESS_RESULT_CODE) {
+            "한국관광공사 상세정보 조회에 실패했습니다: ${tourResponse.header.resultMsg}"
+        }
+        return tourResponse.body.items
+            ?.item
+            ?.firstOrNull()
     }
 
     private fun createLegalDongCodeUri(
@@ -130,15 +150,27 @@ class TourApiClient(
     ): URI =
         URI.create(
             "https://apis.data.go.kr/B551011/KorService2/areaBasedList2?" +
-                    "numOfRows=$numOfRows" +
-                    "&pageNo=$pageNo" +
+                "numOfRows=$numOfRows" +
+                "&pageNo=$pageNo" +
                 "&MobileOS=$MOBILE_OS" +
                 "&MobileApp=$MOBILE_APP" +
                 "&_type=$RESPONSE_TYPE" +
-                    "&arrange=$AREA_BASED_ARRANGE" +
-                    "&contentTypeId=$contentTypeId" +
-                    "&serviceKey=${encodedApiKey()}" +
-                "&lDongRegnCd=$GYEONGSANGBUKDO_REGION_CODE"  ,
+                "&arrange=$AREA_BASED_ARRANGE" +
+                "&contentTypeId=$contentTypeId" +
+                "&serviceKey=${encodedApiKey()}" +
+                "&lDongRegnCd=$GYEONGSANGBUKDO_REGION_CODE",
+        )
+
+    private fun createCommonDetailUri(contentId: Long): URI =
+        URI.create(
+            "https://apis.data.go.kr/B551011/KorService2/detailCommon2" +
+                "?serviceKey=${encodedApiKey()}" +
+                "&MobileOS=$MOBILE_OS" +
+                "&MobileApp=$MOBILE_APP" +
+                "&_type=$RESPONSE_TYPE" +
+                "&contentId=$contentId" +
+                "&pageNo=1" +
+                "&numOfRows=1",
         )
 
     private fun encodedApiKey(): String =
@@ -297,4 +329,50 @@ data class TourAreaBasedItem(
 data class TourAreaBasedPage(
     val items: List<TourAreaBasedItem>,
     val totalCount: Int,
+)
+
+data class TourCommonDetailApiResponse(
+    val response: TourCommonDetailResponse? = null,
+    @param:JsonProperty("OpenAPI_ServiceResponse")
+    val openApiServiceResponse: OpenApiServiceErrorResponse? = null,
+)
+
+data class TourCommonDetailResponse(
+    val header: TourApiHeader,
+    val body: TourCommonDetailBody,
+)
+
+data class TourCommonDetailBody(
+    val items: TourCommonDetailItems? = null,
+    val numOfRows: Int,
+    val pageNo: Int,
+    val totalCount: Int,
+)
+
+data class TourCommonDetailItems(
+    val item: List<TourCommonDetailItem> = emptyList(),
+)
+
+data class TourCommonDetailItem(
+    val contentid: String,
+    val contenttypeid: String = "",
+    val title: String = "",
+    val createdtime: String = "",
+    val modifiedtime: String = "",
+    val tel: String = "",
+    val telname: String = "",
+    val homepage: String = "",
+    val booktour: String = "",
+    val firstimage: String = "",
+    val firstimage2: String = "",
+    val cpyrhtDivCd: String = "",
+    val addr1: String = "",
+    val addr2: String = "",
+    val zipcode: String = "",
+    val mapx: String = "",
+    val mapy: String = "",
+    val mlevel: String = "",
+    val lDongRegnCd: String = "",
+    val lDongSignguCd: String = "",
+    val overview: String = "",
 )
