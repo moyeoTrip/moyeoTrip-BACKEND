@@ -11,6 +11,7 @@ import kr.hanchae.moyeotrip.repository.ChatMessageRepository
 import kr.hanchae.moyeotrip.repository.ChatRoomParticipantRepository
 import kr.hanchae.moyeotrip.repository.ChatRoomRepository
 import kr.hanchae.moyeotrip.repository.TravelCourseRepository
+import kr.hanchae.moyeotrip.service.notification.NotificationService
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Test
@@ -27,8 +28,9 @@ class ChatRoomLifecycleSchedulerTest {
     private val participantRepository = mock(ChatRoomParticipantRepository::class.java)
     private val messageRepository = mock(ChatMessageRepository::class.java)
     private val courseRepository = mock(TravelCourseRepository::class.java)
+    private val notificationService = mock(NotificationService::class.java)
     private val scheduler =
-        ChatRoomLifecycleScheduler(roomRepository, participantRepository, messageRepository, courseRepository)
+        ChatRoomLifecycleScheduler(roomRepository, participantRepository, messageRepository, courseRepository, notificationService)
 
     @Test
     fun `모집 마감일까지 세 명이 모이지 않으면 채팅을 닫고 14일 후 삭제를 예약한다`() {

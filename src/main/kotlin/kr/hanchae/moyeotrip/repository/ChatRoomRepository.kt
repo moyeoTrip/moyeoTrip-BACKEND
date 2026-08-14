@@ -28,4 +28,9 @@ interface ChatRoomRepository : JpaRepository<ChatRoom, Long> {
     fun findAllDeletionDueRoomsForUpdate(
         @Param("date") date: LocalDate,
     ): List<ChatRoom>
+
+    fun findAllByStatusAndRecruitmentDeadlineDate(
+        status: ChatRoomStatus,
+        recruitmentDeadlineDate: LocalDate,
+    ): List<ChatRoom>
 }

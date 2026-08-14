@@ -37,6 +37,7 @@ enum class ErrorCode(
     CHAT_ROOM_NO_MESSAGES(HttpStatus.NOT_FOUND, 40407, "채팅방에 메시지가 없습니다."),
     TOURISM_CONTENT_NOT_FOUND(HttpStatus.NOT_FOUND, 40408, "관광 콘텐츠를 찾을 수 없습니다."),
     TOURISM_CONTENT_TYPE_NOT_FOUND(HttpStatus.NOT_FOUND, 40409, "관광 콘텐츠 타입을 찾을 수 없습니다."),
+    NOTIFICATION_NOT_FOUND(HttpStatus.NOT_FOUND, 40410, "알림을 찾을 수 없습니다."),
 
     // 리소스 충돌은 40900부터 시작
     ALREADY_EXIST_NICKNAME(HttpStatus.CONFLICT, 40900, "이미 사용중인 닉네임입니다."),

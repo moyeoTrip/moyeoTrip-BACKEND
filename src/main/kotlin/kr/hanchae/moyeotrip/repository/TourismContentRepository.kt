@@ -17,4 +17,8 @@ interface TourismContentRepository : JpaRepository<TourismContent, Long> {
         contentTypeCode: Int,
         pageable: Pageable,
     ): Page<TourismContent>
+
+    fun findAllByContentTypeCode(contentTypeCode: Int): List<TourismContent>
+
+    fun findAllByContentIdIn(contentIds: Collection<Long>): List<TourismContent>
 }

@@ -8,6 +8,7 @@ import kr.hanchae.moyeotrip.repository.ChatMessageRepository
 import kr.hanchae.moyeotrip.repository.ChatRoomParticipantRepository
 import kr.hanchae.moyeotrip.repository.ChatRoomRepository
 import kr.hanchae.moyeotrip.repository.TravelCourseRepository
+import kr.hanchae.moyeotrip.service.notification.NotificationService
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Component
 import org.springframework.transaction.annotation.Transactional
@@ -20,7 +21,16 @@ class ChatRoomLifecycleScheduler(
     private val participantRepository: ChatRoomParticipantRepository,
     private val messageRepository: ChatMessageRepository,
     private val courseRepository: TravelCourseRepository,
+    private val notificationService: NotificationService,
 ) {
+    @Scheduled(cron = "0 0 0 * * *", zone = "Asia/Seoul")
+    @Transactional
+    fun notifyRecruitmentDeadline() {
+        roomRepository
+            .findAllByStatusAndRecruitmentDeadlineDate(ChatRoomStatus.RECRUITING, LocalDate.now().plusDays(1))
+            .forEach(notificationService::notifyRecruitmentDeadline)
+    }
+
     @Scheduled(cron = "0 0 0 * * *", zone = "Asia/Seoul")
     @Transactional
     fun closeExpiredRecruitingRooms() {

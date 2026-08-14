@@ -20,6 +20,7 @@ import kr.hanchae.moyeotrip.repository.TourismContentRepository
 import kr.hanchae.moyeotrip.repository.TravelCoursePlaceRepository
 import kr.hanchae.moyeotrip.repository.TravelCourseRepository
 import kr.hanchae.moyeotrip.repository.UserRepository
+import kr.hanchae.moyeotrip.service.notification.NotificationService
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 import org.mockito.ArgumentMatchers.any
@@ -40,6 +41,7 @@ class ChatRoomServiceTest {
     private val userRepository = mock(UserRepository::class.java)
     private val objectStorageRepository = mock(ObjectStorageRepository::class.java)
     private val noticeRepository = mock(ChatRoomNoticeRepository::class.java)
+    private val notificationService = mock(NotificationService::class.java)
     private val service =
         ChatRoomService(
             roomRepository,
@@ -52,6 +54,7 @@ class ChatRoomServiceTest {
             userRepository,
             objectStorageRepository,
             noticeRepository,
+            notificationService,
         )
 
     @Test

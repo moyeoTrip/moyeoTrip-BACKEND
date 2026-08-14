@@ -1,6 +1,8 @@
 package kr.hanchae.moyeotrip.client
 
 import com.fasterxml.jackson.annotation.JsonProperty
+import com.fasterxml.jackson.databind.JsonNode
+import com.fasterxml.jackson.databind.ObjectMapper
 import kr.hanchae.moyeotrip.config.properties.TourApiProperties
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
@@ -12,6 +14,7 @@ import java.nio.charset.StandardCharsets
 @Component
 class TourApiClient(
     private val tourApiProperties: TourApiProperties,
+    private val objectMapper: ObjectMapper,
 ) {
     private val restClient: RestClient =
         RestClient
@@ -112,6 +115,46 @@ class TourApiClient(
             ?.firstOrNull()
     }
 
+    fun getIntroDetail(
+        contentId: Long,
+        contentTypeId: Int,
+    ): JsonNode = getDynamicDetail(createIntroDetailUri(contentId, contentTypeId), "소개정보")
+
+    fun getAdditionalDetails(
+        contentId: Long,
+        contentTypeId: Int,
+    ): JsonNode = getDynamicDetail(createAdditionalDetailUri(contentId, contentTypeId), "반복정보")
+
+    fun getImages(
+        contentId: Long,
+        imageYn: String,
+    ): JsonNode = getDynamicDetail(createImageDetailUri(contentId, imageYn), "이미지정보($imageYn)")
+
+    private fun getDynamicDetail(
+        uri: URI,
+        apiName: String,
+    ): JsonNode {
+        val root =
+            restClient
+                .get()
+                .uri(uri)
+                .retrieve()
+                .body(JsonNode::class.java)
+                ?: throw IllegalStateException("한국관광공사 $apiName 응답이 비어 있습니다.")
+        val response = root.path("response")
+        check(!response.isMissingNode) { "한국관광공사 $apiName 조회에 실패했습니다." }
+        val header = response.path("header")
+        check(header.path("resultCode").asText() == SUCCESS_RESULT_CODE) {
+            "한국관광공사 $apiName 조회에 실패했습니다: ${header.path("resultMsg").asText()}"
+        }
+        val item = response.path("body").path("items").path("item")
+        return when {
+            item.isArray -> item
+            item.isObject -> objectMapper.createArrayNode().add(item)
+            else -> objectMapper.createArrayNode()
+        }
+    }
+
     private fun createLegalDongCodeUri(
         pageNo: Int,
         numOfRows: Int,
@@ -173,6 +216,50 @@ class TourApiClient(
                 "&numOfRows=1",
         )
 
+    private fun createIntroDetailUri(
+        contentId: Long,
+        contentTypeId: Int,
+    ): URI = createContentTypeDetailUri("detailIntro2", contentId, contentTypeId, 1)
+
+    private fun createAdditionalDetailUri(
+        contentId: Long,
+        contentTypeId: Int,
+    ): URI = createContentTypeDetailUri("detailInfo2", contentId, contentTypeId, DETAIL_NUM_OF_ROWS)
+
+    private fun createContentTypeDetailUri(
+        endpoint: String,
+        contentId: Long,
+        contentTypeId: Int,
+        numOfRows: Int,
+    ): URI =
+        URI.create(
+            "https://apis.data.go.kr/B551011/KorService2/$endpoint" +
+                "?serviceKey=${encodedApiKey()}" +
+                "&MobileOS=$MOBILE_OS" +
+                "&MobileApp=$MOBILE_APP" +
+                "&_type=$RESPONSE_TYPE" +
+                "&contentId=$contentId" +
+                "&contentTypeId=$contentTypeId" +
+                "&pageNo=1" +
+                "&numOfRows=$numOfRows",
+        )
+
+    private fun createImageDetailUri(
+        contentId: Long,
+        imageYn: String,
+    ): URI =
+        URI.create(
+            "https://apis.data.go.kr/B551011/KorService2/detailImage2" +
+                "?serviceKey=${encodedApiKey()}" +
+                "&MobileOS=$MOBILE_OS" +
+                "&MobileApp=$MOBILE_APP" +
+                "&_type=$RESPONSE_TYPE" +
+                "&contentId=$contentId" +
+                "&imageYN=$imageYn" +
+                "&pageNo=1" +
+                "&numOfRows=$DETAIL_NUM_OF_ROWS",
+        )
+
     private fun encodedApiKey(): String =
         tourApiProperties.tourApiKey.let { key ->
             if ('%' in key) key else URLEncoder.encode(key, StandardCharsets.UTF_8)
@@ -191,6 +278,7 @@ class TourApiClient(
         private const val CLASSIFICATION_SYSTEM_LIST_YES = "Y"
         private const val AREA_BASED_ARRANGE = "C"
         private const val SUCCESS_RESULT_CODE = "0000"
+        private const val DETAIL_NUM_OF_ROWS = 1000
     }
 }
 
