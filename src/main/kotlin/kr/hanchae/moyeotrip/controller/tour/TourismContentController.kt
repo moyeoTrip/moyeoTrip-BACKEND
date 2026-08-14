@@ -5,6 +5,7 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement
 import io.swagger.v3.oas.annotations.tags.Tag
 import kr.hanchae.moyeotrip.controller.tour.response.TourismContentDetailResponse
 import kr.hanchae.moyeotrip.controller.tour.response.TourismContentPageResponse
+import kr.hanchae.moyeotrip.controller.tour.response.TourismContentTypeResponse
 import kr.hanchae.moyeotrip.service.tour.TourismContentService
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
@@ -19,6 +20,10 @@ import org.springframework.web.bind.annotation.RestController
 class TourismContentController(
     private val tourismContentService: TourismContentService,
 ) {
+    @Operation(summary = "관광 콘텐츠 타입 목록 조회")
+    @GetMapping("/types")
+    fun getContentTypes(): List<TourismContentTypeResponse> = tourismContentService.getContentTypes()
+
     @Operation(summary = "여행지 목록 조회")
     @GetMapping
     fun getContents(

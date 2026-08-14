@@ -4,10 +4,12 @@ import kr.hanchae.moyeotrip.client.TourApiClient
 import kr.hanchae.moyeotrip.controller.tour.response.TourismContentDetailResponse
 import kr.hanchae.moyeotrip.controller.tour.response.TourismContentPageResponse
 import kr.hanchae.moyeotrip.controller.tour.response.TourismContentSummaryResponse
+import kr.hanchae.moyeotrip.controller.tour.response.TourismContentTypeResponse
 import kr.hanchae.moyeotrip.entity.tour.TourismContent
 import kr.hanchae.moyeotrip.exception.BaseException
 import kr.hanchae.moyeotrip.exception.ErrorCode
 import kr.hanchae.moyeotrip.repository.TourismContentRepository
+import kr.hanchae.moyeotrip.repository.TourismContentTypeRepository
 import org.springframework.data.domain.PageRequest
 import org.springframework.data.domain.Sort
 import org.springframework.stereotype.Service
@@ -17,7 +19,14 @@ import org.springframework.transaction.annotation.Transactional
 class TourismContentService(
     private val tourApiClient: TourApiClient,
     private val repository: TourismContentRepository,
+    private val contentTypeRepository: TourismContentTypeRepository,
 ) {
+    @Transactional(readOnly = true)
+    fun getContentTypes(): List<TourismContentTypeResponse> =
+        contentTypeRepository.findAllByCodeNotOrderByCodeAsc(COURSE_CONTENT_TYPE_ID).map {
+            TourismContentTypeResponse(contentTypeId = it.code, contentTypeName = it.name)
+        }
+
     @Transactional(readOnly = true)
     fun getContents(
         contentTypeId: Int?,
@@ -29,8 +38,8 @@ class TourismContentService(
         }
         val pageable = PageRequest.of(page, size, Sort.by("title").ascending())
         val contents =
-            contentTypeId?.let { repository.findAllByContentTypeId(it, pageable) }
-                ?: repository.findAllByContentTypeIdNot(COURSE_CONTENT_TYPE_ID, pageable)
+            contentTypeId?.let { repository.findAllByContentTypeCode(it, pageable) }
+                ?: repository.findAllByContentTypeCodeNot(COURSE_CONTENT_TYPE_ID, pageable)
         return TourismContentPageResponse(
             items = contents.content.map(TourismContent::toSummaryResponse),
             page = contents.number,
@@ -71,7 +80,7 @@ class TourismContentService(
 private fun TourismContent.toSummaryResponse() =
     TourismContentSummaryResponse(
         contentId = contentId,
-        contentTypeId = contentTypeId,
+        contentTypeId = contentType.code,
         title = title,
         address1 = address1,
         address2 = address2,
@@ -84,7 +93,7 @@ private fun TourismContent.toSummaryResponse() =
 private fun TourismContent.toDetailResponse() =
     TourismContentDetailResponse(
         contentId = contentId,
-        contentTypeId = contentTypeId,
+        contentTypeId = contentType.code,
         title = title,
         address1 = address1,
         address2 = address2,

@@ -2,10 +2,13 @@ package kr.hanchae.moyeotrip.entity.tour
 
 import jakarta.persistence.Column
 import jakarta.persistence.Entity
+import jakarta.persistence.FetchType
 import jakarta.persistence.GeneratedValue
 import jakarta.persistence.GenerationType
 import jakarta.persistence.Id
+import jakarta.persistence.JoinColumn
 import jakarta.persistence.Lob
+import jakarta.persistence.ManyToOne
 import jakarta.persistence.Table
 import jakarta.persistence.UniqueConstraint
 import kr.hanchae.moyeotrip.entity.BaseModifiableEntity
@@ -22,8 +25,9 @@ class TourismContent(
     val id: Long = 0L,
     @Column(name = "content_id", nullable = false)
     val contentId: Long,
-    @Column(name = "content_type_id", nullable = false)
-    var contentTypeId: Int,
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "content_type_id", nullable = false)
+    var contentType: TourismContentType,
     @Column(nullable = false, length = 300)
     var title: String,
     @Column(length = 500)
@@ -83,7 +87,7 @@ class TourismContent(
     }
 
     fun update(
-        contentTypeId: Int,
+        contentType: TourismContentType,
         title: String,
         address1: String?,
         address2: String?,
@@ -103,7 +107,7 @@ class TourismContent(
         level2Code: String?,
         level3Code: String?,
     ) {
-        this.contentTypeId = contentTypeId
+        this.contentType = contentType
         this.title = title
         this.address1 = address1
         this.address2 = address2

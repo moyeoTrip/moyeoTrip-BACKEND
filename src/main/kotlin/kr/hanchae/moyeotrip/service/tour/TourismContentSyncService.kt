@@ -3,7 +3,11 @@ package kr.hanchae.moyeotrip.service.tour
 import kr.hanchae.moyeotrip.client.TourApiClient
 import kr.hanchae.moyeotrip.client.TourAreaBasedItem
 import kr.hanchae.moyeotrip.entity.tour.TourismContent
+import kr.hanchae.moyeotrip.entity.tour.TourismContentType
+import kr.hanchae.moyeotrip.exception.BaseException
+import kr.hanchae.moyeotrip.exception.ErrorCode
 import kr.hanchae.moyeotrip.repository.TourismContentRepository
+import kr.hanchae.moyeotrip.repository.TourismContentTypeRepository
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.LocalDateTime
@@ -13,14 +17,20 @@ import java.time.format.DateTimeFormatter
 class TourismContentSyncService(
     private val tourApiClient: TourApiClient,
     private val repository: TourismContentRepository,
+    private val contentTypeRepository: TourismContentTypeRepository,
 ) {
     @Transactional
     fun syncGyeongsangbukdo(): Int {
-        val apiItems = CONTENT_TYPE_IDS.flatMap(::fetchAllItems)
+        val contentTypes = contentTypeRepository.findAll().associateBy { it.code }
+        val apiItems = contentTypes.keys.flatMap(::fetchAllItems)
         val existingByContentId = repository.findAll().associateBy(TourismContent::contentId)
         val entities =
             apiItems.distinctBy(TourAreaBasedItem::contentid).map { item ->
-                existingByContentId[item.contentid.toLong()]?.apply { updateFrom(item) } ?: item.toEntity()
+                val contentType =
+                    contentTypes[item.contenttypeid.toInt()]
+                        ?: throw BaseException(ErrorCode.TOURISM_CONTENT_TYPE_NOT_FOUND)
+                existingByContentId[item.contentid.toLong()]?.apply { updateFrom(item, contentType) }
+                    ?: item.toEntity(contentType)
             }
         repository.saveAll(entities)
         return entities.size
@@ -39,16 +49,19 @@ class TourismContentSyncService(
         }
     }
 
-    private fun TourAreaBasedItem.toEntity() =
+    private fun TourAreaBasedItem.toEntity(contentType: TourismContentType) =
         TourismContent(
             contentId = contentid.toLong(),
-            contentTypeId = contenttypeid.toInt(),
+            contentType = contentType,
             title = title,
-        ).apply { updateFrom(this@toEntity) }
+        ).apply { updateFrom(this@toEntity, contentType) }
 
-    private fun TourismContent.updateFrom(item: TourAreaBasedItem) {
+    private fun TourismContent.updateFrom(
+        item: TourAreaBasedItem,
+        contentType: TourismContentType,
+    ) {
         update(
-            contentTypeId = item.contenttypeid.toInt(),
+            contentType = contentType,
             title = item.title,
             address1 = item.addr1.nullIfBlank(),
             address2 = item.addr2.nullIfBlank(),
@@ -78,7 +91,6 @@ class TourismContentSyncService(
 
     companion object {
         private const val PAGE_SIZE = 1000
-        private val CONTENT_TYPE_IDS = listOf(25, 14, 15, 12, 28, 32, 38, 39)
         private val TOUR_API_DATE_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyyMMddHHmmss")
     }
 }

@@ -1,6 +1,7 @@
 package kr.hanchae.moyeotrip.entity.chat
 
 import kr.hanchae.moyeotrip.entity.tour.TourismContent
+import kr.hanchae.moyeotrip.entity.tour.TourismContentType
 import kr.hanchae.moyeotrip.entity.tour.TravelCourse
 import kr.hanchae.moyeotrip.entity.tour.TravelCourseType
 import org.junit.jupiter.api.Assertions.assertThrows
@@ -12,7 +13,10 @@ class TravelCourseTest {
         val course = TravelCourse(id = 1L, type = TravelCourseType.MANAGED, title = "관리 코스")
 
         assertThrows(IllegalStateException::class.java) {
-            course.addCustomPlace(TourismContent(contentId = 1L, contentTypeId = 12, title = "임의 장소"), 1)
+            course.addCustomPlace(
+                TourismContent(contentId = 1L, contentType = TourismContentType(12, "관광지"), title = "임의 장소"),
+                1,
+            )
         }
     }
 }

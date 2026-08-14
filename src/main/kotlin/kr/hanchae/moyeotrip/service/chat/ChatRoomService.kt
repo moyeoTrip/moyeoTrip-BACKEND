@@ -399,7 +399,7 @@ class ChatRoomService(
         request: CreateChatRoomRequest,
     ): TravelCourse {
         val hasManaged = request.managedCourseId != null
-        val hasCustom = !request.customCourseTitle.isNullOrBlank() && !request.customPlaces.isNullOrEmpty()
+        val hasCustom = request.customCourseTitle.isNotBlank() && request.customPlaces.isNotEmpty()
         if (hasManaged == hasCustom) throw BaseException(ErrorCode.INVALID_TRAVEL_COURSE_SELECTION)
         request.managedCourseId?.let { managedCourseId ->
             return courseRepository.findByIdAndType(managedCourseId, TravelCourseType.MANAGED)
@@ -407,10 +407,11 @@ class ChatRoomService(
         }
         val course =
             courseRepository.saveAndFlush(
-                TravelCourse(type = TravelCourseType.CUSTOM, owner = host, title = request.customCourseTitle!!.trim()),
+                TravelCourse(type = TravelCourseType.CUSTOM, owner = host, title = request.customCourseTitle.trim()),
             )
         check(
-            request.customPlaces.map { it.sequence }
+            request.customPlaces
+                .map { it.sequence }
                 .distinct()
                 .size == request.customPlaces.size,
         ) {

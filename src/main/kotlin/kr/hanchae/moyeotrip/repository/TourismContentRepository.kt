@@ -8,13 +8,13 @@ import org.springframework.data.jpa.repository.JpaRepository
 interface TourismContentRepository : JpaRepository<TourismContent, Long> {
     fun findByContentId(contentId: Long): TourismContent?
 
-    fun findAllByContentTypeId(
-        contentTypeId: Int,
+    fun findAllByContentTypeCode(
+        contentTypeCode: Int,
         pageable: Pageable,
     ): Page<TourismContent>
 
-    fun findAllByContentTypeIdNot(
-        contentTypeId: Int,
+    fun findAllByContentTypeCodeNot(
+        contentTypeCode: Int,
         pageable: Pageable,
     ): Page<TourismContent>
 }

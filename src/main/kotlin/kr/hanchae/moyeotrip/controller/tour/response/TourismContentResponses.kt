@@ -1,5 +1,10 @@
 package kr.hanchae.moyeotrip.controller.tour.response
 
+data class TourismContentTypeResponse(
+    val contentTypeId: Int,
+    val contentTypeName: String,
+)
+
 data class TourismContentPageResponse(
     val items: List<TourismContentSummaryResponse>,
     val page: Int,
