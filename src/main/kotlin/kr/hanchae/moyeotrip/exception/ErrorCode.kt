@@ -13,6 +13,7 @@ enum class ErrorCode(
     INVALID_AUTH_PROVIDER(HttpStatus.BAD_REQUEST, 40002, "지원하지 않거나 유효하지 않은 Firebase 로그인 제공자입니다."),
     INVALID_NICKNAME_SELECTION(HttpStatus.BAD_REQUEST, 40003, "닉네임 선택이 만료되었거나 발급된 후보와 일치하지 않습니다."),
     INVALID_KAKAO_REDIRECT_URI(HttpStatus.BAD_REQUEST, 40004, "허용되지 않은 카카오 redirect URI입니다."),
+    TOURISM_COURSE_CONTENT_NOT_LISTED(HttpStatus.BAD_REQUEST, 40005, "코스 관광 콘텐츠는 여행지 목록에서 조회할 수 없습니다."),
 
     // UNAUTHORIZED는 40100부터 시작
     UNAUTHORIZED(HttpStatus.UNAUTHORIZED, 40100, "인증되지 않은 사용자입니다."),
@@ -34,6 +35,7 @@ enum class ErrorCode(
     CHAT_ROOM_NOT_FOUND(HttpStatus.NOT_FOUND, 40405, "채팅방을 찾을 수 없습니다."),
     CHAT_ROOM_MEMBER_NOT_FOUND(HttpStatus.NOT_FOUND, 40406, "채팅방 멤버를 찾을 수 없습니다."),
     CHAT_ROOM_NO_MESSAGES(HttpStatus.NOT_FOUND, 40407, "채팅방에 메시지가 없습니다."),
+    TOURISM_CONTENT_NOT_FOUND(HttpStatus.NOT_FOUND, 40408, "관광 콘텐츠를 찾을 수 없습니다."),
 
     // 리소스 충돌은 40900부터 시작
     ALREADY_EXIST_NICKNAME(HttpStatus.CONFLICT, 40900, "이미 사용중인 닉네임입니다."),

@@ -38,12 +38,11 @@ class TravelCourse(
         get() = coursePlaces.toList()
 
     fun addCustomPlace(
-        placeName: String,
-        description: String?,
+        tourismContent: TourismContent,
         sequence: Int,
     ): TravelCoursePlace {
         check(type == TravelCourseType.CUSTOM) { "관리자 코스의 세부 장소는 변경할 수 없습니다." }
-        return TravelCoursePlace(course = this, placeName = placeName, description = description, sequence = sequence)
+        return TravelCoursePlace(course = this, tourismContent = tourismContent, sequence = sequence)
             .also(coursePlaces::add)
     }
 }

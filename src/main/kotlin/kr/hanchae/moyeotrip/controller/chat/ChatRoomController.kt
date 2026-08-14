@@ -19,7 +19,6 @@ import kr.hanchae.moyeotrip.controller.chat.response.JoinChatRoomResponse
 import kr.hanchae.moyeotrip.controller.chat.response.LeaveChatRoomResponse
 import kr.hanchae.moyeotrip.controller.chat.response.MyChatRoomSummaryResponse
 import kr.hanchae.moyeotrip.controller.chat.response.MyWaitingChatRoomResponse
-import kr.hanchae.moyeotrip.controller.chat.response.TravelCourseResponse
 import kr.hanchae.moyeotrip.service.chat.ChatRoomService
 import kr.hanchae.moyeotrip.utils.LoginUserId
 import org.springframework.http.HttpStatus
@@ -47,10 +46,6 @@ class ChatRoomController(
         @LoginUserId userId: Long,
         @Valid @RequestBody request: CreateChatRoomRequest,
     ): ResponseEntity<Unit> = ResponseEntity.status(HttpStatus.CREATED).body(chatRoomService.createRoom(userId, request))
-
-    @Operation(summary = "관리자가 미리 구성한 여행 코스 목록")
-    @GetMapping("/managed-courses")
-    fun getManagedCourses(): List<TravelCourseResponse> = chatRoomService.getManagedCourses()
 
     @Operation(summary = "내 채팅방 목록", description = "안 읽은 메시지 수와 최근 메시지 정보를 함께 반환합니다.")
     @GetMapping("/my")

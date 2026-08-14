@@ -43,6 +43,7 @@ import kr.hanchae.moyeotrip.repository.ChatRoomNoticeRepository
 import kr.hanchae.moyeotrip.repository.ChatRoomParticipantRepository
 import kr.hanchae.moyeotrip.repository.ChatRoomRepository
 import kr.hanchae.moyeotrip.repository.ObjectStorageRepository
+import kr.hanchae.moyeotrip.repository.TourismContentRepository
 import kr.hanchae.moyeotrip.repository.TravelCoursePlaceRepository
 import kr.hanchae.moyeotrip.repository.TravelCourseRepository
 import kr.hanchae.moyeotrip.repository.UserRepository
@@ -61,6 +62,7 @@ class ChatRoomService(
     private val messageRepository: ChatMessageRepository,
     private val courseRepository: TravelCourseRepository,
     private val coursePlaceRepository: TravelCoursePlaceRepository,
+    private val tourismContentRepository: TourismContentRepository,
     private val userRepository: UserRepository,
     private val objectStorageRepository: ObjectStorageRepository,
     private val noticeRepository: ChatRoomNoticeRepository,
@@ -144,6 +146,16 @@ class ChatRoomService(
         courseRepository
             .findAllByTypeOrderByCreatedDateTimeDesc(TravelCourseType.MANAGED)
             .map { it.toResponse(editable = false) }
+
+    @Transactional(readOnly = true)
+    fun getRoomCourse(
+        userId: Long,
+        roomId: Long,
+    ): TravelCourseResponse {
+        val room = findRoom(roomId)
+        requireParticipant(roomId, userId)
+        return room.course.toResponse(editable = room.course.type == TravelCourseType.CUSTOM && room.course.owner?.id == userId)
+    }
 
     @Transactional
     fun applyToJoin(
@@ -397,9 +409,19 @@ class ChatRoomService(
             courseRepository.saveAndFlush(
                 TravelCourse(type = TravelCourseType.CUSTOM, owner = host, title = request.customCourseTitle!!.trim()),
             )
-        request.customPlaces!!.forEachIndexed { index, place ->
+        check(
+            request.customPlaces.map { it.sequence }
+                .distinct()
+                .size == request.customPlaces.size,
+        ) {
+            "코스 장소의 순서는 중복될 수 없습니다."
+        }
+        request.customPlaces.forEach { place ->
+            val tourismContent =
+                tourismContentRepository.findByContentId(place.contentId)
+                    ?: throw BaseException(ErrorCode.TOURISM_CONTENT_NOT_FOUND)
             coursePlaceRepository.save(
-                course.addCustomPlace(place.placeName.trim(), place.description?.trim()?.takeIf(String::isNotEmpty), index + 1),
+                course.addCustomPlace(tourismContent, place.sequence),
             )
         }
         return course
@@ -461,7 +483,12 @@ class ChatRoomService(
 
     private fun ChatRoom.toDetail(userId: Long): ChatRoomDetailResponse {
         val participants = participantRepository.findAllByChatRoomIdOrderByCreatedDateTimeAsc(id)
-        val approvedWaitlistCount = applicationRepository.countByChatRoomIdAndStatus(id, JoinApplicationStatus.WAITLISTED).toInt()
+        val approvedWaitlistCount =
+            if (host.id == userId) {
+                applicationRepository.countByChatRoomIdAndStatus(id, JoinApplicationStatus.WAITLISTED).toInt()
+            } else {
+                null
+            }
         val pendingApplicationCount =
             if (host.id == userId) {
                 applicationRepository.countByChatRoomIdAndStatus(id, JoinApplicationStatus.PENDING).toInt()
@@ -473,7 +500,6 @@ class ChatRoomService(
             roomTitle,
             description,
             noticeRepository.findFirstByChatRoomIdOrderByIdDesc(id)?.toResponse()?.takeUnless { it.cleared },
-            course.toResponse(editable = course.type == TravelCourseType.CUSTOM && course.owner?.id == userId),
             startDate,
             recruitmentDeadlineDate,
             tripDays,
@@ -502,7 +528,16 @@ class ChatRoomService(
             title,
             type,
             editable,
-            places.map { TravelCoursePlaceResponse(it.sequence, it.placeName, it.description) },
+            places.map {
+                TravelCoursePlaceResponse(
+                    it.sequence,
+                    it.tourismContent.contentId,
+                    it.tourismContent.title,
+                    it.tourismContent.firstThumbnailUrl,
+                    it.tourismContent.latitude ?: 0.0,
+                    it.tourismContent.longitude ?: 0.0,
+                )
+            },
         )
 
     private fun User.toApplicantProfile(): ApplicantProfileResponse {

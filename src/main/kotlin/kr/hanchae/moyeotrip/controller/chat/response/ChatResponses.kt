@@ -15,7 +15,6 @@ data class ChatRoomDetailResponse(
     val title: String,
     val description: String?,
     val latestNotice: ChatRoomNoticeResponse?,
-    val course: TravelCourseResponse,
     val startDate: LocalDate,
     val recruitmentDeadlineDate: LocalDate,
     val tripDays: Int,
@@ -29,7 +28,7 @@ data class ChatRoomDetailResponse(
     val hostId: Long,
     val participantCount: Int,
     val maxParticipants: Int,
-    val approvedWaitlistCount: Int,
+    val approvedWaitlistCount: Int?,
     val pendingApplicationCount: Int?,
     val status: ChatRoomStatus,
     val participants: List<ChatParticipantResponse>,
@@ -47,8 +46,11 @@ data class TravelCourseResponse(
 
 data class TravelCoursePlaceResponse(
     val sequence: Int,
-    val placeName: String,
-    val description: String?,
+    val contentId: Long,
+    val title: String,
+    val firstThumbnailUrl: String?,
+    val latitude: Double,
+    val longitude: Double,
 )
 
 data class ChatParticipantResponse(

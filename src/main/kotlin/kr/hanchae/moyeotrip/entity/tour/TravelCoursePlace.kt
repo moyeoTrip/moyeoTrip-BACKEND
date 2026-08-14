@@ -18,10 +18,9 @@ class TravelCoursePlace(
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "travel_course_id", nullable = false, updatable = false)
     val course: TravelCourse,
-    @Column(name = "place_name", nullable = false, length = 100)
-    val placeName: String,
-    @Column(length = 300)
-    val description: String? = null,
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "tourism_content_id", nullable = false, updatable = false)
+    val tourismContent: TourismContent,
     @Column(name = "place_sequence", nullable = false)
     val sequence: Int,
 )

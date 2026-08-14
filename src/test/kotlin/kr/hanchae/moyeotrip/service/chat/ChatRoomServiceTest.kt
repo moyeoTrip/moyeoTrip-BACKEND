@@ -16,6 +16,7 @@ import kr.hanchae.moyeotrip.repository.ChatRoomNoticeRepository
 import kr.hanchae.moyeotrip.repository.ChatRoomParticipantRepository
 import kr.hanchae.moyeotrip.repository.ChatRoomRepository
 import kr.hanchae.moyeotrip.repository.ObjectStorageRepository
+import kr.hanchae.moyeotrip.repository.TourismContentRepository
 import kr.hanchae.moyeotrip.repository.TravelCoursePlaceRepository
 import kr.hanchae.moyeotrip.repository.TravelCourseRepository
 import kr.hanchae.moyeotrip.repository.UserRepository
@@ -35,6 +36,7 @@ class ChatRoomServiceTest {
     private val messageRepository = mock(ChatMessageRepository::class.java)
     private val courseRepository = mock(TravelCourseRepository::class.java)
     private val placeRepository = mock(TravelCoursePlaceRepository::class.java)
+    private val tourismContentRepository = mock(TourismContentRepository::class.java)
     private val userRepository = mock(UserRepository::class.java)
     private val objectStorageRepository = mock(ObjectStorageRepository::class.java)
     private val noticeRepository = mock(ChatRoomNoticeRepository::class.java)
@@ -46,6 +48,7 @@ class ChatRoomServiceTest {
             messageRepository,
             courseRepository,
             placeRepository,
+            tourismContentRepository,
             userRepository,
             objectStorageRepository,
             noticeRepository,

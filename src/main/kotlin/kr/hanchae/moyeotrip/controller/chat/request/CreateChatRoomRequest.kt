@@ -33,14 +33,14 @@ data class CreateChatRoomRequest(
     val participationFee: Long? = null,
     val managedCourseId: Long? = null,
     @field:Size(max = 100)
-    val customCourseTitle: String? = null,
+    val customCourseTitle: String,
     @field:Valid
-    val customPlaces: List<CustomCoursePlaceRequest>? = null,
+    val customPlaces: List<CustomCoursePlaceRequest>,
 )
 
 data class CustomCoursePlaceRequest(
-    @field:NotBlank @field:Size(max = 100)
-    val placeName: String,
-    @field:Size(max = 300)
-    val description: String? = null,
+    @field:Min(1)
+    val contentId: Long,
+    @field:Min(1)
+    val sequence: Int,
 )
