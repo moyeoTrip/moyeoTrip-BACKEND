@@ -21,15 +21,18 @@ import kr.hanchae.moyeotrip.entity.user.User
 class TravelCourse(
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
     val id: Long = 0L,
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 20, updatable = false)
-    val type: TravelCourseType,
+    type: TravelCourseType,
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "owner_id", updatable = false)
     val owner: User? = null,
     @Column(nullable = false, length = 100)
     val title: String,
 ) : BaseModifiableEntity() {
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    var type: TravelCourseType = type
+        protected set
+
     @OneToMany(mappedBy = "course", fetch = FetchType.LAZY)
     @OrderBy("sequence ASC")
     private val coursePlaces: MutableList<TravelCoursePlace> = mutableListOf()
@@ -41,13 +44,18 @@ class TravelCourse(
         tourismContent: TourismContent,
         sequence: Int,
     ): TravelCoursePlace {
-        check(type == TravelCourseType.CUSTOM) { "관리자 코스의 세부 장소는 변경할 수 없습니다." }
+        check(type == TravelCourseType.CUSTOM) { "공개된 코스의 세부 장소는 변경할 수 없습니다." }
         return TravelCoursePlace(course = this, tourismContent = tourismContent, sequence = sequence)
             .also(coursePlaces::add)
+    }
+
+    fun publish() {
+        check(type == TravelCourseType.CUSTOM) { "커스텀 코스만 공개할 수 있습니다." }
+        type = TravelCourseType.PUBLIC
     }
 }
 
 enum class TravelCourseType {
     CUSTOM,
-    MANAGED,
+    PUBLIC,
 }

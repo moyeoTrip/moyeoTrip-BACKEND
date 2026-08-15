@@ -145,15 +145,15 @@ class ChatRoomService(
             }
 
     @Transactional(readOnly = true)
-    fun getManagedCourses(): List<TravelCourseResponse> =
+    fun getPublicCourses(): List<TravelCourseResponse> =
         courseRepository
-            .findAllByTypeOrderByCreatedDateTimeDesc(TravelCourseType.MANAGED)
+            .findAllByTypeOrderByCreatedDateTimeDesc(TravelCourseType.PUBLIC)
             .map { it.toResponse(editable = false) }
 
     @Transactional(readOnly = true)
-    fun getPopularManagedCourses(): List<TravelCourseResponse> =
+    fun getPopularPublicCourses(): List<TravelCourseResponse> =
         courseRepository
-            .findPopularManagedCourses(PageRequest.of(0, POPULAR_COURSE_LIMIT))
+            .findPopularPublicCourses(PageRequest.of(0, POPULAR_COURSE_LIMIT))
             .map { it.toResponse(editable = false) }
 
     @Transactional(readOnly = true)
@@ -430,11 +430,11 @@ class ChatRoomService(
         host: User,
         request: CreateChatRoomRequest,
     ): TravelCourse {
-        val hasManaged = request.managedCourseId != null
+        val hasPublicCourse = request.courseId != null
         val hasCustom = request.customCourseTitle.isNotBlank() && request.customPlaces.isNotEmpty()
-        if (hasManaged == hasCustom) throw BaseException(ErrorCode.INVALID_TRAVEL_COURSE_SELECTION)
-        request.managedCourseId?.let { managedCourseId ->
-            return courseRepository.findByIdAndType(managedCourseId, TravelCourseType.MANAGED)
+        if (hasPublicCourse == hasCustom) throw BaseException(ErrorCode.INVALID_TRAVEL_COURSE_SELECTION)
+        request.courseId?.let { courseId ->
+            return courseRepository.findByIdAndType(courseId, TravelCourseType.PUBLIC)
                 ?: throw BaseException(ErrorCode.TRAVEL_COURSE_NOT_FOUND)
         }
         val course =

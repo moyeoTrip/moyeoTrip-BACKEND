@@ -33,4 +33,18 @@ interface ChatRoomRepository : JpaRepository<ChatRoom, Long> {
         status: ChatRoomStatus,
         recruitmentDeadlineDate: LocalDate,
     ): List<ChatRoom>
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query(
+        """
+        SELECT room FROM ChatRoom room
+        WHERE room.status = :status
+          AND room.course.type = CUSTOM
+          AND ((room.endDate IS NULL AND room.startDate < :date) OR room.endDate < :date)
+        """,
+    )
+    fun findAllCompletedConfirmedRoomsForUpdate(
+        @Param("status") status: ChatRoomStatus,
+        @Param("date") date: LocalDate,
+    ): List<ChatRoom>
 }

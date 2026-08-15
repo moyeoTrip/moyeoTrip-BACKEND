@@ -116,7 +116,7 @@ class ChatRoomServiceTest {
         ChatRoom(
             id = 10L,
             host = host,
-            course = TravelCourse(id = 5L, type = TravelCourseType.MANAGED, title = "울릉도 대표 코스"),
+            course = TravelCourse(id = 5L, type = TravelCourseType.PUBLIC, title = "울릉도 대표 코스"),
             roomTitle = "울릉도 여행",
             maxParticipants = 3,
             startDate = LocalDate.now().plusDays(10),

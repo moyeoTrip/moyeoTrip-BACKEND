@@ -23,10 +23,10 @@ interface TravelCourseRepository : JpaRepository<TravelCourse, Long> {
         """
         SELECT course FROM TravelCourse course
         LEFT JOIN ChatRoom room ON room.course = course
-        WHERE course.type = MANAGED
+        WHERE course.type = PUBLIC
         GROUP BY course
         ORDER BY COUNT(room) DESC, course.id DESC
         """,
     )
-    fun findPopularManagedCourses(pageable: Pageable): List<TravelCourse>
+    fun findPopularPublicCourses(pageable: Pageable): List<TravelCourse>
 }

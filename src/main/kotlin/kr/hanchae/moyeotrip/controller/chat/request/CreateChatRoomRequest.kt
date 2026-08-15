@@ -30,7 +30,7 @@ data class CreateChatRoomRequest(
     val meetingDateTime: LocalDateTime,
     @field:Min(0)
     val participationFee: Long? = null,
-    val managedCourseId: Long? = null,
+    val courseId: Long? = null,
     @field:Size(max = 100)
     val customCourseTitle: String,
     @field:Valid

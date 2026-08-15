@@ -54,7 +54,7 @@ class ChatRoomLifecycleSchedulerTest {
         return ChatRoom(
             id = 10L,
             host = host,
-            course = TravelCourse(id = 5L, type = TravelCourseType.MANAGED, title = "관리 코스"),
+            course = TravelCourse(id = 5L, type = TravelCourseType.PUBLIC, title = "공개 코스"),
             roomTitle = "경주 여행",
             maxParticipants = 5,
             startDate = LocalDate.now().plusDays(5),

@@ -50,6 +50,16 @@ class ChatRoomLifecycleScheduler(
 
     @Scheduled(cron = "0 0 0 * * *", zone = "Asia/Seoul")
     @Transactional
+    fun publishCompletedTravelCourses() {
+        roomRepository
+            .findAllCompletedConfirmedRoomsForUpdate(ChatRoomStatus.CONFIRMED, LocalDate.now())
+            .map { it.course }
+            .distinctBy { it.id }
+            .forEach { it.publish() }
+    }
+
+    @Scheduled(cron = "0 0 0 * * *", zone = "Asia/Seoul")
+    @Transactional
     fun deleteExpiredRooms() {
         roomRepository.findAllDeletionDueRoomsForUpdate(LocalDate.now()).forEach { room ->
             val customCourse = room.course.takeIf { it.type == TravelCourseType.CUSTOM }
