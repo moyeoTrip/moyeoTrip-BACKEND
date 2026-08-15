@@ -28,10 +28,7 @@ class TravelCourse(
     @JoinColumn(name = "owner_id", updatable = false)
     val owner: User? = null,
     @Column(nullable = false, length = 100)
-    var title: String,
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "source_content_id")
-    val sourceContent: TourismContent? = null,
+    val title: String,
 ) : BaseModifiableEntity() {
     @OneToMany(mappedBy = "course", fetch = FetchType.LAZY)
     @OrderBy("sequence ASC")
@@ -47,11 +44,6 @@ class TravelCourse(
         check(type == TravelCourseType.CUSTOM) { "관리자 코스의 세부 장소는 변경할 수 없습니다." }
         return TravelCoursePlace(course = this, tourismContent = tourismContent, sequence = sequence)
             .also(coursePlaces::add)
-    }
-
-    fun updateManagedTitle(title: String) {
-        check(type == TravelCourseType.MANAGED)
-        this.title = title
     }
 }
 

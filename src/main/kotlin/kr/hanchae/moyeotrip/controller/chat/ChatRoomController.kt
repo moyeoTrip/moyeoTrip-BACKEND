@@ -4,6 +4,7 @@ import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.security.SecurityRequirement
 import io.swagger.v3.oas.annotations.tags.Tag
 import jakarta.validation.Valid
+import kr.hanchae.moyeotrip.controller.chat.request.CreateChatRoomNoticeRequest
 import kr.hanchae.moyeotrip.controller.chat.request.CreateChatRoomRequest
 import kr.hanchae.moyeotrip.controller.chat.request.JoinChatRoomRequest
 import kr.hanchae.moyeotrip.controller.chat.request.SendChatMessageRequest
@@ -129,14 +130,26 @@ class ChatRoomController(
         return ResponseEntity.noContent().build()
     }
 
-    @Operation(summary = "채팅방 공지 변경", description = "호스트가 최신 공지 한 건을 등록하거나 삭제합니다.")
-    @PutMapping("/{roomId}/notice")
+    @Operation(summary = "채팅방 공지 등록")
+    @PostMapping("/{roomId}/notices")
+    fun createNotice(
+        @LoginUserId userId: Long,
+        @PathVariable roomId: Long,
+        @Valid @RequestBody request: CreateChatRoomNoticeRequest,
+    ): ResponseEntity<Void> {
+        chatRoomService.createNotice(userId, roomId, request.notice)
+        return ResponseEntity.status(HttpStatus.CREATED).build()
+    }
+
+    @Operation(summary = "채팅방 공지 변경·삭제", description = "공지 내용이 null이면 noticeId에 해당하는 공지를 삭제합니다.")
+    @PutMapping("/{roomId}/notices/{noticeId}")
     fun updateNotice(
         @LoginUserId userId: Long,
         @PathVariable roomId: Long,
+        @PathVariable noticeId: Long,
         @Valid @RequestBody request: UpdateChatRoomNoticeRequest,
     ): ResponseEntity<Void> {
-        chatRoomService.updateNotice(userId, roomId, request.notice)
+        chatRoomService.updateNotice(userId, roomId, noticeId, request.notice)
         return ResponseEntity.noContent().build()
     }
 

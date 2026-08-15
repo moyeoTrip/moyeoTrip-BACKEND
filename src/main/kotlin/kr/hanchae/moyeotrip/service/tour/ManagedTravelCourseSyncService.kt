@@ -22,27 +22,23 @@ class ManagedTravelCourseSyncService(
     @Transactional
     fun sync(): Int {
         val courseContents = contentRepository.findAllByContentTypeCode(COURSE_CONTENT_TYPE_ID)
-        courseContents.forEach(::syncCourse)
-        return courseContents.size
+        return courseContents.count(::createCourseIfAbsent)
     }
 
-    private fun syncCourse(source: TourismContent) {
+    private fun createCourseIfAbsent(source: TourismContent): Boolean {
+        if (courseRepository.existsByTypeAndTitle(TravelCourseType.MANAGED, source.title)) return false
         val detailItems = tourApiClient.getAdditionalDetails(source.contentId, COURSE_CONTENT_TYPE_ID)
         val placesByContentId =
             contentRepository
                 .findAllByContentIdIn(detailItems.mapNotNull { it.subContentId() })
                 .associateBy { it.contentId }
         val course =
-            courseRepository.findBySourceContentId(source.id)?.apply { updateManagedTitle(source.title) }
-                ?: courseRepository.saveAndFlush(
-                    TravelCourse(
-                        type = TravelCourseType.MANAGED,
-                        title = source.title,
-                        sourceContent = source,
-                    ),
-                )
-        placeRepository.deleteAllByCourseId(course.id)
-        placeRepository.flush()
+            courseRepository.saveAndFlush(
+                TravelCourse(
+                    type = TravelCourseType.MANAGED,
+                    title = source.title,
+                ),
+            )
         detailItems
             .mapNotNull { item ->
                 val content = item.subContentId()?.let(placesByContentId::get) ?: return@mapNotNull null
@@ -54,6 +50,7 @@ class ManagedTravelCourseSyncService(
                 )
             }.sortedBy(TravelCoursePlace::sequence)
             .forEach(placeRepository::save)
+        return true
     }
 
     private fun JsonNode.subContentId(): Long? = path("subcontentid").asText().toLongOrNull()

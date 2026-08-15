@@ -5,6 +5,6 @@ import jakarta.validation.constraints.Size
 
 data class UpdateChatRoomNoticeRequest(
     @field:Size(max = 1000, message = "공지는 1000자 이하여야 합니다.")
-    @Schema(description = "채팅방 공지, null이면 현재 공지를 내림")
+    @Schema(description = "수정할 공지 내용. null이면 해당 공지를 삭제")
     val notice: String?,
 )

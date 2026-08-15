@@ -14,20 +14,19 @@ data class CreateChatRoomRequest(
     val title: String,
     @field:Size(max = 500)
     val description: String? = null,
-    @field:Min(3) @field:Max(20)
+    @field:Min(3) @field:Max(12)
     val maxParticipants: Int,
     val startDate: LocalDate,
+    val endDate: LocalDate? = null,
     val recruitmentDeadlineDate: LocalDate,
-    @field:Min(1) @field:Max(30)
-    val tripDays: Int,
     val dayTripStartTime: LocalTime? = null,
     val dayTripEndTime: LocalTime? = null,
     @field:Min(-90)
     @field:Max(90)
-    val meetingLatitude: Double,
+    val meetingLatitude: Double? = null,
     @field:Min(-180)
     @field:Max(180)
-    val meetingLongitude: Double,
+    val meetingLongitude: Double? = null,
     val meetingDateTime: LocalDateTime,
     @field:Min(0)
     val participationFee: Long? = null,

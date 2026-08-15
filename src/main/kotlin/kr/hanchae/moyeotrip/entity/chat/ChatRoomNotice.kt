@@ -24,5 +24,9 @@ class ChatRoomNotice(
     @JoinColumn(name = "author_id", nullable = false, updatable = false)
     val author: User,
     @Column(length = 1000)
-    val content: String?,
-) : BaseTimeEntity()
+    var content: String?,
+) : BaseTimeEntity() {
+    fun updateContent(content: String) {
+        this.content = content
+    }
+}

@@ -11,6 +11,7 @@ import jakarta.persistence.Id
 import jakarta.persistence.JoinColumn
 import jakarta.persistence.ManyToOne
 import jakarta.persistence.Table
+import jakarta.persistence.Transient
 import kr.hanchae.moyeotrip.entity.BaseModifiableEntity
 import kr.hanchae.moyeotrip.entity.tour.TravelCourse
 import kr.hanchae.moyeotrip.entity.user.User
@@ -38,18 +39,18 @@ class ChatRoom(
     val maxParticipants: Int,
     @Column(name = "start_date", nullable = false)
     val startDate: LocalDate,
+    @Column(name = "end_date")
+    val endDate: LocalDate? = null,
     @Column(name = "recruitment_deadline_date", nullable = false)
     val recruitmentDeadlineDate: LocalDate,
-    @Column(name = "trip_days", nullable = false)
-    val tripDays: Int,
     @Column(name = "day_trip_start_time")
     val dayTripStartTime: LocalTime? = null,
     @Column(name = "day_trip_end_time")
     val dayTripEndTime: LocalTime? = null,
-    @Column(name = "meeting_latitude", nullable = false)
-    val meetingLatitude: Double,
-    @Column(name = "meeting_longitude", nullable = false)
-    val meetingLongitude: Double,
+    @Column(name = "meeting_latitude")
+    val meetingLatitude: Double? = null,
+    @Column(name = "meeting_longitude")
+    val meetingLongitude: Double? = null,
     @Column(name = "meeting_datetime", nullable = false)
     val meetingDateTime: LocalDateTime,
     @Column(name = "participation_fee")
@@ -58,6 +59,14 @@ class ChatRoom(
     @Column(nullable = false, length = 20)
     var status: ChatRoomStatus = ChatRoomStatus.RECRUITING,
 ) : BaseModifiableEntity() {
+    @get:Transient
+    val tripDays: Int
+        get() = endDate?.let { ChronoUnit.DAYS.between(startDate, it).toInt() + 1 } ?: 1
+
+    @get:Transient
+    val tripNights: Int
+        get() = tripDays - 1
+
     @Column(name = "chat_closed_datetime")
     var chatClosedDateTime: LocalDateTime? = null
         protected set
@@ -68,9 +77,13 @@ class ChatRoom(
 
     init {
         require(recruitmentDeadlineDate <= startDate)
+        endDate?.let { require(!it.isBefore(startDate)) }
+        require(tripDays <= 30)
+        require(maxParticipants in 3..12)
         participationFee?.let { require(it >= 0) }
-        require(meetingLatitude in -90.0..90.0)
-        require(meetingLongitude in -180.0..180.0)
+        meetingLatitude?.let { require(it in -90.0..90.0) }
+        meetingLongitude?.let { require(it in -180.0..180.0) }
+        require((meetingLatitude == null) == (meetingLongitude == null))
         require(meetingDateTime.toLocalDate() <= startDate)
         if (tripDays == 1) {
             val startTime = dayTripStartTime

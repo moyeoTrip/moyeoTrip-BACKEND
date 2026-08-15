@@ -85,8 +85,8 @@ class ChatRoomService(
                     description = request.description?.trim()?.takeIf(String::isNotEmpty),
                     maxParticipants = request.maxParticipants,
                     startDate = request.startDate,
+                    endDate = request.endDate,
                     recruitmentDeadlineDate = request.recruitmentDeadlineDate,
-                    tripDays = request.tripDays,
                     dayTripStartTime = request.dayTripStartTime,
                     dayTripEndTime = request.dayTripEndTime,
                     meetingLatitude = request.meetingLatitude,
@@ -334,17 +334,39 @@ class ChatRoomService(
     }
 
     @Transactional
+    fun createNotice(
+        hostId: Long,
+        roomId: Long,
+        notice: String,
+    ) {
+        val room = findRoomForUpdate(roomId)
+        requireHost(room, hostId)
+        requireChatEnabled(room)
+        val content = notice.trim().takeIf(String::isNotEmpty) ?: throw BaseException(ErrorCode.BAD_REQUEST)
+        noticeRepository.save(ChatRoomNotice(chatRoom = room, author = room.host, content = content))
+        saveSystemMessage(room, "공지가 등록되었어요.\n$content")
+    }
+
+    @Transactional
     fun updateNotice(
         hostId: Long,
         roomId: Long,
+        noticeId: Long,
         notice: String?,
     ) {
         val room = findRoomForUpdate(roomId)
         requireHost(room, hostId)
         requireChatEnabled(room)
         val normalizedNotice = notice?.trim()?.takeIf(String::isNotEmpty)
-        noticeRepository.save(ChatRoomNotice(chatRoom = room, author = room.host, content = normalizedNotice))
-        normalizedNotice?.let { saveSystemMessage(room, "공지가 등록되었어요.\n$it") }
+        val target =
+            noticeRepository.findByIdAndChatRoomId(noticeId, roomId)
+                ?: throw BaseException(ErrorCode.CHAT_ROOM_NOTICE_NOT_FOUND)
+        if (normalizedNotice == null) {
+            noticeRepository.delete(target)
+        } else {
+            target.updateContent(normalizedNotice)
+            saveSystemMessage(room, "공지가 수정되었어요.\n$normalizedNotice")
+        }
     }
 
     @Transactional(readOnly = true)
@@ -510,9 +532,11 @@ class ChatRoomService(
             id,
             roomTitle,
             description,
-            noticeRepository.findFirstByChatRoomIdOrderByIdDesc(id)?.toResponse()?.takeUnless { it.cleared },
+            noticeRepository.findFirstByChatRoomIdAndContentIsNotNullOrderByIdDesc(id)?.toResponse(),
             startDate,
+            endDate,
             recruitmentDeadlineDate,
+            tripNights,
             tripDays,
             dayTripStartTime,
             dayTripEndTime,
@@ -588,7 +612,6 @@ class ChatRoomService(
             content = content,
             authorNickname = author.nickname(),
             createdAt = createdDateTime,
-            cleared = content == null,
         )
 
     private fun User.nickname() = information?.nickname ?: "사용자 $id"

@@ -14,7 +14,10 @@ interface TravelCourseRepository : JpaRepository<TravelCourse, Long> {
 
     fun findAllByTypeOrderByCreatedDateTimeDesc(type: TravelCourseType): List<TravelCourse>
 
-    fun findBySourceContentId(sourceContentId: Long): TravelCourse?
+    fun existsByTypeAndTitle(
+        type: TravelCourseType,
+        title: String,
+    ): Boolean
 
     @Query(
         """
