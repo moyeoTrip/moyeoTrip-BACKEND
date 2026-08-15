@@ -50,7 +50,7 @@ data class TravelCoursePlaceResponse(
     val sequence: Int,
     val contentId: Long,
     val title: String,
-    val firstThumbnailUrl: String?,
+    val thumbnail: String?,
     val latitude: Double,
     val longitude: Double,
 )

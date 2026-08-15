@@ -7,5 +7,5 @@ import org.springframework.boot.context.properties.ConfigurationProperties
 data class TourApiProperties(
     @field:JsonProperty("tour-api-key")
     val tourApiKey: String,
-    val syncOnStartup: Boolean = true,
+    val syncOnStartup: Boolean = false,
 )

@@ -47,10 +47,8 @@ class TourismContent(
     @Lob
     @Column(name = "overview", columnDefinition = "CLOB")
     var overview: String? = null,
-    @Column(name = "first_image_url", length = 1000)
-    var firstImageUrl: String? = null,
-    @Column(name = "first_thumbnail_url", length = 1000)
-    var firstThumbnailUrl: String? = null,
+    @Column(name = "thumbnail", length = 1000)
+    var thumbnail: String? = null,
     @Column(name = "copyright_type", length = 20)
     var copyrightType: String? = null,
     @Column(name = "longitude")
@@ -93,8 +91,7 @@ class TourismContent(
         address2: String?,
         zipcode: String?,
         telephone: String?,
-        firstImageUrl: String?,
-        firstThumbnailUrl: String?,
+        thumbnail: String?,
         copyrightType: String?,
         longitude: Double?,
         latitude: Double?,
@@ -113,8 +110,7 @@ class TourismContent(
         this.address2 = address2
         this.zipcode = zipcode
         this.telephone = telephone
-        this.firstImageUrl = firstImageUrl
-        this.firstThumbnailUrl = firstThumbnailUrl
+        this.thumbnail = thumbnail
         this.copyrightType = copyrightType
         this.longitude = longitude
         this.latitude = latitude

@@ -1,6 +1,6 @@
 package kr.hanchae.moyeotrip.controller.tour.response
 
-import com.fasterxml.jackson.databind.JsonNode
+import io.swagger.v3.oas.annotations.media.Schema
 
 data class TourismContentTypeResponse(
     val contentTypeId: Int,
@@ -21,8 +21,7 @@ data class TourismContentSummaryResponse(
     val title: String,
     val address1: String?,
     val address2: String?,
-    val firstImageUrl: String?,
-    val firstThumbnailUrl: String?,
+    val thumbnail: String?,
     val longitude: Double?,
     val latitude: Double?,
 )
@@ -39,10 +38,20 @@ data class TourismContentDetailResponse(
     val homepage: String?,
     val bookTour: String?,
     val overview: String?,
-    val firstImageUrl: String?,
-    val firstThumbnailUrl: String?,
+    val thumbnail: String?,
     val longitude: Double?,
     val latitude: Double?,
-    val contentImages: JsonNode,
-    val menuImages: JsonNode,
+    val contentImages: List<TourismContentImageResponse>,
+    @field:Schema(
+        description = "음식점(contentTypeId=39)에서만 제공되는 메뉴판 이미지 목록. 음식점이 아니면 빈 배열([])",
+    )
+    val menuImages: List<TourismContentImageResponse>,
+)
+
+data class TourismContentImageResponse(
+    val contentId: Long,
+    val imageName: String?,
+    val originalImageUrl: String?,
+    val serialNumber: String?,
+    val copyrightType: String?,
 )

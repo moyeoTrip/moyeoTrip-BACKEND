@@ -568,7 +568,7 @@ class ChatRoomService(
                     it.sequence,
                     it.tourismContent.contentId,
                     it.tourismContent.title,
-                    it.tourismContent.firstThumbnailUrl,
+                    it.tourismContent.thumbnail,
                     it.tourismContent.latitude ?: 0.0,
                     it.tourismContent.longitude ?: 0.0,
                 )

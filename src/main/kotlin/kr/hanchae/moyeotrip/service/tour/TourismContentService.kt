@@ -1,16 +1,18 @@
 package kr.hanchae.moyeotrip.service.tour
 
-import com.fasterxml.jackson.databind.ObjectMapper
 import kr.hanchae.moyeotrip.client.TourApiClient
+import kr.hanchae.moyeotrip.client.TourImageItem
 import kr.hanchae.moyeotrip.controller.tour.response.TourismContentDetailResponse
+import kr.hanchae.moyeotrip.controller.tour.response.TourismContentImageResponse
 import kr.hanchae.moyeotrip.controller.tour.response.TourismContentPageResponse
 import kr.hanchae.moyeotrip.controller.tour.response.TourismContentSummaryResponse
 import kr.hanchae.moyeotrip.controller.tour.response.TourismContentTypeResponse
 import kr.hanchae.moyeotrip.entity.tour.TourismContent
-import kr.hanchae.moyeotrip.entity.tour.TourismContentDetail
+import kr.hanchae.moyeotrip.entity.tour.TourismContentImage
+import kr.hanchae.moyeotrip.entity.tour.TourismContentImageType
 import kr.hanchae.moyeotrip.exception.BaseException
 import kr.hanchae.moyeotrip.exception.ErrorCode
-import kr.hanchae.moyeotrip.repository.TourismContentDetailRepository
+import kr.hanchae.moyeotrip.repository.TourismContentImageRepository
 import kr.hanchae.moyeotrip.repository.TourismContentRepository
 import kr.hanchae.moyeotrip.repository.TourismContentTypeRepository
 import org.springframework.data.domain.PageRequest
@@ -23,8 +25,7 @@ class TourismContentService(
     private val tourApiClient: TourApiClient,
     private val repository: TourismContentRepository,
     private val contentTypeRepository: TourismContentTypeRepository,
-    private val detailRepository: TourismContentDetailRepository,
-    private val objectMapper: ObjectMapper,
+    private val imageRepository: TourismContentImageRepository,
 ) {
     @Transactional(readOnly = true)
     fun getContentTypes(): List<TourismContentTypeResponse> =
@@ -69,22 +70,33 @@ class TourismContentService(
                 )
             }
         }
-        val detail =
-            detailRepository.findByTourismContentId(content.id)
-                ?: fetchAndSaveDetails(content)
-        return content.toDetailResponse(detail, objectMapper)
+        var contentImages = findImages(content, TourismContentImageType.CONTENT)
+        var menuImages = if (content.isRestaurant()) findImages(content, TourismContentImageType.MENU) else emptyList()
+        if (contentImages.isEmpty() && menuImages.isEmpty()) {
+            fetchAndSaveImages(content)
+            contentImages = findImages(content, TourismContentImageType.CONTENT)
+            menuImages = if (content.isRestaurant()) findImages(content, TourismContentImageType.MENU) else emptyList()
+        }
+        return content.toDetailResponse(contentImages, menuImages)
     }
 
-    private fun fetchAndSaveDetails(content: TourismContent): TourismContentDetail {
+    private fun findImages(
+        content: TourismContent,
+        type: TourismContentImageType,
+    ): List<TourismContentImage> = imageRepository.findAllByTourismContentIdAndTypeOrderByIdAsc(content.id, type)
+
+    private fun fetchAndSaveImages(content: TourismContent) {
         val contentId = content.contentId
-        val contentImages = tourApiClient.getImages(contentId, IMAGE_YES)
-        val menuImages = tourApiClient.getImages(contentId, IMAGE_NO)
-        return detailRepository.saveAndFlush(
-            TourismContentDetail(
-                tourismContent = content,
-                contentImagePayload = objectMapper.writeValueAsString(contentImages),
-                menuImagePayload = objectMapper.writeValueAsString(menuImages),
-            ),
+        val contentImages = tourApiClient.getImages(contentId, CONTENT_IMAGE_YES)
+        val menuImages =
+            if (content.isRestaurant()) {
+                tourApiClient.getImages(contentId, MENU_IMAGE_NO)
+            } else {
+                emptyList()
+            }
+        imageRepository.saveAll(
+            contentImages.map { it.toEntity(content, TourismContentImageType.CONTENT) } +
+                menuImages.map { it.toEntity(content, TourismContentImageType.MENU) },
         )
     }
 
@@ -93,12 +105,27 @@ class TourismContentService(
     private fun TourismContent.hasCommonDetail(): Boolean =
         telephoneName != null || homepage != null || bookTour != null || overview != null
 
+    private fun TourismContent.isRestaurant(): Boolean = contentType.code == RESTAURANT_CONTENT_TYPE_ID
+
     companion object {
         private const val COURSE_CONTENT_TYPE_ID = 25
-        private const val IMAGE_YES = "Y"
-        private const val IMAGE_NO = "N"
+        private const val RESTAURANT_CONTENT_TYPE_ID = 39
+        private const val CONTENT_IMAGE_YES = "Y"
+        private const val MENU_IMAGE_NO = "N"
     }
 }
+
+private fun TourImageItem.toEntity(
+    content: TourismContent,
+    type: TourismContentImageType,
+) = TourismContentImage(
+    tourismContent = content,
+    type = type,
+    imageName = imgname.nullIfBlank(),
+    originalImageUrl = originimgurl.nullIfBlank(),
+    serialNumber = serialnum.nullIfBlank(),
+    copyrightType = cpyrhtDivCd.nullIfBlank(),
+)
 
 private fun TourismContent.toSummaryResponse() =
     TourismContentSummaryResponse(
@@ -107,15 +134,14 @@ private fun TourismContent.toSummaryResponse() =
         title = title,
         address1 = address1,
         address2 = address2,
-        firstImageUrl = firstImageUrl,
-        firstThumbnailUrl = firstThumbnailUrl,
+        thumbnail = thumbnail,
         longitude = longitude,
         latitude = latitude,
     )
 
 private fun TourismContent.toDetailResponse(
-    detail: TourismContentDetail,
-    objectMapper: ObjectMapper,
+    contentImages: List<TourismContentImage>,
+    menuImages: List<TourismContentImage>,
 ) = TourismContentDetailResponse(
     contentId = contentId,
     contentTypeId = contentType.code,
@@ -128,10 +154,20 @@ private fun TourismContent.toDetailResponse(
     homepage = homepage,
     bookTour = bookTour,
     overview = overview,
-    firstImageUrl = firstImageUrl,
-    firstThumbnailUrl = firstThumbnailUrl,
+    thumbnail = thumbnail,
     longitude = longitude,
     latitude = latitude,
-    contentImages = objectMapper.readTree(detail.contentImagePayload),
-    menuImages = objectMapper.readTree(detail.menuImagePayload),
+    contentImages = contentImages.map { it.toResponse(contentId) },
+    menuImages = menuImages.map { it.toResponse(contentId) },
 )
+
+private fun TourismContentImage.toResponse(contentId: Long) =
+    TourismContentImageResponse(
+        contentId = contentId,
+        imageName = imageName,
+        originalImageUrl = originalImageUrl,
+        serialNumber = serialNumber,
+        copyrightType = copyrightType,
+    )
+
+private fun String.nullIfBlank(): String? = trim().takeIf(String::isNotEmpty)

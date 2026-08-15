@@ -1,8 +1,6 @@
 package kr.hanchae.moyeotrip.client
 
 import com.fasterxml.jackson.annotation.JsonProperty
-import com.fasterxml.jackson.databind.JsonNode
-import com.fasterxml.jackson.databind.ObjectMapper
 import kr.hanchae.moyeotrip.config.properties.TourApiProperties
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
@@ -14,7 +12,6 @@ import java.nio.charset.StandardCharsets
 @Component
 class TourApiClient(
     private val tourApiProperties: TourApiProperties,
-    private val objectMapper: ObjectMapper,
 ) {
     private val restClient: RestClient =
         RestClient
@@ -118,31 +115,24 @@ class TourApiClient(
     fun getImages(
         contentId: Long,
         imageYn: String,
-    ): JsonNode = getDynamicDetail(createImageDetailUri(contentId, imageYn), "이미지정보($imageYn)")
-
-    private fun getDynamicDetail(
-        uri: URI,
-        apiName: String,
-    ): JsonNode {
-        val root =
+    ): List<TourImageItem> {
+        val response =
             restClient
                 .get()
-                .uri(uri)
+                .uri(createImageDetailUri(contentId, imageYn))
                 .retrieve()
-                .body(JsonNode::class.java)
-                ?: throw IllegalStateException("한국관광공사 $apiName 응답이 비어 있습니다.")
-        val response = root.path("response")
-        check(!response.isMissingNode) { "한국관광공사 $apiName 조회에 실패했습니다." }
-        val header = response.path("header")
-        check(header.path("resultCode").asText() == SUCCESS_RESULT_CODE) {
-            "한국관광공사 $apiName 조회에 실패했습니다: ${header.path("resultMsg").asText()}"
+                .body(TourImageApiResponse::class.java)
+                ?: throw IllegalStateException("한국관광공사 이미지정보 응답이 비어 있습니다.")
+
+        val tourResponse =
+            response.response
+                ?: throw IllegalStateException(response.openApiServiceResponse?.errorMessage() ?: "알 수 없는 공공데이터포털 오류입니다.")
+        check(tourResponse.header.resultCode == SUCCESS_RESULT_CODE) {
+            "한국관광공사 이미지정보 조회에 실패했습니다: ${tourResponse.header.resultMsg}"
         }
-        val item = response.path("body").path("items").path("item")
-        return when {
-            item.isArray -> item
-            item.isObject -> objectMapper.createArrayNode().add(item)
-            else -> objectMapper.createArrayNode()
-        }
+        return tourResponse.body.items
+            ?.item
+            .orEmpty()
     }
 
     private fun createLegalDongCodeUri(
@@ -425,4 +415,35 @@ data class TourCommonDetailItem(
     val lDongRegnCd: String = "",
     val lDongSignguCd: String = "",
     val overview: String = "",
+)
+
+data class TourImageApiResponse(
+    val response: TourImageResponse? = null,
+    @param:JsonProperty("OpenAPI_ServiceResponse")
+    val openApiServiceResponse: OpenApiServiceErrorResponse? = null,
+)
+
+data class TourImageResponse(
+    val header: TourApiHeader,
+    val body: TourImageBody,
+)
+
+data class TourImageBody(
+    val items: TourImageItems? = null,
+    val numOfRows: Int,
+    val pageNo: Int,
+    val totalCount: Int,
+)
+
+data class TourImageItems(
+    val item: List<TourImageItem> = emptyList(),
+)
+
+data class TourImageItem(
+    val contentid: String,
+    val imgname: String = "",
+    val originimgurl: String = "",
+    val serialnum: String = "",
+    val smallimageurl: String = "",
+    val cpyrhtDivCd: String = "",
 )
