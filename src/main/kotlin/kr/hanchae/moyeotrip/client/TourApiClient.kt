@@ -115,16 +115,6 @@ class TourApiClient(
             ?.firstOrNull()
     }
 
-    fun getIntroDetail(
-        contentId: Long,
-        contentTypeId: Int,
-    ): JsonNode = getDynamicDetail(createIntroDetailUri(contentId, contentTypeId), "소개정보")
-
-    fun getAdditionalDetails(
-        contentId: Long,
-        contentTypeId: Int,
-    ): JsonNode = getDynamicDetail(createAdditionalDetailUri(contentId, contentTypeId), "반복정보")
-
     fun getImages(
         contentId: Long,
         imageYn: String,
@@ -216,34 +206,6 @@ class TourApiClient(
                 "&numOfRows=1",
         )
 
-    private fun createIntroDetailUri(
-        contentId: Long,
-        contentTypeId: Int,
-    ): URI = createContentTypeDetailUri("detailIntro2", contentId, contentTypeId, 1)
-
-    private fun createAdditionalDetailUri(
-        contentId: Long,
-        contentTypeId: Int,
-    ): URI = createContentTypeDetailUri("detailInfo2", contentId, contentTypeId, DETAIL_NUM_OF_ROWS)
-
-    private fun createContentTypeDetailUri(
-        endpoint: String,
-        contentId: Long,
-        contentTypeId: Int,
-        numOfRows: Int,
-    ): URI =
-        URI.create(
-            "https://apis.data.go.kr/B551011/KorService2/$endpoint" +
-                "?serviceKey=${encodedApiKey()}" +
-                "&MobileOS=$MOBILE_OS" +
-                "&MobileApp=$MOBILE_APP" +
-                "&_type=$RESPONSE_TYPE" +
-                "&contentId=$contentId" +
-                "&contentTypeId=$contentTypeId" +
-                "&pageNo=1" +
-                "&numOfRows=$numOfRows",
-        )
-
     private fun createImageDetailUri(
         contentId: Long,
         imageYn: String,
@@ -257,7 +219,7 @@ class TourApiClient(
                 "&contentId=$contentId" +
                 "&imageYN=$imageYn" +
                 "&pageNo=1" +
-                "&numOfRows=$DETAIL_NUM_OF_ROWS",
+                "&numOfRows=$IMAGE_NUM_OF_ROWS",
         )
 
     private fun encodedApiKey(): String =
@@ -278,7 +240,7 @@ class TourApiClient(
         private const val CLASSIFICATION_SYSTEM_LIST_YES = "Y"
         private const val AREA_BASED_ARRANGE = "C"
         private const val SUCCESS_RESULT_CODE = "0000"
-        private const val DETAIL_NUM_OF_ROWS = 1000
+        private const val IMAGE_NUM_OF_ROWS = 1000
     }
 }
 

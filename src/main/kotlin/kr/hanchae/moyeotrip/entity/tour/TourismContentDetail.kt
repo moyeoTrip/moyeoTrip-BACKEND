@@ -22,12 +22,6 @@ class TourismContentDetail(
     @JoinColumn(name = "tourism_content_id", nullable = false, updatable = false, unique = true)
     val tourismContent: TourismContent,
     @Lob
-    @Column(name = "intro_payload", nullable = false, columnDefinition = "CLOB")
-    val introPayload: String,
-    @Lob
-    @Column(name = "info_payload", nullable = false, columnDefinition = "CLOB")
-    val infoPayload: String,
-    @Lob
     @Column(name = "content_image_payload", nullable = false, columnDefinition = "CLOB")
     val contentImagePayload: String,
     @Lob

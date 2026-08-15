@@ -43,8 +43,6 @@ data class TourismContentDetailResponse(
     val firstThumbnailUrl: String?,
     val longitude: Double?,
     val latitude: Double?,
-    val introDetails: JsonNode,
-    val additionalDetails: JsonNode,
     val contentImages: JsonNode,
     val menuImages: JsonNode,
 )

@@ -77,16 +77,11 @@ class TourismContentService(
 
     private fun fetchAndSaveDetails(content: TourismContent): TourismContentDetail {
         val contentId = content.contentId
-        val contentTypeId = content.contentType.code
-        val intro = tourApiClient.getIntroDetail(contentId, contentTypeId)
-        val info = tourApiClient.getAdditionalDetails(contentId, contentTypeId)
         val contentImages = tourApiClient.getImages(contentId, IMAGE_YES)
         val menuImages = tourApiClient.getImages(contentId, IMAGE_NO)
         return detailRepository.saveAndFlush(
             TourismContentDetail(
                 tourismContent = content,
-                introPayload = objectMapper.writeValueAsString(intro),
-                infoPayload = objectMapper.writeValueAsString(info),
                 contentImagePayload = objectMapper.writeValueAsString(contentImages),
                 menuImagePayload = objectMapper.writeValueAsString(menuImages),
             ),
@@ -137,8 +132,6 @@ private fun TourismContent.toDetailResponse(
     firstThumbnailUrl = firstThumbnailUrl,
     longitude = longitude,
     latitude = latitude,
-    introDetails = objectMapper.readTree(detail.introPayload),
-    additionalDetails = objectMapper.readTree(detail.infoPayload),
     contentImages = objectMapper.readTree(detail.contentImagePayload),
     menuImages = objectMapper.readTree(detail.menuImagePayload),
 )
