@@ -13,7 +13,6 @@ class LegalDongCodeStartupSync(
     private val legalDongCodeSyncService: LegalDongCodeSyncService,
     private val classificationCodeSyncService: TourClassificationCodeSyncService,
     private val tourismContentSyncService: TourismContentSyncService,
-    private val managedTravelCourseSyncService: ManagedTravelCourseSyncService,
 ) : ApplicationRunner {
     override fun run(args: ApplicationArguments) {
         if (!properties.syncOnStartup) return
