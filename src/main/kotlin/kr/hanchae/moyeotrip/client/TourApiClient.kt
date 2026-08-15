@@ -402,7 +402,6 @@ data class TourCommonDetailItem(
     val tel: String = "",
     val telname: String = "",
     val homepage: String = "",
-    val booktour: String = "",
     val firstimage: String = "",
     val firstimage2: String = "",
     val cpyrhtDivCd: String = "",

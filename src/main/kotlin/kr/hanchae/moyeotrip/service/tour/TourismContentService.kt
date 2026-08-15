@@ -65,7 +65,6 @@ class TourismContentService(
                 content.updateCommonDetail(
                     telephoneName = detail.telname.nullIfBlank(),
                     homepage = detail.homepage.nullIfBlank(),
-                    bookTour = detail.booktour.nullIfBlank(),
                     overview = detail.overview.nullIfBlank(),
                 )
             }
@@ -102,8 +101,7 @@ class TourismContentService(
 
     private fun String.nullIfBlank(): String? = trim().takeIf(String::isNotEmpty)
 
-    private fun TourismContent.hasCommonDetail(): Boolean =
-        telephoneName != null || homepage != null || bookTour != null || overview != null
+    private fun TourismContent.hasCommonDetail(): Boolean = telephoneName != null || homepage != null || overview != null
 
     private fun TourismContent.isRestaurant(): Boolean = contentType.code == RESTAURANT_CONTENT_TYPE_ID
 
@@ -152,7 +150,6 @@ private fun TourismContent.toDetailResponse(
     telephone = telephone,
     telephoneName = telephoneName,
     homepage = homepage,
-    bookTour = bookTour,
     overview = overview,
     thumbnail = thumbnail,
     longitude = longitude,

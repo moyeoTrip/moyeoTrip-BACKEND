@@ -42,8 +42,6 @@ class TourismContent(
     var telephoneName: String? = null,
     @Column(name = "homepage", length = 2000)
     var homepage: String? = null,
-    @Column(name = "book_tour", length = 10)
-    var bookTour: String? = null,
     @Lob
     @Column(name = "overview", columnDefinition = "CLOB")
     var overview: String? = null,
@@ -75,12 +73,10 @@ class TourismContent(
     fun updateCommonDetail(
         telephoneName: String?,
         homepage: String?,
-        bookTour: String?,
         overview: String?,
     ) {
         this.telephoneName = telephoneName
         this.homepage = homepage
-        this.bookTour = bookTour
         this.overview = overview
     }
 

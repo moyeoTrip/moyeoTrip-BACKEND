@@ -36,7 +36,6 @@ data class TourismContentDetailResponse(
     val telephone: String?,
     val telephoneName: String?,
     val homepage: String?,
-    val bookTour: String?,
     val overview: String?,
     val thumbnail: String?,
     val longitude: Double?,
