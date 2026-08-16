@@ -5,6 +5,8 @@ import jakarta.validation.constraints.Max
 import jakarta.validation.constraints.Min
 import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.Size
+import kr.hanchae.moyeotrip.entity.chat.GenderRestriction
+import kr.hanchae.moyeotrip.entity.chat.JoinApprovalMode
 import kr.hanchae.moyeotrip.entity.chat.TripType
 import kr.hanchae.moyeotrip.entity.tour.TravelCourseType
 import java.time.LocalDate
@@ -35,6 +37,12 @@ data class CreateChatRoomRequest(
     val meetingDateTime: LocalDateTime,
     @field:Min(0)
     val participationFee: Long? = null,
+    val genderRestriction: GenderRestriction,
+    @field:Min(20) @field:Max(100)
+    val minimumAge: Int? = null,
+    @field:Min(20) @field:Max(100)
+    val maximumAge: Int? = null,
+    val joinApprovalMode: JoinApprovalMode,
     val courseType: TravelCourseType,
     val courseId: Long? = null,
     @field:Valid

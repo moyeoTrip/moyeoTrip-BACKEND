@@ -3,6 +3,7 @@ package kr.hanchae.moyeotrip.service.chat
 import kr.hanchae.moyeotrip.controller.chat.request.CreateChatRoomRequest
 import kr.hanchae.moyeotrip.controller.chat.request.CreateCustomCourseRequest
 import kr.hanchae.moyeotrip.controller.chat.request.CustomCoursePlaceRequest
+import kr.hanchae.moyeotrip.controller.chat.request.JoinChatRoomRequest
 import kr.hanchae.moyeotrip.controller.chat.request.UpdateMeetingInfoRequest
 import kr.hanchae.moyeotrip.controller.tour.request.UpdateTravelCourseRequest
 import kr.hanchae.moyeotrip.entity.chat.ChatMessage
@@ -10,14 +11,19 @@ import kr.hanchae.moyeotrip.entity.chat.ChatParticipantRole
 import kr.hanchae.moyeotrip.entity.chat.ChatRoom
 import kr.hanchae.moyeotrip.entity.chat.ChatRoomJoinApplication
 import kr.hanchae.moyeotrip.entity.chat.ChatRoomParticipant
+import kr.hanchae.moyeotrip.entity.chat.GenderRestriction
 import kr.hanchae.moyeotrip.entity.chat.JoinApplicationStatus
+import kr.hanchae.moyeotrip.entity.chat.JoinApprovalMode
 import kr.hanchae.moyeotrip.entity.chat.TripType
 import kr.hanchae.moyeotrip.entity.tour.TourismContent
 import kr.hanchae.moyeotrip.entity.tour.TourismContentType
 import kr.hanchae.moyeotrip.entity.tour.TravelCourse
 import kr.hanchae.moyeotrip.entity.tour.TravelCourseRating
 import kr.hanchae.moyeotrip.entity.tour.TravelCourseType
+import kr.hanchae.moyeotrip.entity.user.Gender
+import kr.hanchae.moyeotrip.entity.user.NicknameColor
 import kr.hanchae.moyeotrip.entity.user.User
+import kr.hanchae.moyeotrip.entity.user.UserInformation
 import kr.hanchae.moyeotrip.entity.user.UserRole
 import kr.hanchae.moyeotrip.exception.BaseException
 import kr.hanchae.moyeotrip.exception.ErrorCode
@@ -314,6 +320,90 @@ class ChatRoomServiceTest {
     }
 
     @Test
+    fun `자동 승인 방은 조건에 맞는 신청자를 즉시 참가시킨다`() {
+        val host = user(1L)
+        val applicant = user(2L)
+        val room = room(host, joinApprovalMode = JoinApprovalMode.AUTO)
+        `when`(roomRepository.findByIdForUpdate(10L)).thenReturn(room)
+        `when`(userRepository.findById(2L)).thenReturn(Optional.of(applicant))
+        `when`(participantRepository.countByChatRoomId(10L)).thenReturn(1L)
+        `when`(participantRepository.saveAndFlush(any(ChatRoomParticipant::class.java))).thenAnswer { it.arguments[0] }
+        `when`(messageRepository.saveAndFlush(any(ChatMessage::class.java))).thenAnswer { it.arguments[0] }
+
+        val response = service.applyToJoin(2L, 10L, JoinChatRoomRequest("함께 가고 싶어요"))
+
+        assertEquals("JOINED", response.result.name)
+        verify(participantRepository).saveAndFlush(any(ChatRoomParticipant::class.java))
+    }
+
+    @Test
+    fun `참가 신청자가 성별 조건을 충족하지 않으면 거절한다`() {
+        val host = user(1L)
+        val applicant = profiledUser(2L, Gender.M, LocalDate.now().minusYears(30))
+        val room = room(host, genderRestriction = GenderRestriction.FEMALE_ONLY)
+        `when`(roomRepository.findByIdForUpdate(10L)).thenReturn(room)
+        `when`(userRepository.findById(2L)).thenReturn(Optional.of(applicant))
+
+        val exception =
+            assertThrows(BaseException::class.java) {
+                service.applyToJoin(2L, 10L, JoinChatRoomRequest("함께 가고 싶어요"))
+            }
+
+        assertEquals(ErrorCode.CHAT_ROOM_JOIN_CONDITION_NOT_MET, exception.errorCode)
+        verifyNoInteractions(messageRepository)
+    }
+
+    @Test
+    fun `최소 나이만 설정된 방은 최소 나이 이상인 신청자를 허용한다`() {
+        val host = user(1L)
+        val applicant = profiledUser(2L, Gender.F, LocalDate.now().minusYears(30))
+        val room = room(host, minimumAge = 25, joinApprovalMode = JoinApprovalMode.AUTO)
+        `when`(roomRepository.findByIdForUpdate(10L)).thenReturn(room)
+        `when`(userRepository.findById(2L)).thenReturn(Optional.of(applicant))
+        `when`(participantRepository.countByChatRoomId(10L)).thenReturn(1L)
+        `when`(participantRepository.saveAndFlush(any(ChatRoomParticipant::class.java))).thenAnswer { it.arguments[0] }
+        `when`(messageRepository.saveAndFlush(any(ChatMessage::class.java))).thenAnswer { it.arguments[0] }
+
+        val response = service.applyToJoin(2L, 10L, JoinChatRoomRequest("함께 가고 싶어요"))
+
+        assertEquals("JOINED", response.result.name)
+    }
+
+    @Test
+    fun `최대 나이만 설정된 방은 최대 나이를 초과한 신청자를 거절한다`() {
+        val host = user(1L)
+        val applicant = profiledUser(2L, Gender.F, LocalDate.now().minusYears(30))
+        val room = room(host, maximumAge = 25)
+        `when`(roomRepository.findByIdForUpdate(10L)).thenReturn(room)
+        `when`(userRepository.findById(2L)).thenReturn(Optional.of(applicant))
+
+        val exception =
+            assertThrows(BaseException::class.java) {
+                service.applyToJoin(2L, 10L, JoinChatRoomRequest("함께 가고 싶어요"))
+            }
+
+        assertEquals(ErrorCode.CHAT_ROOM_JOIN_CONDITION_NOT_MET, exception.errorCode)
+        verifyNoInteractions(messageRepository)
+    }
+
+    @Test
+    fun `수동 승인 방은 호스트에게 전할 말이 필수다`() {
+        val host = user(1L)
+        val applicant = user(2L)
+        val room = room(host)
+        `when`(roomRepository.findByIdForUpdate(10L)).thenReturn(room)
+        `when`(userRepository.findById(2L)).thenReturn(Optional.of(applicant))
+
+        val exception =
+            assertThrows(BaseException::class.java) {
+                service.applyToJoin(2L, 10L, JoinChatRoomRequest())
+            }
+
+        assertEquals(ErrorCode.CHAT_JOIN_APPLICATION_MESSAGE_REQUIRED, exception.errorCode)
+        verifyNoInteractions(messageRepository)
+    }
+
+    @Test
     fun `참가자가 나가면 호스트가 승인한 대기자 중 첫 사용자가 자동 참가한다`() {
         val host = user(1L)
         val leavingUser = user(2L)
@@ -349,6 +439,22 @@ class ChatRoomServiceTest {
 
     private fun user(id: Long) = User(id = id, userRole = UserRole.ROLE_USER)
 
+    private fun profiledUser(
+        id: Long,
+        gender: Gender,
+        birthDate: LocalDate,
+    ) = User(
+        id = id,
+        userRole = UserRole.ROLE_USER,
+        userInformation =
+            UserInformation(
+                nickname = "여행자$id",
+                nicknameColor = NicknameColor.GREEN,
+                gender = gender,
+                birthDate = birthDate,
+            ),
+    )
+
     private fun place(
         contentId: Long,
         dayNumber: Int,
@@ -372,6 +478,8 @@ class ChatRoomServiceTest {
         dayTripStartTime = dayTripStartTime,
         dayTripEndTime = dayTripEndTime,
         meetingDateTime = LocalDateTime.now(),
+        genderRestriction = GenderRestriction.NONE,
+        joinApprovalMode = JoinApprovalMode.MANUAL,
         courseType = TravelCourseType.CUSTOM,
         customCourse =
             CreateCustomCourseRequest(
@@ -394,6 +502,10 @@ class ChatRoomServiceTest {
     private fun room(
         host: User,
         course: TravelCourse = TravelCourse(id = 5L, type = TravelCourseType.PUBLIC, title = "울릉도 대표 코스"),
+        genderRestriction: GenderRestriction = GenderRestriction.NONE,
+        minimumAge: Int? = null,
+        maximumAge: Int? = null,
+        joinApprovalMode: JoinApprovalMode = JoinApprovalMode.MANUAL,
     ) = ChatRoom(
         id = 10L,
         host = host,
@@ -407,5 +519,9 @@ class ChatRoomServiceTest {
         meetingLongitude = 129.3747,
         meetingDateTime = LocalDateTime.now().plusDays(10),
         participationFee = 100000L,
+        genderRestriction = genderRestriction,
+        minimumAge = minimumAge,
+        maximumAge = maximumAge,
+        joinApprovalMode = joinApprovalMode,
     )
 }

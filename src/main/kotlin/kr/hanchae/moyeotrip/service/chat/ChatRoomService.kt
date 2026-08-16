@@ -37,11 +37,14 @@ import kr.hanchae.moyeotrip.entity.chat.ChatRoomJoinApplication
 import kr.hanchae.moyeotrip.entity.chat.ChatRoomNotice
 import kr.hanchae.moyeotrip.entity.chat.ChatRoomParticipant
 import kr.hanchae.moyeotrip.entity.chat.ChatRoomStatus
+import kr.hanchae.moyeotrip.entity.chat.GenderRestriction
 import kr.hanchae.moyeotrip.entity.chat.JoinApplicationStatus
+import kr.hanchae.moyeotrip.entity.chat.JoinApprovalMode
 import kr.hanchae.moyeotrip.entity.chat.TripType
 import kr.hanchae.moyeotrip.entity.tour.TravelCourse
 import kr.hanchae.moyeotrip.entity.tour.TravelCourseRating
 import kr.hanchae.moyeotrip.entity.tour.TravelCourseType
+import kr.hanchae.moyeotrip.entity.user.Gender
 import kr.hanchae.moyeotrip.entity.user.User
 import kr.hanchae.moyeotrip.exception.BaseException
 import kr.hanchae.moyeotrip.exception.ErrorCode
@@ -97,6 +100,7 @@ class ChatRoomService(
         request: CreateChatRoomRequest,
     ) {
         validateTripSchedule(request)
+        validateAgeRestriction(request)
         val host = findUser(userId)
         val course = resolveCourse(host, request)
         val room =
@@ -117,6 +121,10 @@ class ChatRoomService(
                     meetingDetails = request.meetingDetails?.trim()?.takeIf(String::isNotEmpty),
                     meetingDateTime = request.meetingDateTime,
                     participationFee = request.participationFee,
+                    genderRestriction = request.genderRestriction,
+                    minimumAge = request.minimumAge,
+                    maximumAge = request.maximumAge,
+                    joinApprovalMode = request.joinApprovalMode,
                 ),
             )
         val hostParticipant =
@@ -296,14 +304,44 @@ class ChatRoomService(
         ) {
             throw BaseException(ErrorCode.CHAT_ROOM_ALREADY_JOINED)
         }
-        applicationRepository.save(
-            ChatRoomJoinApplication(
-                chatRoom = room,
-                user = findUser(userId),
-                applicationMessage = request.applicationMessage.trim(),
-            ),
-        )
-        return JoinChatRoomResponse(roomId, JoinResult.PENDING_APPROVAL)
+        val user = findUser(userId)
+        requireJoinConditions(room, user)
+        if (room.joinApprovalMode == JoinApprovalMode.MANUAL) {
+            val applicationMessage =
+                request.applicationMessage
+                    ?.trim()
+                    ?.takeIf(String::isNotEmpty)
+                    ?: throw BaseException(ErrorCode.CHAT_JOIN_APPLICATION_MESSAGE_REQUIRED)
+            applicationRepository.save(
+                ChatRoomJoinApplication(
+                    chatRoom = room,
+                    user = user,
+                    applicationMessage = applicationMessage,
+                ),
+            )
+            return JoinChatRoomResponse(roomId, JoinResult.PENDING_APPROVAL)
+        }
+
+        val participantCount = participantRepository.countByChatRoomId(roomId).toInt()
+        if (participantCount >= room.maxParticipants) {
+            applicationRepository.save(
+                ChatRoomJoinApplication(
+                    chatRoom = room,
+                    user = user,
+                    applicationMessage = request.applicationMessage?.trim().orEmpty(),
+                    status = JoinApplicationStatus.WAITLISTED,
+                ),
+            )
+            return JoinChatRoomResponse(roomId, JoinResult.WAITLISTED)
+        }
+
+        val participant =
+            participantRepository.saveAndFlush(
+                ChatRoomParticipant(chatRoom = room, user = user, role = ChatParticipantRole.MEMBER),
+            )
+        val latestMessageId = recordParticipantJoined(room, user, participantCount + 1)
+        participant.readThrough(latestMessageId)
+        return JoinChatRoomResponse(roomId, JoinResult.JOINED)
     }
 
     @Transactional(readOnly = true)
@@ -684,6 +722,10 @@ class ChatRoomService(
             meetingDetails = meetingDetails,
             meetingDateTime = meetingDateTime,
             participationFee = participationFee,
+            genderRestriction = genderRestriction,
+            minimumAge = minimumAge,
+            maximumAge = maximumAge,
+            joinApprovalMode = joinApprovalMode,
             dDay = dDay(),
             hostId = host.id,
             hostProfileImageUrl =
@@ -766,6 +808,36 @@ class ChatRoomService(
         )
 
     private fun User.nickname() = information?.nickname ?: "사용자 $id"
+
+    private fun requireJoinConditions(
+        room: ChatRoom,
+        user: User,
+    ) {
+        val information = user.information
+        val genderMatches =
+            when (room.genderRestriction) {
+                GenderRestriction.NONE -> true
+                GenderRestriction.FEMALE_ONLY -> information?.gender == Gender.F
+                GenderRestriction.MALE_ONLY -> information?.gender == Gender.M
+            }
+        val minimumAge = room.minimumAge
+        val maximumAge = room.maximumAge
+        val ageMatches =
+            if (minimumAge == null && maximumAge == null) {
+                true
+            } else {
+                information
+                    ?.birthDate
+                    ?.let { Period.between(it, LocalDate.now()).years }
+                    ?.let { age ->
+                        (minimumAge == null || age >= minimumAge) &&
+                            (maximumAge == null || age <= maximumAge)
+                    } == true
+            }
+        if (!genderMatches || !ageMatches) {
+            throw BaseException(ErrorCode.CHAT_ROOM_JOIN_CONDITION_NOT_MET)
+        }
+    }
 
     private fun requireParticipant(
         roomId: Long,
@@ -874,6 +946,13 @@ private fun validateTripSchedule(request: CreateChatRoomRequest) {
                     request.dayTripEndTime == null
         }
     if (!valid) throw BaseException(ErrorCode.INVALID_TRIP_SCHEDULE)
+}
+
+private fun validateAgeRestriction(request: CreateChatRoomRequest) {
+    val minimumAge = request.minimumAge
+    val maximumAge = request.maximumAge
+    val valid = minimumAge == null || maximumAge == null || minimumAge <= maximumAge
+    if (!valid) throw BaseException(ErrorCode.INVALID_CHAT_ROOM_AGE_RESTRICTION)
 }
 
 private fun CreateChatRoomRequest.tripDays(): Int? =

@@ -54,6 +54,16 @@ class ChatRoom(
     @Column(name = "participation_fee")
     val participationFee: Long? = null,
     @Enumerated(EnumType.STRING)
+    @Column(name = "gender_restriction", nullable = false, length = 20)
+    val genderRestriction: GenderRestriction = GenderRestriction.NONE,
+    @Column(name = "minimum_age")
+    val minimumAge: Int? = null,
+    @Column(name = "maximum_age")
+    val maximumAge: Int? = null,
+    @Enumerated(EnumType.STRING)
+    @Column(name = "join_approval_mode", nullable = false, length = 20)
+    val joinApprovalMode: JoinApprovalMode = JoinApprovalMode.MANUAL,
+    @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     var status: ChatRoomStatus = ChatRoomStatus.RECRUITING,
 ) : BaseModifiableEntity() {
@@ -99,6 +109,11 @@ class ChatRoom(
         require(tripDays <= 30)
         require(maxParticipants in 3..12)
         participationFee?.let { require(it >= 0) }
+        val minimumAgeValue = minimumAge
+        val maximumAgeValue = maximumAge
+        minimumAgeValue?.let { require(it in 20..100) }
+        maximumAgeValue?.let { require(it in 20..100) }
+        if (minimumAgeValue != null && maximumAgeValue != null) require(minimumAgeValue <= maximumAgeValue)
         meetingLatitude?.let { require(it in -90.0..90.0) }
         meetingLongitude?.let { require(it in -180.0..180.0) }
         require((meetingLatitude == null) == (meetingLongitude == null))
@@ -152,4 +167,15 @@ enum class ChatRoomStatus {
     RECRUITING,
     CONFIRMED,
     CANCELLED,
+}
+
+enum class GenderRestriction {
+    NONE,
+    FEMALE_ONLY,
+    MALE_ONLY,
+}
+
+enum class JoinApprovalMode {
+    AUTO,
+    MANUAL,
 }

@@ -92,6 +92,7 @@ class AuthServiceTest {
 
     @Test
     fun `Firebase 회원가입은 완성된 사용자와 서비스 토큰을 생성한다`() {
+        val minimumAgeBirthDate = LocalDate.now().minusYears(20)
         val identity = FirebaseIdentity("firebase-uid", "user@example.com", ProviderType.EMAIL)
         `when`(firebaseAuthenticationClient.verifyIdToken("id-token")).thenReturn(identity)
         `when`(nicknameCandidateRepository.consume("selection-token"))
@@ -116,7 +117,7 @@ class AuthServiceTest {
                     nicknameSelectionToken = "selection-token",
                     nickname = "따스한 사슴 1234",
                     gender = Gender.F,
-                    birthDate = LocalDate.of(1998, 4, 12),
+                    birthDate = minimumAgeBirthDate,
                     fcmToken = "fcm-token",
                 ),
             )
@@ -128,7 +129,7 @@ class AuthServiceTest {
         assertEquals("따스한 사슴 1234", savedUser.value.information?.nickname)
         assertEquals(NicknameColor.RED, savedUser.value.information?.nicknameColor)
         assertEquals(Gender.F, savedUser.value.information?.gender)
-        assertEquals(LocalDate.of(1998, 4, 12), savedUser.value.information?.birthDate)
+        assertEquals(minimumAgeBirthDate, savedUser.value.information?.birthDate)
         assertEquals("fcm-token", savedUser.value.fcmToken)
         assertEquals(SignupState.PROFILE_IMAGE_REQUIRED, savedUser.value.signupState)
         assertEquals(SignupState.PROFILE_IMAGE_REQUIRED, response.signupState)
@@ -139,6 +140,30 @@ class AuthServiceTest {
         assertTrue(savedSetting.value.recruitmentDeadlineEnabled)
         assertTrue(savedSetting.value.socialActivityEnabled)
         assertTrue(savedSetting.value.marketingEnabled)
+    }
+
+    @Test
+    fun `만 20세 미만 사용자는 Firebase 회원가입을 할 수 없다`() {
+        val identity = FirebaseIdentity("firebase-uid", "user@example.com", ProviderType.EMAIL)
+        `when`(firebaseAuthenticationClient.verifyIdToken("id-token")).thenReturn(identity)
+        `when`(userAuthIdentityRepository.findByProviderTypeAndProviderUserId(ProviderType.EMAIL, "firebase-uid")).thenReturn(null)
+        `when`(userRepository.findByEmail("user@example.com")).thenReturn(null)
+
+        val exception =
+            assertThrows(BaseException::class.java) {
+                authService.signupWithFirebase(
+                    FirebaseSignupRequest(
+                        idToken = "id-token",
+                        nicknameSelectionToken = "selection-token",
+                        nickname = "따스한 사슴 1234",
+                        gender = Gender.F,
+                        birthDate = LocalDate.now().minusYears(20).plusDays(1),
+                    ),
+                )
+            }
+
+        assertEquals(ErrorCode.MINIMUM_SIGNUP_AGE_NOT_MET, exception.errorCode)
+        verifyNoInteractions(nicknameCandidateRepository, notificationSettingRepository)
     }
 
     @Test

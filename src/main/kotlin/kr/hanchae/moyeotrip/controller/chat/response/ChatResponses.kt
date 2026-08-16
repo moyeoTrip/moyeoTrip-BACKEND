@@ -3,7 +3,9 @@ package kr.hanchae.moyeotrip.controller.chat.response
 import kr.hanchae.moyeotrip.controller.tour.response.TravelCourseTagResponse
 import kr.hanchae.moyeotrip.entity.chat.ChatMessageType
 import kr.hanchae.moyeotrip.entity.chat.ChatRoomStatus
+import kr.hanchae.moyeotrip.entity.chat.GenderRestriction
 import kr.hanchae.moyeotrip.entity.chat.JoinApplicationStatus
+import kr.hanchae.moyeotrip.entity.chat.JoinApprovalMode
 import kr.hanchae.moyeotrip.entity.chat.TripType
 import kr.hanchae.moyeotrip.entity.tour.TravelCourseType
 import kr.hanchae.moyeotrip.entity.user.Gender
@@ -28,6 +30,10 @@ data class ChatRoomDetailResponse(
     val meetingDetails: String?,
     val meetingDateTime: LocalDateTime,
     val participationFee: Long?,
+    val genderRestriction: GenderRestriction,
+    val minimumAge: Int?,
+    val maximumAge: Int?,
+    val joinApprovalMode: JoinApprovalMode,
     val dDay: Long,
     val hostId: Long,
     val hostProfileImageUrl: String?,
@@ -94,7 +100,7 @@ data class JoinChatRoomResponse(
     val result: JoinResult,
 )
 
-enum class JoinResult { PENDING_APPROVAL }
+enum class JoinResult { JOINED, WAITLISTED, PENDING_APPROVAL }
 
 data class JoinApplicationResponse(
     val applicationId: Long,

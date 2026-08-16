@@ -17,6 +17,9 @@ enum class ErrorCode(
     TRAVEL_COURSE_RATING_NOT_ALLOWED(HttpStatus.BAD_REQUEST, 40006, "완료한 여행의 참가자만 코스를 평가할 수 있습니다."),
     INVALID_TRAVEL_COURSE_SCHEDULE(HttpStatus.BAD_REQUEST, 40007, "여행 일차마다 방문지를 최소 2개 편성해야 합니다."),
     INVALID_TRIP_SCHEDULE(HttpStatus.BAD_REQUEST, 40008, "당일치기는 종료 날짜 없이 시간을, 1박 이상은 종료 날짜만 입력해야 합니다."),
+    INVALID_CHAT_ROOM_AGE_RESTRICTION(HttpStatus.BAD_REQUEST, 40009, "최소 나이는 최대 나이보다 작거나 같아야 합니다."),
+    CHAT_JOIN_APPLICATION_MESSAGE_REQUIRED(HttpStatus.BAD_REQUEST, 40010, "수동 승인 모임은 호스트에게 전할 말을 입력해야 합니다."),
+    MINIMUM_SIGNUP_AGE_NOT_MET(HttpStatus.BAD_REQUEST, 40011, "만 20세 이상만 가입할 수 있습니다."),
 
     // UNAUTHORIZED는 40100부터 시작
     UNAUTHORIZED(HttpStatus.UNAUTHORIZED, 40100, "인증되지 않은 사용자입니다."),
@@ -28,6 +31,7 @@ enum class ErrorCode(
     // FORBIDDEN는 40300부터 시작
     FORBIDDEN(HttpStatus.FORBIDDEN, 40300, "접근 권한이 없습니다."),
     CHAT_ROOM_NOT_PARTICIPANT(HttpStatus.FORBIDDEN, 40301, "사용자가 채팅방에 참여하고 있지 않습니다."),
+    CHAT_ROOM_JOIN_CONDITION_NOT_MET(HttpStatus.FORBIDDEN, 40302, "모임의 성별 또는 나이 조건을 충족하지 않습니다."),
 
     // 리소스 NOT FOUND는 40400부터 시작
     USER_NOT_FOUND(HttpStatus.NOT_FOUND, 40400, "해당 유저를 찾을 수 없습니다."),

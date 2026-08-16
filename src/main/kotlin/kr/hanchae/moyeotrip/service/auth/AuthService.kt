@@ -38,6 +38,7 @@ import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.client.RestClientException
 import org.springframework.web.client.RestClientResponseException
 import java.net.URI
+import java.time.LocalDate
 
 @Service
 @Transactional
@@ -155,6 +156,8 @@ class AuthService(
             throw BaseException(ErrorCode.AUTH_IDENTITY_ALREADY_LINKED, "해당 이메일의 기존 계정에 로그인 수단을 연결해 주세요.")
         }
 
+        validateMinimumSignupAge(request.birthDate)
+
         val nicknameColor = validateNicknameSelection(request.nicknameSelectionToken, request.nickname)
         val nickname = request.nickname
         if (userRepository.existsByInformationNickname(nickname)) {
@@ -187,6 +190,12 @@ class AuthService(
         val savedUser = userRepository.save(user)
         notificationSettingRepository.save(NotificationSetting(user = savedUser))
         return makeTokens(savedUser)
+    }
+
+    private fun validateMinimumSignupAge(birthDate: LocalDate) {
+        if (birthDate.isAfter(LocalDate.now().minusYears(MINIMUM_SIGNUP_AGE.toLong()))) {
+            throw BaseException(ErrorCode.MINIMUM_SIGNUP_AGE_NOT_MET)
+        }
     }
 
     fun linkFirebaseIdentity(
@@ -276,5 +285,9 @@ class AuthService(
         val refreshToken = jwtUtil.generateRefreshToken(user.id, rotateId)
         jwtUtil.storeCachedRefreshTokenRotateId(user.id, rotateId)
         return ServiceTokensResponse(accessToken, refreshToken, user.signupState)
+    }
+
+    private companion object {
+        const val MINIMUM_SIGNUP_AGE = 20
     }
 }
