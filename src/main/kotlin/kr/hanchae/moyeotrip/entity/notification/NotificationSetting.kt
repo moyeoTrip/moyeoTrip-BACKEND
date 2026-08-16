@@ -20,13 +20,13 @@ class NotificationSetting(
     @OneToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "user_id", nullable = false, unique = true, updatable = false)
     val user: User,
-    @Column(name = "chat_message_enabled", nullable = false)
+    @Column(name = "chat_message_enabled", nullable = false, columnDefinition = "NUMBER(1)")
     var chatMessageEnabled: Boolean = true,
-    @Column(name = "recruitment_deadline_enabled", nullable = false)
+    @Column(name = "recruitment_deadline_enabled", nullable = false, columnDefinition = "NUMBER(1)")
     var recruitmentDeadlineEnabled: Boolean = true,
-    @Column(name = "social_activity_enabled", nullable = false)
+    @Column(name = "social_activity_enabled", nullable = false, columnDefinition = "NUMBER(1)")
     var socialActivityEnabled: Boolean = true,
-    @Column(name = "marketing_enabled", nullable = false)
+    @Column(name = "marketing_enabled", nullable = false, columnDefinition = "NUMBER(1)")
     var marketingEnabled: Boolean = true,
 ) : BaseModifiableEntity() {
     fun update(
