@@ -4,6 +4,7 @@ import kr.hanchae.moyeotrip.entity.chat.ChatRoomParticipant
 import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.data.jpa.repository.Query
 import org.springframework.data.repository.query.Param
+import java.time.LocalDate
 
 interface ChatRoomParticipantRepository : JpaRepository<ChatRoomParticipant, Long> {
     fun countByChatRoomId(chatRoomId: Long): Long
@@ -34,4 +35,20 @@ interface ChatRoomParticipantRepository : JpaRepository<ChatRoomParticipant, Lon
     fun countCompletedTrips(
         @Param("userId") userId: Long,
     ): Long
+
+    @Query(
+        """
+        SELECT COUNT(participant) > 0 FROM ChatRoomParticipant participant
+        WHERE participant.chatRoom.id = :roomId
+          AND participant.user.id = :userId
+          AND participant.chatRoom.status = CONFIRMED
+          AND ((participant.chatRoom.endDate IS NULL AND participant.chatRoom.startDate < :today)
+               OR participant.chatRoom.endDate < :today)
+        """,
+    )
+    fun hasCompletedTrip(
+        @Param("roomId") roomId: Long,
+        @Param("userId") userId: Long,
+        @Param("today") today: LocalDate,
+    ): Boolean
 }

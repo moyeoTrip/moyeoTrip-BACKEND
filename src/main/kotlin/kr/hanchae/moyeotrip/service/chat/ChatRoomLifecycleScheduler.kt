@@ -1,7 +1,9 @@
 package kr.hanchae.moyeotrip.service.chat
 
+import kr.hanchae.moyeotrip.controller.chat.response.ChatMessageResponse
 import kr.hanchae.moyeotrip.entity.chat.ChatMessage
 import kr.hanchae.moyeotrip.entity.chat.ChatMessageType
+import kr.hanchae.moyeotrip.entity.chat.ChatRoom
 import kr.hanchae.moyeotrip.entity.chat.ChatRoomStatus
 import kr.hanchae.moyeotrip.entity.tour.TravelCourseType
 import kr.hanchae.moyeotrip.repository.ChatMessageRepository
@@ -9,6 +11,7 @@ import kr.hanchae.moyeotrip.repository.ChatRoomParticipantRepository
 import kr.hanchae.moyeotrip.repository.ChatRoomRepository
 import kr.hanchae.moyeotrip.repository.TravelCourseRepository
 import kr.hanchae.moyeotrip.service.notification.NotificationService
+import kr.hanchae.moyeotrip.service.realtime.RealtimeMessagingService
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Component
 import org.springframework.transaction.annotation.Transactional
@@ -22,13 +25,17 @@ class ChatRoomLifecycleScheduler(
     private val messageRepository: ChatMessageRepository,
     private val courseRepository: TravelCourseRepository,
     private val notificationService: NotificationService,
+    private val realtimeMessagingService: RealtimeMessagingService,
 ) {
-    @Scheduled(cron = "0 0 0 * * *", zone = "Asia/Seoul")
+    @Scheduled(cron = "0 0 13 * * *", zone = "Asia/Seoul")
     @Transactional
     fun notifyRecruitmentDeadline() {
         roomRepository
-            .findAllByStatusAndRecruitmentDeadlineDate(ChatRoomStatus.RECRUITING, LocalDate.now().plusDays(1))
-            .forEach(notificationService::notifyRecruitmentDeadline)
+            .findAllByStatusAndRecruitmentDeadlineDateBetween(
+                ChatRoomStatus.RECRUITING,
+                LocalDate.now(),
+                LocalDate.now().plusDays(3),
+            ).forEach(notificationService::notifyRecruitmentDeadline)
     }
 
     @Scheduled(cron = "0 0 0 * * *", zone = "Asia/Seoul")
@@ -70,10 +77,21 @@ class ChatRoomLifecycleScheduler(
     }
 
     private fun saveSystemMessage(
-        room: kr.hanchae.moyeotrip.entity.chat.ChatRoom,
+        room: ChatRoom,
         content: String,
     ) {
-        messageRepository.save(ChatMessage(chatRoom = room, type = ChatMessageType.SYSTEM, content = content))
+        val message = messageRepository.save(ChatMessage(chatRoom = room, type = ChatMessageType.SYSTEM, content = content))
+        realtimeMessagingService.sendChatMessage(
+            room.id,
+            ChatMessageResponse(
+                messageId = message.id,
+                type = ChatMessageType.SYSTEM,
+                senderId = null,
+                senderNickname = "시스템",
+                content = content,
+                createdAt = LocalDateTime.now(),
+            ),
+        )
     }
 
     companion object {

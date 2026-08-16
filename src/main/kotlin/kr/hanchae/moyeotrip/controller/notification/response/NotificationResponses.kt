@@ -18,3 +18,10 @@ data class NotificationResponse(
     val read: Boolean,
     val createdAt: LocalDateTime,
 )
+
+data class NotificationSettingResponse(
+    val chatMessageEnabled: Boolean,
+    val recruitmentDeadlineEnabled: Boolean,
+    val socialActivityEnabled: Boolean,
+    val marketingEnabled: Boolean,
+)

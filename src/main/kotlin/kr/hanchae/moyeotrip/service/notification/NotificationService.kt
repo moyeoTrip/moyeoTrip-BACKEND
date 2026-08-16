@@ -2,15 +2,20 @@ package kr.hanchae.moyeotrip.service.notification
 
 import kr.hanchae.moyeotrip.controller.notification.response.NotificationPageResponse
 import kr.hanchae.moyeotrip.controller.notification.response.NotificationResponse
+import kr.hanchae.moyeotrip.controller.notification.response.NotificationSettingResponse
 import kr.hanchae.moyeotrip.entity.chat.ChatMessage
 import kr.hanchae.moyeotrip.entity.chat.ChatRoom
 import kr.hanchae.moyeotrip.entity.notification.Notification
+import kr.hanchae.moyeotrip.entity.notification.NotificationSetting
 import kr.hanchae.moyeotrip.entity.notification.NotificationType
 import kr.hanchae.moyeotrip.entity.user.User
 import kr.hanchae.moyeotrip.exception.BaseException
 import kr.hanchae.moyeotrip.exception.ErrorCode
 import kr.hanchae.moyeotrip.repository.ChatRoomParticipantRepository
 import kr.hanchae.moyeotrip.repository.NotificationRepository
+import kr.hanchae.moyeotrip.repository.NotificationSettingRepository
+import kr.hanchae.moyeotrip.repository.UserRepository
+import kr.hanchae.moyeotrip.service.realtime.RealtimeMessagingService
 import org.springframework.data.domain.PageRequest
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -19,6 +24,9 @@ import org.springframework.transaction.annotation.Transactional
 class NotificationService(
     private val repository: NotificationRepository,
     private val participantRepository: ChatRoomParticipantRepository,
+    private val settingRepository: NotificationSettingRepository,
+    private val userRepository: UserRepository,
+    private val realtimeMessagingService: RealtimeMessagingService,
 ) {
     @Transactional(readOnly = true)
     fun getNotifications(
@@ -61,6 +69,22 @@ class NotificationService(
         repository.findAllByRecipientIdAndReadDateTimeIsNull(userId).forEach(Notification::markRead)
     }
 
+    @Transactional
+    fun getSetting(userId: Long): NotificationSettingResponse = findOrCreateSetting(userId).toResponse()
+
+    @Transactional
+    fun updateSetting(
+        userId: Long,
+        chatMessageEnabled: Boolean,
+        recruitmentDeadlineEnabled: Boolean,
+        socialActivityEnabled: Boolean,
+        marketingEnabled: Boolean,
+    ): NotificationSettingResponse {
+        val setting = findOrCreateSetting(userId)
+        setting.update(chatMessageEnabled, recruitmentDeadlineEnabled, socialActivityEnabled, marketingEnabled)
+        return setting.toResponse()
+    }
+
     fun notifyRoomCreated(room: ChatRoom) {
         save(room.host, NotificationType.CHAT_ROOM_CREATED, "${room.roomTitle} 모임이 만들어졌어요 ✨", room.id, room.id)
     }
@@ -83,15 +107,59 @@ class NotificationService(
             }
     }
 
+    fun notifyCourseUpdated(
+        room: ChatRoom,
+        referenceId: Long,
+    ) {
+        participantRepository
+            .findAllByChatRoomIdOrderByCreatedDateTimeAsc(room.id)
+            .asSequence()
+            .filter { it.user.id != room.host.id }
+            .forEach { participant ->
+                save(
+                    participant.user,
+                    NotificationType.TRAVEL_COURSE_UPDATED,
+                    "${room.roomTitle} 여행 코스가 변경되었어요.",
+                    room.id,
+                    referenceId,
+                )
+            }
+    }
+
+    fun notifyMeetingInfoUpdated(
+        room: ChatRoom,
+        referenceId: Long,
+    ) {
+        participantRepository
+            .findAllByChatRoomIdOrderByCreatedDateTimeAsc(room.id)
+            .asSequence()
+            .filter { it.user.id != room.host.id }
+            .forEach { participant ->
+                save(
+                    participant.user,
+                    NotificationType.MEETING_INFO_UPDATED,
+                    "${room.roomTitle} 집합 정보가 변경되었어요.",
+                    room.id,
+                    referenceId,
+                )
+            }
+    }
+
     fun notifyRecruitmentDeadline(room: ChatRoom) {
         val participantCount = participantRepository.countByChatRoomId(room.id)
+        val dDay =
+            java.time.temporal.ChronoUnit.DAYS
+                .between(java.time.LocalDate.now(), room.recruitmentDeadlineDate)
         participantRepository.findAllByChatRoomIdOrderByCreatedDateTimeAsc(room.id).forEach { participant ->
             save(
                 participant.user,
                 NotificationType.RECRUITMENT_DEADLINE,
-                "마감 D-1 · 현재 $participantCount/${room.maxParticipants}명이에요",
+                "마감 D-$dDay · 현재 $participantCount/${room.maxParticipants}명이에요",
                 room.id,
-                room.id,
+                room.id * DEADLINE_REFERENCE_MULTIPLIER +
+                    java.time.LocalDate
+                        .now()
+                        .toEpochDay(),
             )
         }
     }
@@ -103,18 +171,46 @@ class NotificationService(
         chatRoomId: Long,
         referenceId: Long,
     ) {
+        if (!allows(recipient, type)) return
         if (repository.existsByRecipientIdAndTypeAndReferenceId(recipient.id, type, referenceId)) return
-        repository.save(
-            Notification(
-                recipient = recipient,
-                type = type,
-                content = content,
-                chatRoomId = chatRoomId,
-                referenceId = referenceId,
-            ),
-        )
+        val notification =
+            repository.save(
+                Notification(
+                    recipient = recipient,
+                    type = type,
+                    content = content,
+                    chatRoomId = chatRoomId,
+                    referenceId = referenceId,
+                ),
+            )
+        realtimeMessagingService.sendNotification(recipient.id, notification.toResponse())
+    }
+
+    private fun allows(
+        recipient: User,
+        type: NotificationType,
+    ): Boolean = settingRepository.findByUserId(recipient.id)?.allows(type) ?: true
+
+    private fun findOrCreateSetting(userId: Long): NotificationSetting =
+        settingRepository.findByUserId(userId)
+            ?: settingRepository.save(
+                NotificationSetting(
+                    user = userRepository.findById(userId).orElseThrow { BaseException(ErrorCode.USER_NOT_FOUND) },
+                ),
+            )
+
+    companion object {
+        private const val DEADLINE_REFERENCE_MULTIPLIER = 100_000L
     }
 }
+
+private fun NotificationSetting.toResponse() =
+    NotificationSettingResponse(
+        chatMessageEnabled = chatMessageEnabled,
+        recruitmentDeadlineEnabled = recruitmentDeadlineEnabled,
+        socialActivityEnabled = socialActivityEnabled,
+        marketingEnabled = marketingEnabled,
+    )
 
 private fun Notification.toResponse() =
     NotificationResponse(

@@ -9,6 +9,7 @@ import kr.hanchae.moyeotrip.controller.auth.request.FirebaseSignupRequest
 import kr.hanchae.moyeotrip.controller.auth.request.KakaoAuthorizationCodeRequest
 import kr.hanchae.moyeotrip.controller.auth.request.KakaoCustomTokenRequest
 import kr.hanchae.moyeotrip.controller.client.KakaoTokenInfoResponse
+import kr.hanchae.moyeotrip.entity.notification.NotificationSetting
 import kr.hanchae.moyeotrip.entity.user.Gender
 import kr.hanchae.moyeotrip.entity.user.NicknameColor
 import kr.hanchae.moyeotrip.entity.user.ProviderType
@@ -19,6 +20,7 @@ import kr.hanchae.moyeotrip.entity.user.UserRole
 import kr.hanchae.moyeotrip.exception.BaseException
 import kr.hanchae.moyeotrip.exception.ErrorCode
 import kr.hanchae.moyeotrip.repository.NicknameCandidateRepository
+import kr.hanchae.moyeotrip.repository.NotificationSettingRepository
 import kr.hanchae.moyeotrip.repository.UserAuthIdentityRepository
 import kr.hanchae.moyeotrip.repository.UserRepository
 import kr.hanchae.moyeotrip.utils.jwt.JwtUtil
@@ -44,6 +46,7 @@ class AuthServiceTest {
     private lateinit var kakaoClient: KakaoClient
     private lateinit var userAuthIdentityRepository: UserAuthIdentityRepository
     private lateinit var nicknameCandidateRepository: NicknameCandidateRepository
+    private lateinit var notificationSettingRepository: NotificationSettingRepository
     private lateinit var authService: AuthService
 
     @BeforeEach
@@ -54,6 +57,7 @@ class AuthServiceTest {
         kakaoClient = mock(KakaoClient::class.java)
         userAuthIdentityRepository = mock(UserAuthIdentityRepository::class.java)
         nicknameCandidateRepository = mock(NicknameCandidateRepository::class.java)
+        notificationSettingRepository = mock(NotificationSettingRepository::class.java)
         authService =
             AuthService(
                 userRepository,
@@ -68,6 +72,7 @@ class AuthServiceTest {
                 ),
                 userAuthIdentityRepository,
                 nicknameCandidateRepository,
+                notificationSettingRepository,
             )
     }
 
@@ -128,6 +133,12 @@ class AuthServiceTest {
         assertEquals(SignupState.PROFILE_IMAGE_REQUIRED, savedUser.value.signupState)
         assertEquals(SignupState.PROFILE_IMAGE_REQUIRED, response.signupState)
         assertEquals(setOf(ProviderType.EMAIL), savedUser.value.linkedProviders())
+        val savedSetting = org.mockito.ArgumentCaptor.forClass(NotificationSetting::class.java)
+        verify(notificationSettingRepository).save(savedSetting.capture())
+        assertTrue(savedSetting.value.chatMessageEnabled)
+        assertTrue(savedSetting.value.recruitmentDeadlineEnabled)
+        assertTrue(savedSetting.value.socialActivityEnabled)
+        assertTrue(savedSetting.value.marketingEnabled)
     }
 
     @Test

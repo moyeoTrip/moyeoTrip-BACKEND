@@ -1,9 +1,10 @@
 package kr.hanchae.moyeotrip.controller.chat.response
 
+import kr.hanchae.moyeotrip.controller.tour.response.TravelCourseTagResponse
 import kr.hanchae.moyeotrip.entity.chat.ChatMessageType
-import kr.hanchae.moyeotrip.entity.chat.ChatParticipantRole
 import kr.hanchae.moyeotrip.entity.chat.ChatRoomStatus
 import kr.hanchae.moyeotrip.entity.chat.JoinApplicationStatus
+import kr.hanchae.moyeotrip.entity.chat.TripType
 import kr.hanchae.moyeotrip.entity.tour.TravelCourseType
 import kr.hanchae.moyeotrip.entity.user.Gender
 import java.time.LocalDate
@@ -14,7 +15,7 @@ data class ChatRoomDetailResponse(
     val roomId: Long,
     val title: String,
     val description: String?,
-    val latestNotice: ChatRoomNoticeResponse?,
+    val tripType: TripType,
     val startDate: LocalDate,
     val endDate: LocalDate?,
     val recruitmentDeadlineDate: LocalDate,
@@ -24,18 +25,16 @@ data class ChatRoomDetailResponse(
     val dayTripEndTime: LocalTime?,
     val meetingLatitude: Double?,
     val meetingLongitude: Double?,
+    val meetingDetails: String?,
     val meetingDateTime: LocalDateTime,
     val participationFee: Long?,
     val dDay: Long,
     val hostId: Long,
+    val hostProfileImageUrl: String?,
     val participantCount: Int,
     val maxParticipants: Int,
-    val approvedWaitlistCount: Int?,
-    val pendingApplicationCount: Int?,
     val status: ChatRoomStatus,
     val participants: List<ChatParticipantResponse>,
-    val myState: ChatRoomMyState,
-    val myWaitlistPosition: Int?,
 )
 
 data class TravelCourseResponse(
@@ -46,9 +45,39 @@ data class TravelCourseResponse(
     val places: List<TravelCoursePlaceResponse>,
 )
 
+data class TravelCourseDetailResponse(
+    val room: TravelCourseRoomResponse?,
+    val course: TravelCourseInformationResponse,
+)
+
+data class TravelCourseRoomResponse(
+    val roomId: Long,
+    val tripType: TripType,
+    val startDate: LocalDate,
+    val endDate: LocalDate?,
+    val dayTripStartTime: LocalTime?,
+    val dayTripEndTime: LocalTime?,
+)
+
+data class TravelCourseInformationResponse(
+    val courseId: Long,
+    val title: String,
+    val description: String?,
+    val type: TravelCourseType,
+    val travelTime: String,
+    val distanceKm: Double,
+    val averageRating: Double?,
+    val ratingCount: Long,
+    val tags: List<TravelCourseTagResponse>,
+    val thumbnail: String?,
+    val places: List<TravelCoursePlaceResponse>,
+)
+
 data class TravelCoursePlaceResponse(
-    val sequence: Int,
     val contentId: Long,
+    val dayNumber: Int,
+    val sequence: Int,
+    val visitTime: LocalTime?,
     val title: String,
     val thumbnail: String?,
     val latitude: Double,
@@ -57,19 +86,8 @@ data class TravelCoursePlaceResponse(
 
 data class ChatParticipantResponse(
     val userId: Long,
-    val nickname: String,
-    val role: ChatParticipantRole,
+    val profileImageUrl: String?,
 )
-
-enum class ChatRoomMyState(
-    description: String,
-) {
-    PARTICIPANT("참가자"),
-    PENDING_APPROVAL("참가 승인 대기"),
-    WAITING("참가 대기열(승인됨)"),
-    REJECTED("거절됨"),
-    NONE("참가하지 않음"),
-}
 
 data class JoinChatRoomResponse(
     val roomId: Long,

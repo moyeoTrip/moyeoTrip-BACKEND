@@ -6,6 +6,7 @@ import kr.hanchae.moyeotrip.entity.tour.TravelCourse
 import kr.hanchae.moyeotrip.entity.tour.TravelCourseType
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
+import java.time.LocalTime
 
 class TravelCourseTest {
     @Test
@@ -16,6 +17,8 @@ class TravelCourseTest {
             course.addCustomPlace(
                 TourismContent(contentId = 1L, contentType = TourismContentType(12, "관광지"), title = "임의 장소"),
                 1,
+                1,
+                LocalTime.of(9, 0),
             )
         }
     }

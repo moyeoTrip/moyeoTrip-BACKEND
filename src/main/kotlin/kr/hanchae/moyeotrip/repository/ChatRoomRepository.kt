@@ -29,9 +29,10 @@ interface ChatRoomRepository : JpaRepository<ChatRoom, Long> {
         @Param("date") date: LocalDate,
     ): List<ChatRoom>
 
-    fun findAllByStatusAndRecruitmentDeadlineDate(
+    fun findAllByStatusAndRecruitmentDeadlineDateBetween(
         status: ChatRoomStatus,
-        recruitmentDeadlineDate: LocalDate,
+        startDate: LocalDate,
+        endDate: LocalDate,
     ): List<ChatRoom>
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)

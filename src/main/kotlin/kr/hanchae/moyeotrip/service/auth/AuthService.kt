@@ -14,6 +14,7 @@ import kr.hanchae.moyeotrip.controller.auth.response.FirebaseLoginResponse
 import kr.hanchae.moyeotrip.controller.auth.response.LinkedProvidersResponse
 import kr.hanchae.moyeotrip.controller.auth.response.ServiceTokensResponse
 import kr.hanchae.moyeotrip.controller.client.KakaoTokenInfoResponse
+import kr.hanchae.moyeotrip.entity.notification.NotificationSetting
 import kr.hanchae.moyeotrip.entity.user.NicknameColor
 import kr.hanchae.moyeotrip.entity.user.ProviderType
 import kr.hanchae.moyeotrip.entity.user.SignupState
@@ -28,6 +29,7 @@ import kr.hanchae.moyeotrip.exception.InvalidRefreshTokenException
 import kr.hanchae.moyeotrip.exception.KakaoClientException
 import kr.hanchae.moyeotrip.exception.UserNotFoundException
 import kr.hanchae.moyeotrip.repository.NicknameCandidateRepository
+import kr.hanchae.moyeotrip.repository.NotificationSettingRepository
 import kr.hanchae.moyeotrip.repository.UserAuthIdentityRepository
 import kr.hanchae.moyeotrip.repository.UserRepository
 import kr.hanchae.moyeotrip.utils.jwt.JwtUtil
@@ -47,6 +49,7 @@ class AuthService(
     private val kakaoProperties: KakaoProperties,
     private val userAuthIdentityRepository: UserAuthIdentityRepository,
     private val nicknameCandidateRepository: NicknameCandidateRepository,
+    private val notificationSettingRepository: NotificationSettingRepository,
 ) {
     fun createKakaoCustomToken(request: KakaoCustomTokenRequest): FirebaseCustomTokenResponse = createKakaoCustomToken(request.accessToken)
 
@@ -181,7 +184,9 @@ class AuthService(
             )
         user.addAuthIdentity(identity.providerType, identity.uid)
         request.fcmToken?.let(user::changeFcmToken)
-        return makeTokens(userRepository.save(user))
+        val savedUser = userRepository.save(user)
+        notificationSettingRepository.save(NotificationSetting(user = savedUser))
+        return makeTokens(savedUser)
     }
 
     fun linkFirebaseIdentity(

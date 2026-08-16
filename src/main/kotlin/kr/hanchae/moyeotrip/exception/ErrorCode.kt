@@ -14,6 +14,9 @@ enum class ErrorCode(
     INVALID_NICKNAME_SELECTION(HttpStatus.BAD_REQUEST, 40003, "닉네임 선택이 만료되었거나 발급된 후보와 일치하지 않습니다."),
     INVALID_KAKAO_REDIRECT_URI(HttpStatus.BAD_REQUEST, 40004, "허용되지 않은 카카오 redirect URI입니다."),
     TOURISM_COURSE_CONTENT_NOT_LISTED(HttpStatus.BAD_REQUEST, 40005, "코스 관광 콘텐츠는 여행지 목록에서 조회할 수 없습니다."),
+    TRAVEL_COURSE_RATING_NOT_ALLOWED(HttpStatus.BAD_REQUEST, 40006, "완료한 여행의 참가자만 코스를 평가할 수 있습니다."),
+    INVALID_TRAVEL_COURSE_SCHEDULE(HttpStatus.BAD_REQUEST, 40007, "여행 일차마다 방문지를 최소 2개 편성해야 합니다."),
+    INVALID_TRIP_SCHEDULE(HttpStatus.BAD_REQUEST, 40008, "당일치기는 종료 날짜 없이 시간을, 1박 이상은 종료 날짜만 입력해야 합니다."),
 
     // UNAUTHORIZED는 40100부터 시작
     UNAUTHORIZED(HttpStatus.UNAUTHORIZED, 40100, "인증되지 않은 사용자입니다."),
@@ -30,7 +33,7 @@ enum class ErrorCode(
     USER_NOT_FOUND(HttpStatus.NOT_FOUND, 40400, "해당 유저를 찾을 수 없습니다."),
     PROFILE_IMAGE_NOT_FOUND(HttpStatus.NOT_FOUND, 40401, "선택할 수 있는 프로필 이미지를 찾을 수 없습니다."),
     RESOURCE_NOT_FOUND(HttpStatus.NOT_FOUND, 40402, "요청한 리소스를 찾을 수 없습니다."),
-    TRAVEL_COURSE_NOT_FOUND(HttpStatus.NOT_FOUND, 40403, "관리자가 등록한 여행 코스를 찾을 수 없습니다."),
+    TRAVEL_COURSE_NOT_FOUND(HttpStatus.NOT_FOUND, 40403, "공개된 여행 코스를 찾을 수 없습니다."),
     CHAT_JOIN_APPLICATION_NOT_FOUND(HttpStatus.NOT_FOUND, 40404, "참가 신청을 찾을 수 없습니다."),
     CHAT_ROOM_NOT_FOUND(HttpStatus.NOT_FOUND, 40405, "채팅방을 찾을 수 없습니다."),
     CHAT_ROOM_MEMBER_NOT_FOUND(HttpStatus.NOT_FOUND, 40406, "채팅방 멤버를 찾을 수 없습니다."),
@@ -39,6 +42,7 @@ enum class ErrorCode(
     TOURISM_CONTENT_TYPE_NOT_FOUND(HttpStatus.NOT_FOUND, 40409, "관광 콘텐츠 타입을 찾을 수 없습니다."),
     NOTIFICATION_NOT_FOUND(HttpStatus.NOT_FOUND, 40410, "알림을 찾을 수 없습니다."),
     CHAT_ROOM_NOTICE_NOT_FOUND(HttpStatus.NOT_FOUND, 40411, "채팅방 공지를 찾을 수 없습니다."),
+    TRAVEL_COURSE_TAG_NOT_FOUND(HttpStatus.NOT_FOUND, 40412, "여행 코스 태그를 찾을 수 없습니다."),
 
     // 리소스 충돌은 40900부터 시작
     ALREADY_EXIST_NICKNAME(HttpStatus.CONFLICT, 40900, "이미 사용중인 닉네임입니다."),
@@ -49,9 +53,11 @@ enum class ErrorCode(
     CHAT_ROOM_CLOSED(HttpStatus.CONFLICT, 40905, "모집이 종료된 채팅방입니다."),
     CHAT_ROOM_ALREADY_JOINED(HttpStatus.CONFLICT, 40906, "이미 참가했거나 대기 중인 채팅방입니다."),
     CHAT_ROOM_NOT_JOINED(HttpStatus.CONFLICT, 40907, "참가하거나 대기 중인 채팅방이 아닙니다."),
-    INVALID_TRAVEL_COURSE_SELECTION(HttpStatus.CONFLICT, 40909, "관리 코스 하나 또는 직접 구성한 코스 중 하나만 선택해야 합니다."),
+    INVALID_TRAVEL_COURSE_SELECTION(HttpStatus.CONFLICT, 40909, "공개 코스 하나 또는 직접 구성한 코스 중 하나만 선택해야 합니다."),
     INVALID_CHAT_ROOM_STATUS(HttpStatus.CONFLICT, 40910, "변경할 수 없는 여행 상태입니다."),
     CHAT_DISABLED(HttpStatus.CONFLICT, 40911, "종료된 방에서는 채팅할 수 없습니다."),
+    TRAVEL_COURSE_NOT_EDITABLE(HttpStatus.CONFLICT, 40912, "여행 확정 전의 커스텀 코스만 호스트가 수정할 수 있습니다."),
+    MEETING_INFO_NOT_EDITABLE(HttpStatus.CONFLICT, 40913, "여행 확정 전까지만 집합 정보를 수정할 수 있습니다."),
 
     // 요청 한도 초과는 42900부터 시작
     PROFILE_IMAGE_GENERATION_LIMIT(HttpStatus.TOO_MANY_REQUESTS, 42900, "프로필 이미지는 사용자당 최대 3번까지 생성할 수 있습니다."),

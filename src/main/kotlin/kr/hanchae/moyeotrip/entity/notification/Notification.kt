@@ -45,7 +45,10 @@ class Notification(
 enum class NotificationType {
     CHAT_ROOM_CREATED,
     CHAT_MESSAGE_RECEIVED,
+    TRAVEL_COURSE_UPDATED,
+    MEETING_INFO_UPDATED,
     RECRUITMENT_DEADLINE,
     FRIEND_REQUEST,
     FEED_LIKE,
+    MARKETING,
 }

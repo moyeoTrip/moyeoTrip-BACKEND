@@ -9,6 +9,7 @@ import jakarta.persistence.Id
 import jakarta.persistence.JoinColumn
 import jakarta.persistence.ManyToOne
 import jakarta.persistence.Table
+import java.time.LocalTime
 
 @Entity
 @Table(name = "travel_course_places")
@@ -21,6 +22,10 @@ class TravelCoursePlace(
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "tourism_content_id", nullable = false, updatable = false)
     val tourismContent: TourismContent,
+    @Column(name = "day_number", nullable = false)
+    val dayNumber: Int,
     @Column(name = "place_sequence", nullable = false)
     val sequence: Int,
+    @Column(name = "visit_time")
+    val visitTime: LocalTime? = null,
 )

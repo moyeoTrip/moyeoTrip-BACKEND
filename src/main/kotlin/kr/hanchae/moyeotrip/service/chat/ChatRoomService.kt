@@ -1,8 +1,11 @@
 package kr.hanchae.moyeotrip.service.chat
 
 import kr.hanchae.moyeotrip.controller.chat.request.CreateChatRoomRequest
+import kr.hanchae.moyeotrip.controller.chat.request.CreateCustomCourseRequest
+import kr.hanchae.moyeotrip.controller.chat.request.CustomCoursePlaceRequest
 import kr.hanchae.moyeotrip.controller.chat.request.JoinChatRoomRequest
 import kr.hanchae.moyeotrip.controller.chat.request.SendChatMessageRequest
+import kr.hanchae.moyeotrip.controller.chat.request.UpdateMeetingInfoRequest
 import kr.hanchae.moyeotrip.controller.chat.response.ApplicantProfileResponse
 import kr.hanchae.moyeotrip.controller.chat.response.ApprovalResult
 import kr.hanchae.moyeotrip.controller.chat.response.ApproveJoinApplicationResponse
@@ -10,7 +13,6 @@ import kr.hanchae.moyeotrip.controller.chat.response.ChatMessagePageResponse
 import kr.hanchae.moyeotrip.controller.chat.response.ChatMessageResponse
 import kr.hanchae.moyeotrip.controller.chat.response.ChatParticipantResponse
 import kr.hanchae.moyeotrip.controller.chat.response.ChatRoomDetailResponse
-import kr.hanchae.moyeotrip.controller.chat.response.ChatRoomMyState
 import kr.hanchae.moyeotrip.controller.chat.response.ChatRoomNoticeResponse
 import kr.hanchae.moyeotrip.controller.chat.response.JoinApplicationResponse
 import kr.hanchae.moyeotrip.controller.chat.response.JoinChatRoomResponse
@@ -20,8 +22,13 @@ import kr.hanchae.moyeotrip.controller.chat.response.LeaveChatRoomResponse
 import kr.hanchae.moyeotrip.controller.chat.response.LeaveResult
 import kr.hanchae.moyeotrip.controller.chat.response.MyChatRoomSummaryResponse
 import kr.hanchae.moyeotrip.controller.chat.response.MyWaitingChatRoomResponse
+import kr.hanchae.moyeotrip.controller.chat.response.TravelCourseDetailResponse
+import kr.hanchae.moyeotrip.controller.chat.response.TravelCourseInformationResponse
 import kr.hanchae.moyeotrip.controller.chat.response.TravelCoursePlaceResponse
 import kr.hanchae.moyeotrip.controller.chat.response.TravelCourseResponse
+import kr.hanchae.moyeotrip.controller.chat.response.TravelCourseRoomResponse
+import kr.hanchae.moyeotrip.controller.tour.request.UpdateTravelCourseRequest
+import kr.hanchae.moyeotrip.controller.tour.response.TravelCourseTagResponse
 import kr.hanchae.moyeotrip.entity.chat.ChatMessage
 import kr.hanchae.moyeotrip.entity.chat.ChatMessageType
 import kr.hanchae.moyeotrip.entity.chat.ChatParticipantRole
@@ -31,7 +38,9 @@ import kr.hanchae.moyeotrip.entity.chat.ChatRoomNotice
 import kr.hanchae.moyeotrip.entity.chat.ChatRoomParticipant
 import kr.hanchae.moyeotrip.entity.chat.ChatRoomStatus
 import kr.hanchae.moyeotrip.entity.chat.JoinApplicationStatus
+import kr.hanchae.moyeotrip.entity.chat.TripType
 import kr.hanchae.moyeotrip.entity.tour.TravelCourse
+import kr.hanchae.moyeotrip.entity.tour.TravelCourseRating
 import kr.hanchae.moyeotrip.entity.tour.TravelCourseType
 import kr.hanchae.moyeotrip.entity.user.User
 import kr.hanchae.moyeotrip.exception.BaseException
@@ -45,15 +54,25 @@ import kr.hanchae.moyeotrip.repository.ChatRoomRepository
 import kr.hanchae.moyeotrip.repository.ObjectStorageRepository
 import kr.hanchae.moyeotrip.repository.TourismContentRepository
 import kr.hanchae.moyeotrip.repository.TravelCoursePlaceRepository
+import kr.hanchae.moyeotrip.repository.TravelCourseRatingRepository
 import kr.hanchae.moyeotrip.repository.TravelCourseRepository
+import kr.hanchae.moyeotrip.repository.TravelCourseTagRepository
 import kr.hanchae.moyeotrip.repository.UserRepository
 import kr.hanchae.moyeotrip.service.notification.NotificationService
+import kr.hanchae.moyeotrip.service.realtime.RealtimeMessagingService
 import org.springframework.data.domain.PageRequest
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import java.time.Duration
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.Period
+import kotlin.math.asin
+import kotlin.math.cos
+import kotlin.math.pow
+import kotlin.math.round
+import kotlin.math.sin
+import kotlin.math.sqrt
 
 @Service
 class ChatRoomService(
@@ -63,17 +82,21 @@ class ChatRoomService(
     private val messageRepository: ChatMessageRepository,
     private val courseRepository: TravelCourseRepository,
     private val coursePlaceRepository: TravelCoursePlaceRepository,
+    private val courseTagRepository: TravelCourseTagRepository,
+    private val courseRatingRepository: TravelCourseRatingRepository,
     private val tourismContentRepository: TourismContentRepository,
     private val userRepository: UserRepository,
     private val objectStorageRepository: ObjectStorageRepository,
     private val noticeRepository: ChatRoomNoticeRepository,
     private val notificationService: NotificationService,
+    private val realtimeMessagingService: RealtimeMessagingService,
 ) {
     @Transactional
     fun createRoom(
         userId: Long,
         request: CreateChatRoomRequest,
     ) {
+        validateTripSchedule(request)
         val host = findUser(userId)
         val course = resolveCourse(host, request)
         val room =
@@ -91,6 +114,7 @@ class ChatRoomService(
                     dayTripEndTime = request.dayTripEndTime,
                     meetingLatitude = request.meetingLatitude,
                     meetingLongitude = request.meetingLongitude,
+                    meetingDetails = request.meetingDetails?.trim()?.takeIf(String::isNotEmpty),
                     meetingDateTime = request.meetingDateTime,
                     participationFee = request.participationFee,
                 ),
@@ -103,10 +127,7 @@ class ChatRoomService(
     }
 
     @Transactional(readOnly = true)
-    fun getRoom(
-        userId: Long,
-        roomId: Long,
-    ): ChatRoomDetailResponse = findParticipant(roomId, userId).chatRoom.toDetail(userId)
+    fun getRoom(roomId: Long): ChatRoomDetailResponse = findRoom(roomId).toDetail()
 
     @Transactional(readOnly = true)
     fun getMyRooms(userId: Long): List<MyChatRoomSummaryResponse> =
@@ -145,25 +166,117 @@ class ChatRoomService(
             }
 
     @Transactional(readOnly = true)
-    fun getPublicCourses(): List<TravelCourseResponse> =
+    fun getPublicCourses(): List<TravelCourseInformationResponse> =
         courseRepository
             .findAllByTypeOrderByCreatedDateTimeDesc(TravelCourseType.PUBLIC)
-            .map { it.toResponse(editable = false) }
+            .map { it.toInformationResponse(travelTime = it.travelTimeText()) }
 
     @Transactional(readOnly = true)
-    fun getPopularPublicCourses(): List<TravelCourseResponse> =
+    fun getPopularPublicCourses(): List<TravelCourseInformationResponse> =
         courseRepository
             .findPopularPublicCourses(PageRequest.of(0, POPULAR_COURSE_LIMIT))
-            .map { it.toResponse(editable = false) }
+            .map { it.toInformationResponse(travelTime = it.travelTimeText()) }
 
     @Transactional(readOnly = true)
-    fun getRoomCourse(
+    fun getRoomCourse(roomId: Long): TravelCourseDetailResponse {
+        val room = findRoom(roomId)
+        return TravelCourseDetailResponse(
+            room = room.toCourseRoomResponse(),
+            course = room.course.toInformationResponse(travelTime = room.travelTimeText()),
+        )
+    }
+
+    @Transactional
+    fun updateRoomCourse(
+        hostId: Long,
+        roomId: Long,
+        request: UpdateTravelCourseRequest,
+    ): TravelCourseInformationResponse {
+        val room = findRoomForUpdate(roomId)
+        requireHost(room, hostId)
+        val course = room.course
+        if (room.status != ChatRoomStatus.RECRUITING ||
+            course.type != TravelCourseType.CUSTOM ||
+            course.owner?.id != hostId
+        ) {
+            throw BaseException(ErrorCode.TRAVEL_COURSE_NOT_EDITABLE)
+        }
+        validateCustomCourseSchedule(request.places, room.tripDays)
+
+        course.clearCustomPlaces()
+        coursePlaceRepository.deleteAllByCourseId(course.id)
+        coursePlaceRepository.flush()
+        request.places.forEach { place ->
+            val tourismContent =
+                tourismContentRepository.findByContentId(place.contentId)
+                    ?: throw BaseException(ErrorCode.TOURISM_CONTENT_NOT_FOUND)
+            coursePlaceRepository.save(
+                course.addCustomPlace(
+                    tourismContent = tourismContent,
+                    dayNumber = place.dayNumber,
+                    sequence = place.sequence,
+                    visitTime = place.visitTime,
+                ),
+            )
+        }
+        val message = saveSystemMessage(room, "호스트가 여행 코스를 변경했어요.")
+        notificationService.notifyCourseUpdated(room, message.id)
+        return course.toInformationResponse(travelTime = room.travelTimeText())
+    }
+
+    @Transactional
+    fun updateMeetingInfo(
+        hostId: Long,
+        roomId: Long,
+        request: UpdateMeetingInfoRequest,
+    ) {
+        val room = findRoomForUpdate(roomId)
+        requireHost(room, hostId)
+        if (room.status != ChatRoomStatus.RECRUITING) {
+            throw BaseException(ErrorCode.MEETING_INFO_NOT_EDITABLE)
+        }
+        if ((request.meetingLatitude == null) != (request.meetingLongitude == null) ||
+            request.meetingDateTime.toLocalDate() > room.startDate
+        ) {
+            throw BaseException(ErrorCode.BAD_REQUEST)
+        }
+        room.updateMeetingInfo(
+            latitude = request.meetingLatitude,
+            longitude = request.meetingLongitude,
+            details = request.meetingDetails?.trim()?.takeIf(String::isNotEmpty),
+            dateTime = request.meetingDateTime,
+        )
+        val message = saveSystemMessage(room, "집합 정보가 변경되었어요.")
+        notificationService.notifyMeetingInfoUpdated(room, message.id)
+    }
+
+    @Transactional(readOnly = true)
+    fun getCourse(courseId: Long): TravelCourseInformationResponse {
+        val course =
+            courseRepository.findByIdAndType(courseId, TravelCourseType.PUBLIC)
+                ?: throw BaseException(ErrorCode.TRAVEL_COURSE_NOT_FOUND)
+        return course.toInformationResponse(travelTime = course.travelTimeText())
+    }
+
+    @Transactional
+    fun rateCourse(
         userId: Long,
         roomId: Long,
-    ): TravelCourseResponse {
+        score: Int,
+    ) {
         val room = findRoom(roomId)
-        requireParticipant(roomId, userId)
-        return room.course.toResponse(editable = room.course.type == TravelCourseType.CUSTOM && room.course.owner?.id == userId)
+        if (!participantRepository.hasCompletedTrip(roomId, userId, LocalDate.now())) {
+            throw BaseException(ErrorCode.TRAVEL_COURSE_RATING_NOT_ALLOWED)
+        }
+        courseRatingRepository.findByChatRoomIdAndUserId(roomId, userId)?.update(score)
+            ?: courseRatingRepository.save(
+                TravelCourseRating(
+                    course = room.course,
+                    chatRoom = room,
+                    user = findUser(userId),
+                    score = score,
+                ),
+            )
     }
 
     @Transactional
@@ -399,7 +512,7 @@ class ChatRoomService(
                 )
         participant.readThrough(message.id)
         notificationService.notifyMessage(message)
-        return message.toResponse()
+        return message.toResponse().also { realtimeMessagingService.sendChatMessage(room.id, it) }
     }
 
     @Transactional
@@ -429,34 +542,58 @@ class ChatRoomService(
     private fun resolveCourse(
         host: User,
         request: CreateChatRoomRequest,
-    ): TravelCourse {
-        val hasPublicCourse = request.courseId != null
-        val hasCustom = request.customCourseTitle.isNotBlank() && request.customPlaces.isNotEmpty()
-        if (hasPublicCourse == hasCustom) throw BaseException(ErrorCode.INVALID_TRAVEL_COURSE_SELECTION)
-        request.courseId?.let { courseId ->
-            return courseRepository.findByIdAndType(courseId, TravelCourseType.PUBLIC)
-                ?: throw BaseException(ErrorCode.TRAVEL_COURSE_NOT_FOUND)
+    ): TravelCourse =
+        when (request.courseType) {
+            TravelCourseType.PUBLIC -> {
+                if (request.courseId == null || request.customCourse != null) {
+                    throw BaseException(ErrorCode.INVALID_TRAVEL_COURSE_SELECTION)
+                }
+                courseRepository.findByIdAndType(request.courseId, TravelCourseType.PUBLIC)
+                    ?: throw BaseException(ErrorCode.TRAVEL_COURSE_NOT_FOUND)
+            }
+
+            TravelCourseType.CUSTOM -> {
+                if (request.courseId != null || request.customCourse == null) {
+                    throw BaseException(ErrorCode.INVALID_TRAVEL_COURSE_SELECTION)
+                }
+                createCustomCourse(host, request, request.customCourse)
+            }
         }
+
+    private fun createCustomCourse(
+        host: User,
+        request: CreateChatRoomRequest,
+        customCourse: CreateCustomCourseRequest,
+    ): TravelCourse {
+        validateCustomCourseSchedule(customCourse.places, request.totalTripDays())
         val course =
             courseRepository.saveAndFlush(
-                TravelCourse(type = TravelCourseType.CUSTOM, owner = host, title = request.customCourseTitle.trim()),
+                TravelCourse(
+                    type = TravelCourseType.CUSTOM,
+                    owner = host,
+                    title = customCourse.title.trim(),
+                    description = customCourse.description?.trim()?.takeIf(String::isNotEmpty),
+                    durationMinutes = request.dayTripDurationMinutes(),
+                    tripNights = request.tripNights(),
+                    tripDays = request.tripDays(),
+                ),
             )
-        check(
-            request.customPlaces
-                .map { it.sequence }
-                .distinct()
-                .size == request.customPlaces.size,
-        ) {
-            "코스 장소의 순서는 중복될 수 없습니다."
-        }
-        request.customPlaces.forEach { place ->
+        customCourse.places.forEach { place ->
             val tourismContent =
                 tourismContentRepository.findByContentId(place.contentId)
                     ?: throw BaseException(ErrorCode.TOURISM_CONTENT_NOT_FOUND)
             coursePlaceRepository.save(
-                course.addCustomPlace(tourismContent, place.sequence),
+                course.addCustomPlace(
+                    tourismContent = tourismContent,
+                    dayNumber = place.dayNumber,
+                    sequence = place.sequence,
+                    visitTime = place.visitTime,
+                ),
             )
         }
+        val tags = courseTagRepository.findAllById(customCourse.tagIds).toList()
+        if (tags.isEmpty()) throw BaseException(ErrorCode.TRAVEL_COURSE_TAG_NOT_FOUND)
+        course.addTags(tags)
         return course
     }
 
@@ -494,10 +631,24 @@ class ChatRoomService(
     private fun saveSystemMessage(
         room: ChatRoom,
         content: String,
-    ): ChatMessage =
-        messageRepository.saveAndFlush(
-            ChatMessage(chatRoom = room, type = ChatMessageType.SYSTEM, content = content),
+    ): ChatMessage {
+        val message =
+            messageRepository.saveAndFlush(
+                ChatMessage(chatRoom = room, type = ChatMessageType.SYSTEM, content = content),
+            )
+        realtimeMessagingService.sendChatMessage(
+            room.id,
+            ChatMessageResponse(
+                messageId = message.id,
+                type = ChatMessageType.SYSTEM,
+                senderId = null,
+                senderNickname = "시스템",
+                content = content,
+                createdAt = runCatching { message.createdDateTime }.getOrElse { LocalDateTime.now() },
+            ),
         )
+        return message
+    }
 
     private fun ChatRoomParticipant.toMySummary(): MyChatRoomSummaryResponse {
         val room = chatRoom
@@ -514,46 +665,44 @@ class ChatRoomService(
         )
     }
 
-    private fun ChatRoom.toDetail(userId: Long): ChatRoomDetailResponse {
+    private fun ChatRoom.toDetail(): ChatRoomDetailResponse {
         val participants = participantRepository.findAllByChatRoomIdOrderByCreatedDateTimeAsc(id)
-        val approvedWaitlistCount =
-            if (host.id == userId) {
-                applicationRepository.countByChatRoomIdAndStatus(id, JoinApplicationStatus.WAITLISTED).toInt()
-            } else {
-                null
-            }
-        val pendingApplicationCount =
-            if (host.id == userId) {
-                applicationRepository.countByChatRoomIdAndStatus(id, JoinApplicationStatus.PENDING).toInt()
-            } else {
-                null
-            }
         return ChatRoomDetailResponse(
-            id,
-            roomTitle,
-            description,
-            noticeRepository.findFirstByChatRoomIdAndContentIsNotNullOrderByIdDesc(id)?.toResponse(),
-            startDate,
-            endDate,
-            recruitmentDeadlineDate,
-            tripNights,
-            tripDays,
-            dayTripStartTime,
-            dayTripEndTime,
-            meetingLatitude,
-            meetingLongitude,
-            meetingDateTime,
-            participationFee,
-            dDay(),
-            host.id,
-            participants.size,
-            maxParticipants,
-            approvedWaitlistCount,
-            pendingApplicationCount,
-            status,
-            participants.map { ChatParticipantResponse(it.user.id, it.user.nickname(), it.role) },
-            ChatRoomMyState.PARTICIPANT,
-            null,
+            roomId = id,
+            title = roomTitle,
+            description = description,
+            tripType = tripType,
+            startDate = startDate,
+            endDate = endDate,
+            recruitmentDeadlineDate = recruitmentDeadlineDate,
+            tripNights = tripNights,
+            tripDays = tripDays,
+            dayTripStartTime = dayTripStartTime,
+            dayTripEndTime = dayTripEndTime,
+            meetingLatitude = meetingLatitude,
+            meetingLongitude = meetingLongitude,
+            meetingDetails = meetingDetails,
+            meetingDateTime = meetingDateTime,
+            participationFee = participationFee,
+            dDay = dDay(),
+            hostId = host.id,
+            hostProfileImageUrl =
+                host.information
+                    ?.profileFileName
+                    ?.let(objectStorageRepository::getDownloadUrl),
+            participantCount = participants.size,
+            maxParticipants = maxParticipants,
+            status = status,
+            participants =
+                participants.map {
+                    ChatParticipantResponse(
+                        userId = it.user.id,
+                        profileImageUrl =
+                            it.user.information
+                                ?.profileFileName
+                                ?.let(objectStorageRepository::getDownloadUrl),
+                    )
+                },
         )
     }
 
@@ -565,12 +714,14 @@ class ChatRoomService(
             editable,
             places.map {
                 TravelCoursePlaceResponse(
-                    it.sequence,
-                    it.tourismContent.contentId,
-                    it.tourismContent.title,
-                    it.tourismContent.thumbnail,
-                    it.tourismContent.latitude ?: 0.0,
-                    it.tourismContent.longitude ?: 0.0,
+                    contentId = it.tourismContent.contentId,
+                    dayNumber = it.dayNumber,
+                    sequence = it.sequence,
+                    visitTime = it.visitTime,
+                    title = it.tourismContent.title,
+                    thumbnail = it.tourismContent.thumbnail,
+                    latitude = it.tourismContent.latitude ?: 0.0,
+                    longitude = it.tourismContent.longitude ?: 0.0,
                 )
             },
         )
@@ -654,9 +805,126 @@ class ChatRoomService(
 
     private fun findUser(id: Long) = userRepository.findById(id).orElseThrow { UserNotFoundException(id) }
 
+    private fun validateCustomCourseSchedule(
+        places: List<CustomCoursePlaceRequest>,
+        tripDays: Int,
+    ) {
+        val placesByDay = places.groupBy { it.dayNumber }
+        val includesEveryTripDay = placesByDay.keys == (1..tripDays).toSet()
+        val hasAtLeastTwoPlacesEveryDay = placesByDay.values.all { it.size >= MIN_PLACES_PER_DAY }
+        val hasUniqueSequencesEveryDay =
+            placesByDay.values.all { dailyPlaces -> dailyPlaces.map { it.sequence }.distinct().size == dailyPlaces.size }
+        if (!includesEveryTripDay || !hasAtLeastTwoPlacesEveryDay || !hasUniqueSequencesEveryDay) {
+            throw BaseException(ErrorCode.INVALID_TRAVEL_COURSE_SCHEDULE)
+        }
+    }
+
+    private fun TravelCourse.toInformationResponse(travelTime: String): TravelCourseInformationResponse =
+        TravelCourseInformationResponse(
+            courseId = id,
+            title = title,
+            description = description,
+            type = type,
+            travelTime = travelTime,
+            distanceKm = totalDistanceKm(),
+            averageRating = courseRatingRepository.findAverageByCourseId(id)?.rounded(1),
+            ratingCount = courseRatingRepository.countByCourseId(id),
+            tags = tags.sortedBy { it.id }.map { TravelCourseTagResponse(it.id, it.name) },
+            thumbnail = places.firstOrNull()?.tourismContent?.thumbnail,
+            places = toResponse(editable = false).places,
+        )
+
     companion object {
         private const val SYSTEM_NICKNAME = "시스템"
         private const val POPULAR_COURSE_LIMIT = 3
+        private const val MIN_PLACES_PER_DAY = 2
         private val ACTIVE_APPLICATION_STATUSES = listOf(JoinApplicationStatus.PENDING, JoinApplicationStatus.WAITLISTED)
     }
 }
+
+private fun ChatRoom.toCourseRoomResponse() =
+    TravelCourseRoomResponse(
+        roomId = id,
+        tripType = tripType,
+        startDate = startDate,
+        endDate = endDate,
+        dayTripStartTime = dayTripStartTime,
+        dayTripEndTime = dayTripEndTime,
+    )
+
+private fun TravelCourse.travelTimeText(): String =
+    durationMinutes?.let(::formatDurationMinutes)
+        ?: if (tripNights != null && tripDays != null) "${tripNights}박 ${tripDays}일" else "정보 없음"
+
+private fun CreateChatRoomRequest.dayTripDurationMinutes(): Long? =
+    if (endDate == null) Duration.between(requireNotNull(dayTripStartTime), requireNotNull(dayTripEndTime)).toMinutes() else null
+
+private fun validateTripSchedule(request: CreateChatRoomRequest) {
+    val valid =
+        when (request.tripType) {
+            TripType.DAY_TRIP ->
+                request.endDate == null &&
+                    request.dayTripStartTime != null &&
+                    request.dayTripEndTime != null &&
+                    request.dayTripStartTime < request.dayTripEndTime
+
+            TripType.OVERNIGHT ->
+                request.endDate?.isAfter(request.startDate) == true &&
+                    request.dayTripStartTime == null &&
+                    request.dayTripEndTime == null
+        }
+    if (!valid) throw BaseException(ErrorCode.INVALID_TRIP_SCHEDULE)
+}
+
+private fun CreateChatRoomRequest.tripDays(): Int? =
+    endDate?.let {
+        java.time.temporal.ChronoUnit.DAYS
+            .between(startDate, it)
+            .toInt() + 1
+    }
+
+private fun CreateChatRoomRequest.tripNights(): Int? = tripDays()?.minus(1)
+
+private fun CreateChatRoomRequest.totalTripDays(): Int = tripDays() ?: 1
+
+private fun ChatRoom.travelTimeText(): String =
+    if (tripDays == 1) {
+        val minutes = Duration.between(requireNotNull(dayTripStartTime), requireNotNull(dayTripEndTime)).toMinutes()
+        formatDurationMinutes(minutes)
+    } else {
+        "${tripNights}박 ${tripDays}일"
+    }
+
+private fun formatDurationMinutes(minutes: Long): String = "${minutes / 60}시간 ${minutes % 60}분".replace(" 0분", "")
+
+private fun TravelCourse.totalDistanceKm(): Double =
+    places
+        .zipWithNext()
+        .sumOf { (from, to) ->
+            val fromLatitude = from.tourismContent.latitude ?: return@sumOf 0.0
+            val fromLongitude = from.tourismContent.longitude ?: return@sumOf 0.0
+            val toLatitude = to.tourismContent.latitude ?: return@sumOf 0.0
+            val toLongitude = to.tourismContent.longitude ?: return@sumOf 0.0
+            haversineKm(fromLatitude, fromLongitude, toLatitude, toLongitude)
+        }.rounded(1)
+
+private fun haversineKm(
+    latitude1: Double,
+    longitude1: Double,
+    latitude2: Double,
+    longitude2: Double,
+): Double {
+    val latitudeDistance = Math.toRadians(latitude2 - latitude1)
+    val longitudeDistance = Math.toRadians(longitude2 - longitude1)
+    val value =
+        sin(latitudeDistance / 2).pow(2) +
+            cos(Math.toRadians(latitude1)) * cos(Math.toRadians(latitude2)) * sin(longitudeDistance / 2).pow(2)
+    return 2 * EARTH_RADIUS_KM * asin(sqrt(value))
+}
+
+private fun Double.rounded(scale: Int): Double {
+    val factor = 10.0.pow(scale)
+    return round(this * factor) / factor
+}
+
+private const val EARTH_RADIUS_KM = 6371.0088

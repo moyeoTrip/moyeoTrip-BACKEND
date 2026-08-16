@@ -10,6 +10,7 @@ import kr.hanchae.moyeotrip.controller.chat.request.JoinChatRoomRequest
 import kr.hanchae.moyeotrip.controller.chat.request.SendChatMessageRequest
 import kr.hanchae.moyeotrip.controller.chat.request.UpdateChatRoomNoticeRequest
 import kr.hanchae.moyeotrip.controller.chat.request.UpdateChatRoomStatusRequest
+import kr.hanchae.moyeotrip.controller.chat.request.UpdateMeetingInfoRequest
 import kr.hanchae.moyeotrip.controller.chat.response.ApproveJoinApplicationResponse
 import kr.hanchae.moyeotrip.controller.chat.response.ChatMessagePageResponse
 import kr.hanchae.moyeotrip.controller.chat.response.ChatMessageResponse
@@ -63,9 +64,19 @@ class ChatRoomController(
     @Operation(summary = "채팅방 상세 조회")
     @GetMapping("/{roomId}")
     fun getRoom(
+        @PathVariable roomId: Long,
+    ): ChatRoomDetailResponse = chatRoomService.getRoom(roomId)
+
+    @Operation(summary = "집합 정보 수정", description = "여행 확정 전까지 채팅방 호스트가 집합 좌표, 상세 안내와 시간을 수정합니다.")
+    @PutMapping("/{roomId}/meeting-info")
+    fun updateMeetingInfo(
         @LoginUserId userId: Long,
         @PathVariable roomId: Long,
-    ): ChatRoomDetailResponse = chatRoomService.getRoom(userId, roomId)
+        @Valid @RequestBody request: UpdateMeetingInfoRequest,
+    ): ResponseEntity<Void> {
+        chatRoomService.updateMeetingInfo(userId, roomId, request)
+        return ResponseEntity.noContent().build()
+    }
 
     @Operation(summary = "채팅방 참가 신청", description = "소개를 작성해 호스트의 승인을 기다립니다.")
     @PostMapping("/{roomId}/applications")

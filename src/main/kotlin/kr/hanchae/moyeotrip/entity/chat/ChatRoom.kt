@@ -47,12 +47,10 @@ class ChatRoom(
     val dayTripStartTime: LocalTime? = null,
     @Column(name = "day_trip_end_time")
     val dayTripEndTime: LocalTime? = null,
-    @Column(name = "meeting_latitude")
-    val meetingLatitude: Double? = null,
-    @Column(name = "meeting_longitude")
-    val meetingLongitude: Double? = null,
-    @Column(name = "meeting_datetime", nullable = false)
-    val meetingDateTime: LocalDateTime,
+    meetingLatitude: Double? = null,
+    meetingLongitude: Double? = null,
+    meetingDetails: String? = null,
+    meetingDateTime: LocalDateTime,
     @Column(name = "participation_fee")
     val participationFee: Long? = null,
     @Enumerated(EnumType.STRING)
@@ -67,6 +65,26 @@ class ChatRoom(
     val tripNights: Int
         get() = tripDays - 1
 
+    @get:Transient
+    val tripType: TripType
+        get() = if (endDate == null) TripType.DAY_TRIP else TripType.OVERNIGHT
+
+    @Column(name = "meeting_latitude")
+    var meetingLatitude: Double? = meetingLatitude
+        protected set
+
+    @Column(name = "meeting_longitude")
+    var meetingLongitude: Double? = meetingLongitude
+        protected set
+
+    @Column(name = "meeting_details", length = 500)
+    var meetingDetails: String? = meetingDetails
+        protected set
+
+    @Column(name = "meeting_datetime", nullable = false)
+    var meetingDateTime: LocalDateTime = meetingDateTime
+        protected set
+
     @Column(name = "chat_closed_datetime")
     var chatClosedDateTime: LocalDateTime? = null
         protected set
@@ -77,7 +95,7 @@ class ChatRoom(
 
     init {
         require(recruitmentDeadlineDate <= startDate)
-        endDate?.let { require(!it.isBefore(startDate)) }
+        endDate?.let { require(it.isAfter(startDate)) }
         require(tripDays <= 30)
         require(maxParticipants in 3..12)
         participationFee?.let { require(it >= 0) }
@@ -104,6 +122,22 @@ class ChatRoom(
         status = ChatRoomStatus.CONFIRMED
         chatClosedDateTime = null
         deletionScheduledDate = null
+    }
+
+    fun updateMeetingInfo(
+        latitude: Double?,
+        longitude: Double?,
+        details: String?,
+        dateTime: LocalDateTime,
+    ) {
+        latitude?.let { require(it in -90.0..90.0) }
+        longitude?.let { require(it in -180.0..180.0) }
+        require((latitude == null) == (longitude == null))
+        require(dateTime.toLocalDate() <= startDate)
+        meetingLatitude = latitude
+        meetingLongitude = longitude
+        meetingDetails = details
+        meetingDateTime = dateTime
     }
 
     fun canChat(): Boolean = chatClosedDateTime == null && status != ChatRoomStatus.CANCELLED
