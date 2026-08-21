@@ -9,9 +9,12 @@ import jakarta.persistence.GeneratedValue
 import jakarta.persistence.GenerationType
 import jakarta.persistence.Id
 import jakarta.persistence.JoinColumn
+import jakarta.persistence.JoinTable
+import jakarta.persistence.ManyToMany
 import jakarta.persistence.ManyToOne
 import jakarta.persistence.Table
 import kr.hanchae.moyeotrip.entity.BaseTimeEntity
+import kr.hanchae.moyeotrip.entity.tour.TourismContent
 import kr.hanchae.moyeotrip.entity.user.User
 
 @Entity
@@ -31,9 +34,47 @@ class ChatMessage(
     val type: ChatMessageType,
     @Column(nullable = false, length = 1000)
     val content: String,
-) : BaseTimeEntity()
+    @Column(name = "image_url", length = 1000)
+    val imageUrl: String? = null,
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "tourism_content_id", updatable = false)
+    val tourismContent: TourismContent? = null,
+    @Column(name = "shared_latitude")
+    val sharedLatitude: Double? = null,
+    @Column(name = "shared_longitude")
+    val sharedLongitude: Double? = null,
+    @Column(name = "location_name", length = 100)
+    val locationName: String? = null,
+    @Column(name = "poll_anonymous", columnDefinition = "NUMBER(1)")
+    val pollAnonymous: Boolean? = null,
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "reply_to_message_id", updatable = false)
+    val replyTo: ChatMessage? = null,
+    @Column(name = "system_event_key", length = 30, updatable = false)
+    val systemEventKey: String? = null,
+) : BaseTimeEntity() {
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(
+        name = "chat_message_mentions",
+        joinColumns = [JoinColumn(name = "message_id")],
+        inverseJoinColumns = [JoinColumn(name = "user_id")],
+    )
+    private val mentionedUserEntities: MutableSet<User> = linkedSetOf()
+
+    val mentionedUsers: Set<User>
+        get() = mentionedUserEntities.toSet()
+
+    fun mention(users: Collection<User>) {
+        mentionedUserEntities.addAll(users)
+    }
+}
 
 enum class ChatMessageType {
     USER,
     SYSTEM,
+    IMAGE,
+    TOURISM_CONTENT,
+    LOCATION,
+    POLL,
+    SETTLEMENT_MEMO,
 }

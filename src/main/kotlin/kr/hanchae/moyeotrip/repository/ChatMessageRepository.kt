@@ -5,6 +5,11 @@ import org.springframework.data.domain.Pageable
 import org.springframework.data.jpa.repository.JpaRepository
 
 interface ChatMessageRepository : JpaRepository<ChatMessage, Long> {
+    fun findByIdAndChatRoomId(
+        id: Long,
+        chatRoomId: Long,
+    ): ChatMessage?
+
     fun findAllByChatRoomIdOrderByIdDesc(
         chatRoomId: Long,
         pageable: Pageable,

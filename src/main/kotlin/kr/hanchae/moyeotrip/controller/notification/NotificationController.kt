@@ -3,7 +3,9 @@ package kr.hanchae.moyeotrip.controller.notification
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.security.SecurityRequirement
 import io.swagger.v3.oas.annotations.tags.Tag
+import kr.hanchae.moyeotrip.controller.notification.request.UpdateChatRoomNotificationSettingRequest
 import kr.hanchae.moyeotrip.controller.notification.request.UpdateNotificationSettingRequest
+import kr.hanchae.moyeotrip.controller.notification.response.ChatRoomNotificationSettingResponse
 import kr.hanchae.moyeotrip.controller.notification.response.NotificationPageResponse
 import kr.hanchae.moyeotrip.controller.notification.response.NotificationSettingResponse
 import kr.hanchae.moyeotrip.service.notification.NotificationService
@@ -66,9 +68,28 @@ class NotificationController(
     ): NotificationSettingResponse =
         notificationService.updateSetting(
             userId,
-            request.chatMessageEnabled,
+            request.chatNotificationMode,
             request.recruitmentDeadlineEnabled,
             request.socialActivityEnabled,
             request.marketingEnabled,
+            request.doNotDisturbEnabled,
+            request.doNotDisturbStartTime,
+            request.doNotDisturbEndTime,
+            request.doNotDisturbDays,
         )
+
+    @Operation(summary = "채팅방별 알림 설정 조회", description = "별도 설정이 없으면 기본값은 켜짐입니다.")
+    @GetMapping("/settings/chat-rooms/{roomId}")
+    fun getChatRoomSetting(
+        @LoginUserId userId: Long,
+        @PathVariable roomId: Long,
+    ): ChatRoomNotificationSettingResponse = notificationService.getChatRoomSetting(userId, roomId)
+
+    @Operation(summary = "채팅방별 알림 켜기·끄기")
+    @PutMapping("/settings/chat-rooms/{roomId}")
+    fun updateChatRoomSetting(
+        @LoginUserId userId: Long,
+        @PathVariable roomId: Long,
+        @RequestBody request: UpdateChatRoomNotificationSettingRequest,
+    ): ChatRoomNotificationSettingResponse = notificationService.updateChatRoomSetting(userId, roomId, request.enabled)
 }

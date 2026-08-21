@@ -22,8 +22,8 @@ spring:
       - database
   servlet:
     multipart:
-      max-file-size: 10MB
-      max-request-size: 11MB
+      max-file-size: 20MB
+      max-request-size: 21MB
   cloud:
     compatibility-verifier:
       enabled: false

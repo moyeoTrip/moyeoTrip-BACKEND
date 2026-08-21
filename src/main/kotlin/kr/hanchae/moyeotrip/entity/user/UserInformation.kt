@@ -13,11 +13,13 @@ data class UserInformation(
     @Column(length = 20, updatable = false, nullable = true)
     @Enumerated(EnumType.STRING)
     var nicknameColor: NicknameColor,
-    @Column(updatable = false, nullable = true)
+    @Column(nullable = true)
     @Enumerated(EnumType.STRING)
     var gender: Gender,
-    @Column(updatable = false, nullable = true)
+    @Column(nullable = true)
     var birthDate: LocalDate? = null,
     @Column(nullable = true)
     var profileFileName: String? = null,
+    @Column(name = "introduction", length = 300)
+    var introduction: String? = null,
 )

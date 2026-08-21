@@ -1,11 +1,14 @@
 package kr.hanchae.moyeotrip.service.chat
 
+import kr.hanchae.moyeotrip.controller.chat.request.CreateChatPollRequest
 import kr.hanchae.moyeotrip.controller.chat.request.CreateChatRoomRequest
 import kr.hanchae.moyeotrip.controller.chat.request.CreateCustomCourseRequest
+import kr.hanchae.moyeotrip.controller.chat.request.CreateSettlementMemoRequest
 import kr.hanchae.moyeotrip.controller.chat.request.CustomCoursePlaceRequest
 import kr.hanchae.moyeotrip.controller.chat.request.JoinChatRoomRequest
 import kr.hanchae.moyeotrip.controller.chat.request.MyChatRoomFilter
 import kr.hanchae.moyeotrip.controller.chat.request.SendChatMessageRequest
+import kr.hanchae.moyeotrip.controller.chat.request.ShareTourismContentRequest
 import kr.hanchae.moyeotrip.controller.chat.request.UpdateMeetingInfoRequest
 import kr.hanchae.moyeotrip.controller.chat.response.ApplicantProfileResponse
 import kr.hanchae.moyeotrip.controller.chat.response.ApprovalResult
@@ -13,6 +16,8 @@ import kr.hanchae.moyeotrip.controller.chat.response.ApproveJoinApplicationRespo
 import kr.hanchae.moyeotrip.controller.chat.response.ChatMessagePageResponse
 import kr.hanchae.moyeotrip.controller.chat.response.ChatMessageResponse
 import kr.hanchae.moyeotrip.controller.chat.response.ChatParticipantResponse
+import kr.hanchae.moyeotrip.controller.chat.response.ChatPollOptionResponse
+import kr.hanchae.moyeotrip.controller.chat.response.ChatPollResponse
 import kr.hanchae.moyeotrip.controller.chat.response.ChatRoomDetailResponse
 import kr.hanchae.moyeotrip.controller.chat.response.ChatRoomFavoriteResponse
 import kr.hanchae.moyeotrip.controller.chat.response.ChatRoomKickHistoryResponse
@@ -20,6 +25,7 @@ import kr.hanchae.moyeotrip.controller.chat.response.ChatRoomMemberListResponse
 import kr.hanchae.moyeotrip.controller.chat.response.ChatRoomMemberResponse
 import kr.hanchae.moyeotrip.controller.chat.response.ChatRoomNoticeHistoryResponse
 import kr.hanchae.moyeotrip.controller.chat.response.ChatRoomNoticeResponse
+import kr.hanchae.moyeotrip.controller.chat.response.CurrentTravelRoadmapResponse
 import kr.hanchae.moyeotrip.controller.chat.response.JoinApplicationResponse
 import kr.hanchae.moyeotrip.controller.chat.response.JoinChatRoomResponse
 import kr.hanchae.moyeotrip.controller.chat.response.JoinEligibilityResponse
@@ -27,19 +33,27 @@ import kr.hanchae.moyeotrip.controller.chat.response.JoinResult
 import kr.hanchae.moyeotrip.controller.chat.response.LatestChatMessageResponse
 import kr.hanchae.moyeotrip.controller.chat.response.LeaveChatRoomResponse
 import kr.hanchae.moyeotrip.controller.chat.response.LeaveResult
+import kr.hanchae.moyeotrip.controller.chat.response.MentionedChatUserResponse
 import kr.hanchae.moyeotrip.controller.chat.response.MyChatRoomSummaryResponse
 import kr.hanchae.moyeotrip.controller.chat.response.MyWaitingChatRoomResponse
 import kr.hanchae.moyeotrip.controller.chat.response.PublicTravelCourseDetailResponse
+import kr.hanchae.moyeotrip.controller.chat.response.RepliedChatMessageResponse
+import kr.hanchae.moyeotrip.controller.chat.response.SharedLocationResponse
+import kr.hanchae.moyeotrip.controller.chat.response.SharedTourismContentResponse
 import kr.hanchae.moyeotrip.controller.chat.response.TravelCourseDetailResponse
 import kr.hanchae.moyeotrip.controller.chat.response.TravelCourseInformationResponse
 import kr.hanchae.moyeotrip.controller.chat.response.TravelCoursePlaceResponse
 import kr.hanchae.moyeotrip.controller.chat.response.TravelCourseResponse
 import kr.hanchae.moyeotrip.controller.chat.response.TravelCourseRoomResponse
+import kr.hanchae.moyeotrip.controller.chat.response.TravelRoadmapPlaceResponse
+import kr.hanchae.moyeotrip.controller.chat.response.TravelRoadmapProgress
 import kr.hanchae.moyeotrip.controller.tour.request.UpdateTravelCourseRequest
 import kr.hanchae.moyeotrip.controller.tour.response.TravelCourseTagResponse
 import kr.hanchae.moyeotrip.entity.chat.ChatMessage
 import kr.hanchae.moyeotrip.entity.chat.ChatMessageType
 import kr.hanchae.moyeotrip.entity.chat.ChatParticipantRole
+import kr.hanchae.moyeotrip.entity.chat.ChatPollOption
+import kr.hanchae.moyeotrip.entity.chat.ChatPollVote
 import kr.hanchae.moyeotrip.entity.chat.ChatRoom
 import kr.hanchae.moyeotrip.entity.chat.ChatRoomFavorite
 import kr.hanchae.moyeotrip.entity.chat.ChatRoomJoinApplication
@@ -51,7 +65,9 @@ import kr.hanchae.moyeotrip.entity.chat.GenderRestriction
 import kr.hanchae.moyeotrip.entity.chat.JoinApplicationStatus
 import kr.hanchae.moyeotrip.entity.chat.JoinApprovalMode
 import kr.hanchae.moyeotrip.entity.chat.TripType
+import kr.hanchae.moyeotrip.entity.tour.TourismContent
 import kr.hanchae.moyeotrip.entity.tour.TravelCourse
+import kr.hanchae.moyeotrip.entity.tour.TravelCoursePlace
 import kr.hanchae.moyeotrip.entity.tour.TravelCourseRating
 import kr.hanchae.moyeotrip.entity.tour.TravelCourseType
 import kr.hanchae.moyeotrip.entity.user.Gender
@@ -60,6 +76,8 @@ import kr.hanchae.moyeotrip.exception.BaseException
 import kr.hanchae.moyeotrip.exception.ErrorCode
 import kr.hanchae.moyeotrip.exception.UserNotFoundException
 import kr.hanchae.moyeotrip.repository.ChatMessageRepository
+import kr.hanchae.moyeotrip.repository.ChatPollOptionRepository
+import kr.hanchae.moyeotrip.repository.ChatPollVoteRepository
 import kr.hanchae.moyeotrip.repository.ChatRoomFavoriteRepository
 import kr.hanchae.moyeotrip.repository.ChatRoomJoinApplicationRepository
 import kr.hanchae.moyeotrip.repository.ChatRoomKickHistoryRepository
@@ -83,6 +101,7 @@ import java.time.Duration
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.Period
+import java.time.temporal.ChronoUnit
 import kotlin.math.asin
 import kotlin.math.cos
 import kotlin.math.pow
@@ -96,6 +115,8 @@ class ChatRoomService(
     private val participantRepository: ChatRoomParticipantRepository,
     private val applicationRepository: ChatRoomJoinApplicationRepository,
     private val messageRepository: ChatMessageRepository,
+    private val pollOptionRepository: ChatPollOptionRepository,
+    private val pollVoteRepository: ChatPollVoteRepository,
     private val courseRepository: TravelCourseRepository,
     private val coursePlaceRepository: TravelCoursePlaceRepository,
     private val courseTagRepository: TravelCourseTagRepository,
@@ -732,20 +753,157 @@ class ChatRoomService(
         val participant = findParticipant(roomId, userId)
         val room = participant.chatRoom
         requireChatEnabled(room)
-        val message =
-            messageRepository
-                .saveAndFlush(
-                    ChatMessage(
-                        chatRoom = room,
-                        sender = findUser(userId),
-                        type = ChatMessageType.USER,
-                        content = request.content.trim(),
-                    ),
-                )
+        val replyTo =
+            request.replyToMessageId?.let { messageId ->
+                messageRepository.findByIdAndChatRoomId(messageId, roomId)
+                    ?: throw BaseException(ErrorCode.RESOURCE_NOT_FOUND)
+            }
+        val participantsByUserId =
+            participantRepository
+                .findAllByChatRoomIdOrderByCreatedDateTimeAsc(roomId)
+                .associateBy { it.user.id }
+        if (!participantsByUserId.keys.containsAll(request.mentionedUserIds)) {
+            throw BaseException(ErrorCode.BAD_REQUEST)
+        }
+        val newMessage =
+            ChatMessage(
+                chatRoom = room,
+                sender = participant.user,
+                type = ChatMessageType.USER,
+                content = request.content.trim(),
+                replyTo = replyTo,
+            ).also { message ->
+                message.mention(request.mentionedUserIds.map { checkNotNull(participantsByUserId[it]).user })
+            }
+        val message = messageRepository.saveAndFlush(newMessage)
         participant.readThrough(message.id)
         notificationService.notifyMessage(message)
-        return message.toResponse().also { realtimeMessagingService.sendChatMessage(room.id, it) }
+        return message.toResponse(userId).also { realtimeMessagingService.sendChatMessage(room.id, it) }
     }
+
+    @Transactional
+    fun shareImage(
+        userId: Long,
+        roomId: Long,
+        image: MultipartFile,
+        caption: String?,
+    ): ChatMessageResponse {
+        if (image.isEmpty || image.size > MAX_CHAT_IMAGE_BYTES || image.contentType?.startsWith("image/") != true) {
+            throw BaseException(ErrorCode.BAD_REQUEST)
+        }
+        requireCanShareMessage(userId, roomId)
+        val imageUrl = uploadChatImage(image)
+        return saveSharedMessage(
+            userId,
+            roomId,
+            ChatMessageType.IMAGE,
+            caption?.trim()?.takeIf(String::isNotEmpty) ?: "사진",
+            imageUrl = imageUrl,
+        )
+    }
+
+    @Transactional
+    fun shareTourismContent(
+        userId: Long,
+        roomId: Long,
+        request: ShareTourismContentRequest,
+    ): ChatMessageResponse {
+        requireCanShareMessage(userId, roomId)
+        val content =
+            tourismContentRepository.findByContentId(request.contentId)
+                ?: throw BaseException(ErrorCode.TOURISM_CONTENT_NOT_FOUND)
+        return saveSharedMessage(
+            userId,
+            roomId,
+            ChatMessageType.TOURISM_CONTENT,
+            content.title,
+            tourismContent = content,
+        )
+    }
+
+    @Transactional
+    fun shareLocation(
+        userId: Long,
+        roomId: Long,
+    ): ChatMessageResponse {
+        val room = findParticipant(roomId, userId).chatRoom
+        requireChatEnabled(room)
+        val latitude = room.meetingLatitude ?: throw BaseException(ErrorCode.BAD_REQUEST)
+        val longitude = room.meetingLongitude ?: throw BaseException(ErrorCode.BAD_REQUEST)
+        val locationName = room.meetingDetails?.trim()?.takeIf(String::isNotEmpty)
+        return saveSharedMessage(
+            userId,
+            roomId,
+            ChatMessageType.LOCATION,
+            locationName ?: "만날 위치",
+            sharedLatitude = latitude,
+            sharedLongitude = longitude,
+            locationName = locationName,
+        )
+    }
+
+    @Transactional
+    fun createPoll(
+        userId: Long,
+        roomId: Long,
+        request: CreateChatPollRequest,
+    ): ChatMessageResponse {
+        val normalizedOptions = request.options.map(String::trim)
+        if (normalizedOptions.distinct().size != normalizedOptions.size) throw BaseException(ErrorCode.BAD_REQUEST)
+        val message =
+            saveSharedMessageEntity(
+                userId,
+                roomId,
+                ChatMessageType.POLL,
+                request.question.trim(),
+                pollAnonymous = request.anonymous,
+            )
+        pollOptionRepository.saveAllAndFlush(
+            normalizedOptions.mapIndexed { index, option ->
+                ChatPollOption(message = message, text = option, sequence = index + 1)
+            },
+        )
+        return message.toResponse(userId).also { realtimeMessagingService.sendChatMessage(roomId, it) }
+    }
+
+    @Transactional
+    fun votePoll(
+        userId: Long,
+        roomId: Long,
+        messageId: Long,
+        optionId: Long,
+    ): ChatMessageResponse {
+        val participant = findParticipant(roomId, userId)
+        requireChatEnabled(participant.chatRoom)
+        val message = findPollMessage(roomId, messageId)
+        val option = pollOptionRepository.findByIdAndMessageId(optionId, messageId) ?: throw BaseException(ErrorCode.RESOURCE_NOT_FOUND)
+        pollVoteRepository.findByMessageIdAndUserId(messageId, userId)?.let {
+            pollVoteRepository.delete(it)
+            pollVoteRepository.flush()
+        }
+        pollVoteRepository.saveAndFlush(ChatPollVote(message = message, option = option, user = participant.user))
+        return message.toResponse(userId)
+    }
+
+    @Transactional
+    fun cancelPollVote(
+        userId: Long,
+        roomId: Long,
+        messageId: Long,
+    ): ChatMessageResponse {
+        val participant = findParticipant(roomId, userId)
+        requireChatEnabled(participant.chatRoom)
+        val message = findPollMessage(roomId, messageId)
+        pollVoteRepository.findByMessageIdAndUserId(messageId, userId)?.let(pollVoteRepository::delete)
+        return message.toResponse(userId)
+    }
+
+    @Transactional
+    fun shareSettlementMemo(
+        userId: Long,
+        roomId: Long,
+        request: CreateSettlementMemoRequest,
+    ): ChatMessageResponse = saveSharedMessage(userId, roomId, ChatMessageType.SETTLEMENT_MEMO, request.memo.trim())
 
     @Transactional
     fun getMessages(
@@ -765,11 +923,160 @@ class ChatRoomService(
         val messagesDescending = fetchedMessages.take(pageSize)
         messagesDescending.firstOrNull()?.let { participant.readThrough(it.id) }
         return ChatMessagePageResponse(
-            messages = messagesDescending.asReversed().map { it.toResponse() },
+            messages = messagesDescending.asReversed().map { it.toResponse(userId) },
             nextCursor = messagesDescending.lastOrNull()?.id?.takeIf { hasNext },
             hasNext = hasNext,
         )
     }
+
+    @Transactional(readOnly = true)
+    fun getCurrentRoadmap(
+        userId: Long,
+        roomId: Long,
+        now: LocalDateTime = LocalDateTime.now(),
+    ): CurrentTravelRoadmapResponse {
+        val room = findParticipant(roomId, userId).chatRoom
+        val today = now.toLocalDate()
+        val lastTravelDate = room.endDate ?: room.startDate
+        if (room.status != ChatRoomStatus.CONFIRMED || today < room.startDate || today > lastTravelDate) {
+            return CurrentTravelRoadmapResponse(
+                active = false,
+                dayNumber = null,
+                totalDays = room.tripDays,
+                currentPlace = null,
+                nextPlace = null,
+                places = emptyList(),
+            )
+        }
+
+        val dayNumber = ChronoUnit.DAYS.between(room.startDate, today).toInt() + 1
+        val scheduledPlaces =
+            room.course.places
+                .filter { it.dayNumber == dayNumber }
+                .sortedBy { it.sequence }
+                .map { place -> place to place.visitTime?.let(today::atTime) }
+        val current =
+            scheduledPlaces
+                .filter { (_, scheduledAt) -> scheduledAt != null && !scheduledAt.isAfter(now) }
+                .maxWithOrNull(compareBy<Pair<TravelCoursePlace, LocalDateTime?>> { it.second }.thenBy { it.first.sequence })
+        val next =
+            scheduledPlaces
+                .filter { (_, scheduledAt) -> scheduledAt?.isAfter(now) == true }
+                .minWithOrNull(compareBy<Pair<TravelCoursePlace, LocalDateTime?>> { it.second }.thenBy { it.first.sequence })
+        val responses =
+            scheduledPlaces.map { (place, scheduledAt) ->
+                place.toRoadmapResponse(
+                    scheduledAt = scheduledAt,
+                    progress =
+                        when {
+                            place.sequence == current?.first?.sequence -> TravelRoadmapProgress.CURRENT
+                            scheduledAt != null && !scheduledAt.isAfter(now) -> TravelRoadmapProgress.COMPLETED
+                            else -> TravelRoadmapProgress.UPCOMING
+                        },
+                )
+            }
+        return CurrentTravelRoadmapResponse(
+            active = true,
+            dayNumber = dayNumber,
+            totalDays = room.tripDays,
+            currentPlace = responses.firstOrNull { it.sequence == current?.first?.sequence },
+            nextPlace = responses.firstOrNull { it.sequence == next?.first?.sequence },
+            places = responses,
+        )
+    }
+
+    private fun saveSharedMessage(
+        userId: Long,
+        roomId: Long,
+        type: ChatMessageType,
+        content: String,
+        imageUrl: String? = null,
+        tourismContent: TourismContent? = null,
+        sharedLatitude: Double? = null,
+        sharedLongitude: Double? = null,
+        locationName: String? = null,
+    ): ChatMessageResponse {
+        val message =
+            saveSharedMessageEntity(
+                userId = userId,
+                roomId = roomId,
+                type = type,
+                content = content,
+                imageUrl = imageUrl,
+                tourismContent = tourismContent,
+                sharedLatitude = sharedLatitude,
+                sharedLongitude = sharedLongitude,
+                locationName = locationName,
+            )
+        return message.toResponse(userId).also { realtimeMessagingService.sendChatMessage(roomId, it) }
+    }
+
+    private fun saveSharedMessageEntity(
+        userId: Long,
+        roomId: Long,
+        type: ChatMessageType,
+        content: String,
+        imageUrl: String? = null,
+        tourismContent: TourismContent? = null,
+        sharedLatitude: Double? = null,
+        sharedLongitude: Double? = null,
+        locationName: String? = null,
+        pollAnonymous: Boolean? = null,
+    ): ChatMessage {
+        val participant = findParticipant(roomId, userId)
+        val room = participant.chatRoom
+        requireChatEnabled(room)
+        val message =
+            messageRepository.saveAndFlush(
+                ChatMessage(
+                    chatRoom = room,
+                    sender = participant.user,
+                    type = type,
+                    content = content,
+                    imageUrl = imageUrl,
+                    tourismContent = tourismContent,
+                    sharedLatitude = sharedLatitude,
+                    sharedLongitude = sharedLongitude,
+                    locationName = locationName,
+                    pollAnonymous = pollAnonymous,
+                ),
+            )
+        participant.readThrough(message.id)
+        notificationService.notifyMessage(message)
+        return message
+    }
+
+    private fun findPollMessage(
+        roomId: Long,
+        messageId: Long,
+    ): ChatMessage =
+        messageRepository
+            .findByIdAndChatRoomId(messageId, roomId)
+            ?.takeIf { it.type == ChatMessageType.POLL }
+            ?: throw BaseException(ErrorCode.RESOURCE_NOT_FOUND)
+
+    private fun requireCanShareMessage(
+        userId: Long,
+        roomId: Long,
+    ) {
+        val participant = findParticipant(roomId, userId)
+        requireChatEnabled(participant.chatRoom)
+    }
+
+    private fun TravelCoursePlace.toRoadmapResponse(
+        scheduledAt: LocalDateTime?,
+        progress: TravelRoadmapProgress,
+    ): TravelRoadmapPlaceResponse =
+        TravelRoadmapPlaceResponse(
+            contentId = tourismContent.contentId,
+            sequence = sequence,
+            title = tourismContent.title,
+            thumbnail = tourismContent.thumbnail,
+            latitude = tourismContent.latitude,
+            longitude = tourismContent.longitude,
+            scheduledAt = scheduledAt,
+            progress = progress,
+        )
 
     private fun resolveCourse(
         host: User,
@@ -1001,15 +1308,68 @@ class ChatRoomService(
         )
     }
 
-    private fun ChatMessage.toResponse() =
-        ChatMessageResponse(
+    private fun ChatMessage.toResponse(viewerUserId: Long? = null): ChatMessageResponse {
+        val sharedContent = tourismContent
+        val poll =
+            if (type == ChatMessageType.POLL) {
+                val options = pollOptionRepository.findAllByMessageIdOrderBySequenceAsc(id)
+                val votes = pollVoteRepository.findAllByMessageId(id)
+                val votesByOption = votes.groupBy { it.option.id }
+                ChatPollResponse(
+                    question = content,
+                    anonymous = pollAnonymous ?: true,
+                    totalVoteCount = votes.size,
+                    options =
+                        options.map { option ->
+                            val optionVotes = votesByOption[option.id].orEmpty()
+                            ChatPollOptionResponse(
+                                optionId = option.id,
+                                text = option.text,
+                                voteCount = optionVotes.size,
+                                votedByMe = viewerUserId != null && optionVotes.any { it.user.id == viewerUserId },
+                                voterNicknames =
+                                    if (pollAnonymous == false) optionVotes.map { it.user.nickname() } else null,
+                            )
+                        },
+                )
+            } else {
+                null
+            }
+        return ChatMessageResponse(
             messageId = id,
             type = type,
             senderId = sender?.id,
             senderNickname = sender?.nickname() ?: SYSTEM_NICKNAME,
             content = content,
             createdAt = createdDateTime,
+            imageUrl = imageUrl,
+            tourismContent =
+                sharedContent?.let {
+                    SharedTourismContentResponse(
+                        contentId = it.contentId,
+                        title = it.title,
+                        address = listOfNotNull(it.address1, it.address2).joinToString(" ").takeIf(String::isNotEmpty),
+                        thumbnail = it.thumbnail,
+                        latitude = it.latitude,
+                        longitude = it.longitude,
+                    )
+                },
+            location =
+                sharedLatitude?.let { latitude ->
+                    SharedLocationResponse(latitude, requireNotNull(sharedLongitude), locationName)
+                },
+            poll = poll,
+            replyTo =
+                replyTo?.let {
+                    RepliedChatMessageResponse(
+                        messageId = it.id,
+                        senderNickname = it.sender?.nickname() ?: SYSTEM_NICKNAME,
+                        content = it.content,
+                    )
+                },
+            mentions = mentionedUsers.sortedBy { it.id }.map { MentionedChatUserResponse(it.id, it.nickname()) },
         )
+    }
 
     private fun ChatMessage.toLatestResponse() =
         LatestChatMessageResponse(
@@ -1031,12 +1391,7 @@ class ChatRoomService(
     private fun User.nickname() = information?.nickname ?: "사용자 $id"
 
     private fun uploadChatRoomThumbnail(file: MultipartFile): String {
-        val extension =
-            file.originalFilename
-                ?.substringAfterLast('.', missingDelimiterValue = "")
-                ?.lowercase()
-                ?.takeIf { it.matches(FILE_EXTENSION_PATTERN) }
-                ?: DEFAULT_IMAGE_EXTENSION
+        val extension = fileExtension(file)
         val key =
             objectStorageRepository.upload(
                 CHAT_ROOM_THUMBNAIL_PATH,
@@ -1045,6 +1400,24 @@ class ChatRoomService(
             )
         return objectStorageRepository.getDownloadUrl(key)
     }
+
+    private fun uploadChatImage(file: MultipartFile): String {
+        val extension = fileExtension(file)
+        val key =
+            objectStorageRepository.upload(
+                CHAT_IMAGE_PATH,
+                ObjectStorageRepository.generateFileName(extension),
+                file.inputStream,
+            )
+        return objectStorageRepository.getDownloadUrl(key)
+    }
+
+    private fun fileExtension(file: MultipartFile): String =
+        file.originalFilename
+            ?.substringAfterLast('.', missingDelimiterValue = "")
+            ?.lowercase()
+            ?.takeIf { it.matches(FILE_EXTENSION_PATTERN) }
+            ?: DEFAULT_IMAGE_EXTENSION
 
     private fun requireJoinConditions(
         room: ChatRoom,
@@ -1161,6 +1534,8 @@ class ChatRoomService(
         private const val POPULAR_COURSE_LIMIT = 3
         private const val MIN_PLACES_PER_DAY = 2
         private const val CHAT_ROOM_THUMBNAIL_PATH = "chat-room/thumbnail/"
+        private const val CHAT_IMAGE_PATH = "chat/message/image/"
+        private const val MAX_CHAT_IMAGE_BYTES = 20L * 1024 * 1024
         private const val DEFAULT_IMAGE_EXTENSION = "jpg"
         private val FILE_EXTENSION_PATTERN = Regex("[a-z0-9]{1,10}")
         private val ACTIVE_APPLICATION_STATUSES = listOf(JoinApplicationStatus.PENDING, JoinApplicationStatus.WAITLISTED)

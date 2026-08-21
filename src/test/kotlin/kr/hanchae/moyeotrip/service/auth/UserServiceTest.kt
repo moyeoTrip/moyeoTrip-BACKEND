@@ -2,9 +2,12 @@ package kr.hanchae.moyeotrip.service.auth
 
 import kr.hanchae.moyeotrip.client.ProfileImageGenerationClient
 import kr.hanchae.moyeotrip.client.ProfileImagePromptFactory
+import kr.hanchae.moyeotrip.controller.user.request.UpdateProfileRequest
+import kr.hanchae.moyeotrip.entity.tour.LegalDongCode
 import kr.hanchae.moyeotrip.entity.user.Gender
 import kr.hanchae.moyeotrip.entity.user.NicknameColor
 import kr.hanchae.moyeotrip.entity.user.SignupState
+import kr.hanchae.moyeotrip.entity.user.TravelStyle
 import kr.hanchae.moyeotrip.entity.user.User
 import kr.hanchae.moyeotrip.entity.user.UserInformation
 import kr.hanchae.moyeotrip.entity.user.UserProfileImage
@@ -12,6 +15,7 @@ import kr.hanchae.moyeotrip.entity.user.UserRole
 import kr.hanchae.moyeotrip.exception.BaseException
 import kr.hanchae.moyeotrip.exception.ErrorCode
 import kr.hanchae.moyeotrip.exception.UserNotFoundException
+import kr.hanchae.moyeotrip.repository.LegalDongCodeRepository
 import kr.hanchae.moyeotrip.repository.ObjectStorageRepository
 import kr.hanchae.moyeotrip.repository.UserProfileImageRepository
 import kr.hanchae.moyeotrip.repository.UserRepository
@@ -29,6 +33,7 @@ import org.mockito.Mockito.verify
 import org.mockito.Mockito.verifyNoInteractions
 import org.mockito.Mockito.`when`
 import org.springframework.transaction.support.TransactionSynchronizationManager
+import java.time.LocalDate
 import java.util.Optional
 
 class UserServiceTest {
@@ -36,6 +41,7 @@ class UserServiceTest {
     private val objectStorageRepository = mock(ObjectStorageRepository::class.java)
     private val profileImageGenerationClient = mock(ProfileImageGenerationClient::class.java)
     private val userProfileImageRepository = mock(UserProfileImageRepository::class.java)
+    private val legalDongCodeRepository = mock(LegalDongCodeRepository::class.java)
     private val promptFactory = ProfileImagePromptFactory()
     private val jwtUtil = mock(JwtUtil::class.java)
     private val service =
@@ -45,6 +51,7 @@ class UserServiceTest {
             profileImageGenerationClient,
             promptFactory,
             userProfileImageRepository,
+            legalDongCodeRepository,
             jwtUtil,
         )
 
@@ -165,6 +172,35 @@ class UserServiceTest {
         verify(userRepository, never()).delete(any(User::class.java))
         verifyNoInteractions(objectStorageRepository)
         verifyNoInteractions(jwtUtil)
+    }
+
+    @Test
+    fun `프로필의 자기소개 여행 스타일 관심 지역 생년월일 성별을 수정한다`() {
+        val user = profileImageRequiredUser()
+        val birthDate = LocalDate.now().minusYears(25)
+        val andong = LegalDongCode(id = 1L, regionCode = "47", signguCode = "47170", regionName = "경상북도", signguName = "안동시")
+        val pohang = LegalDongCode(id = 2L, regionCode = "47", signguCode = "47110", regionName = "경상북도", signguName = "포항시")
+        `when`(userRepository.findByIdForUpdate(7L)).thenReturn(user)
+        `when`(legalDongCodeRepository.findAllByRegionCodeAndSignguCodeIn("47", setOf("47170", "47110")))
+            .thenReturn(listOf(andong, pohang))
+
+        val response =
+            service.updateProfile(
+                7L,
+                UpdateProfileRequest(
+                    introduction = "  느긋한 여행을 좋아해요  ",
+                    travelStyles = setOf(TravelStyle.NATURE, TravelStyle.PHOTOGRAPHY),
+                    interestedRegionCodes = setOf("47170", "47110"),
+                    birthDate = birthDate,
+                    gender = Gender.F,
+                ),
+            )
+
+        assertEquals("느긋한 여행을 좋아해요", response.introduction)
+        assertEquals(setOf(TravelStyle.NATURE, TravelStyle.PHOTOGRAPHY), response.travelStyles)
+        assertEquals(setOf("안동시", "포항시"), response.interestedRegions.map { it.signguName }.toSet())
+        assertEquals(birthDate, response.birthDate)
+        assertEquals(Gender.F, response.gender)
     }
 
     private fun profileImageRequiredUser(): User =

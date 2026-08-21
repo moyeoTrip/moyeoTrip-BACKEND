@@ -57,6 +57,16 @@ class ChatRoomLifecycleScheduler(
 
     @Scheduled(cron = "0 0 0 * * *", zone = "Asia/Seoul")
     @Transactional
+    fun announceTripsStartingToday() {
+        roomRepository
+            .findAllStartingRoomsWithoutSystemEvent(ChatRoomStatus.CONFIRMED, LocalDate.now(), TRIP_STARTED_EVENT_KEY)
+            .forEach { room ->
+                saveSystemMessage(room, "오늘 여행이예요 🎒", TRIP_STARTED_EVENT_KEY)
+            }
+    }
+
+    @Scheduled(cron = "0 0 0 * * *", zone = "Asia/Seoul")
+    @Transactional
     fun publishCompletedTravelCourses() {
         roomRepository
             .findAllCompletedConfirmedRoomsForUpdate(ChatRoomStatus.CONFIRMED, LocalDate.now())
@@ -79,8 +89,17 @@ class ChatRoomLifecycleScheduler(
     private fun saveSystemMessage(
         room: ChatRoom,
         content: String,
+        systemEventKey: String? = null,
     ) {
-        val message = messageRepository.save(ChatMessage(chatRoom = room, type = ChatMessageType.SYSTEM, content = content))
+        val message =
+            messageRepository.save(
+                ChatMessage(
+                    chatRoom = room,
+                    type = ChatMessageType.SYSTEM,
+                    content = content,
+                    systemEventKey = systemEventKey,
+                ),
+            )
         realtimeMessagingService.sendChatMessage(
             room.id,
             ChatMessageResponse(
@@ -96,5 +115,6 @@ class ChatRoomLifecycleScheduler(
 
     companion object {
         const val MINIMUM_TRIP_PARTICIPANTS = 3L
+        private const val TRIP_STARTED_EVENT_KEY = "TRIP_STARTED"
     }
 }

@@ -16,6 +16,7 @@ import kr.hanchae.moyeotrip.service.realtime.RealtimeMessagingService
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Test
+import org.mockito.ArgumentCaptor
 import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito.mock
 import org.mockito.Mockito.verify
@@ -82,6 +83,39 @@ class ChatRoomLifecycleSchedulerTest {
         scheduler.publishCompletedTravelCourses()
 
         assertEquals(TravelCourseType.PUBLIC, course.type)
+    }
+
+    @Test
+    fun `확정 여행 시작일에 여행 시작 시스템 메시지를 한 번 생성한다`() {
+        val host = User(id = 1L, userRole = UserRole.ROLE_USER)
+        val room =
+            ChatRoom(
+                id = 12L,
+                host = host,
+                course = TravelCourse(id = 5L, type = TravelCourseType.PUBLIC, title = "공개 코스"),
+                roomTitle = "오늘 여행",
+                maxParticipants = 5,
+                startDate = LocalDate.now(),
+                endDate = LocalDate.now().plusDays(1),
+                recruitmentDeadlineDate = LocalDate.now().minusDays(1),
+                meetingDateTime = LocalDate.now().atStartOfDay(),
+                status = ChatRoomStatus.CONFIRMED,
+            )
+        `when`(
+            roomRepository.findAllStartingRoomsWithoutSystemEvent(
+                ChatRoomStatus.CONFIRMED,
+                LocalDate.now(),
+                "TRIP_STARTED",
+            ),
+        ).thenReturn(listOf(room))
+        `when`(messageRepository.save(any(ChatMessage::class.java))).thenAnswer { it.arguments[0] }
+        val messageCaptor = ArgumentCaptor.forClass(ChatMessage::class.java)
+
+        scheduler.announceTripsStartingToday()
+
+        verify(messageRepository).save(messageCaptor.capture())
+        assertEquals("오늘 여행이 시작됐어요 🎒", messageCaptor.value.content)
+        assertEquals("TRIP_STARTED", messageCaptor.value.systemEventKey)
     }
 
     private fun room(): ChatRoom {

@@ -2,15 +2,22 @@ package kr.hanchae.moyeotrip.service.auth
 
 import kr.hanchae.moyeotrip.client.ProfileImageGenerationClient
 import kr.hanchae.moyeotrip.client.ProfileImagePromptFactory
+import kr.hanchae.moyeotrip.controller.user.request.UpdateProfileRequest
+import kr.hanchae.moyeotrip.controller.user.response.InterestedRegionResponse
+import kr.hanchae.moyeotrip.controller.user.response.MyProfileResponse
 import kr.hanchae.moyeotrip.controller.user.response.ProfileImageCandidateResponse
 import kr.hanchae.moyeotrip.controller.user.response.ProfileImageCandidatesResponse
 import kr.hanchae.moyeotrip.controller.user.response.ProfileImageGenerationResponse
 import kr.hanchae.moyeotrip.controller.user.response.ProfileImageSelectionResponse
+import kr.hanchae.moyeotrip.controller.user.response.ProfileOptionResponse
+import kr.hanchae.moyeotrip.controller.user.response.ProfileOptionsResponse
+import kr.hanchae.moyeotrip.entity.user.TravelStyle
 import kr.hanchae.moyeotrip.entity.user.User
 import kr.hanchae.moyeotrip.entity.user.UserProfileImage
 import kr.hanchae.moyeotrip.exception.BaseException
 import kr.hanchae.moyeotrip.exception.ErrorCode
 import kr.hanchae.moyeotrip.exception.UserNotFoundException
+import kr.hanchae.moyeotrip.repository.LegalDongCodeRepository
 import kr.hanchae.moyeotrip.repository.ObjectStorageRepository
 import kr.hanchae.moyeotrip.repository.UserProfileImageRepository
 import kr.hanchae.moyeotrip.repository.UserRepository
@@ -20,6 +27,8 @@ import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.transaction.support.TransactionSynchronization
 import org.springframework.transaction.support.TransactionSynchronizationManager
+import java.time.LocalDate
+import java.time.Period
 
 @Service
 class UserService(
@@ -28,9 +37,55 @@ class UserService(
     private val profileImageGenerationClient: ProfileImageGenerationClient,
     private val profileImagePromptFactory: ProfileImagePromptFactory,
     private val userProfileImageRepository: UserProfileImageRepository,
+    private val legalDongCodeRepository: LegalDongCodeRepository,
     private val jwtUtil: JwtUtil,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
+
+    @Transactional(readOnly = true)
+    fun getProfile(userId: Long): MyProfileResponse {
+        val user = userRepository.findById(userId).orElseThrow { UserNotFoundException(userId) }
+        requireProfileSetupStarted(user)
+        return user.toProfileResponse()
+    }
+
+    @Transactional
+    fun updateProfile(
+        userId: Long,
+        request: UpdateProfileRequest,
+    ): MyProfileResponse {
+        val user = userRepository.findByIdForUpdate(userId) ?: throw UserNotFoundException(userId)
+        requireProfileSetupStarted(user)
+        if (Period.between(request.birthDate, LocalDate.now()).years < MINIMUM_PROFILE_AGE) {
+            throw BaseException(ErrorCode.MINIMUM_SIGNUP_AGE_NOT_MET)
+        }
+        val interestedRegions =
+            legalDongCodeRepository.findAllByRegionCodeAndSignguCodeIn(
+                GYEONGSANGBUKDO_REGION_CODE,
+                request.interestedRegionCodes,
+            )
+        if (interestedRegions.map { it.signguCode }.toSet() != request.interestedRegionCodes) {
+            throw BaseException(ErrorCode.BAD_REQUEST)
+        }
+        user.updateProfile(
+            introduction = request.introduction?.trim()?.takeIf(String::isNotEmpty),
+            travelStyles = request.travelStyles,
+            interestedRegions = interestedRegions.toSet(),
+            birthDate = request.birthDate,
+            gender = request.gender,
+        )
+        return user.toProfileResponse()
+    }
+
+    @Transactional(readOnly = true)
+    fun getProfileOptions(): ProfileOptionsResponse =
+        ProfileOptionsResponse(
+            travelStyles = TravelStyle.entries.map { ProfileOptionResponse(it, it.label) },
+            interestedRegions =
+                legalDongCodeRepository
+                    .findAllByRegionCodeOrderBySignguNameAsc(GYEONGSANGBUKDO_REGION_CODE)
+                    .map { InterestedRegionResponse(it.signguCode, it.signguName) },
+        )
 
     @Transactional
     fun generateProfileImage(userId: Long): ProfileImageGenerationResponse {
@@ -122,6 +177,19 @@ class UserService(
             selected = fileName == selectedFileName,
         )
 
+    private fun User.toProfileResponse(): MyProfileResponse {
+        val information = checkNotNull(information)
+        return MyProfileResponse(
+            nickname = information.nickname,
+            profileImageUrl = information.profileFileName?.let(objectStorageRepository::getDownloadUrl),
+            introduction = information.introduction,
+            travelStyles = travelStyles,
+            interestedRegions = interestedRegions.sortedBy { it.signguName }.map { InterestedRegionResponse(it.signguCode, it.signguName) },
+            birthDate = information.birthDate,
+            gender = information.gender,
+        )
+    }
+
     private fun scheduleGeneratedImageCleanupOnRollback(generatedImageKey: String) {
         if (!TransactionSynchronizationManager.isSynchronizationActive()) {
             return
@@ -172,5 +240,10 @@ class UserService(
         } catch (exception: Exception) {
             log.warn("프로필 이미지 객체 정리에 실패했습니다. key={}", key, exception)
         }
+    }
+
+    companion object {
+        private const val MINIMUM_PROFILE_AGE = 20
+        private const val GYEONGSANGBUKDO_REGION_CODE = "47"
     }
 }

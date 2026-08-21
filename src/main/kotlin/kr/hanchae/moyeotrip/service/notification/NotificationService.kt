@@ -1,16 +1,20 @@
 package kr.hanchae.moyeotrip.service.notification
 
+import kr.hanchae.moyeotrip.controller.notification.response.ChatRoomNotificationSettingResponse
 import kr.hanchae.moyeotrip.controller.notification.response.NotificationPageResponse
 import kr.hanchae.moyeotrip.controller.notification.response.NotificationResponse
 import kr.hanchae.moyeotrip.controller.notification.response.NotificationSettingResponse
 import kr.hanchae.moyeotrip.entity.chat.ChatMessage
 import kr.hanchae.moyeotrip.entity.chat.ChatRoom
+import kr.hanchae.moyeotrip.entity.notification.ChatNotificationMode
+import kr.hanchae.moyeotrip.entity.notification.ChatRoomNotificationSetting
 import kr.hanchae.moyeotrip.entity.notification.Notification
 import kr.hanchae.moyeotrip.entity.notification.NotificationSetting
 import kr.hanchae.moyeotrip.entity.notification.NotificationType
 import kr.hanchae.moyeotrip.entity.user.User
 import kr.hanchae.moyeotrip.exception.BaseException
 import kr.hanchae.moyeotrip.exception.ErrorCode
+import kr.hanchae.moyeotrip.repository.ChatRoomNotificationSettingRepository
 import kr.hanchae.moyeotrip.repository.ChatRoomParticipantRepository
 import kr.hanchae.moyeotrip.repository.NotificationRepository
 import kr.hanchae.moyeotrip.repository.NotificationSettingRepository
@@ -19,12 +23,17 @@ import kr.hanchae.moyeotrip.service.realtime.RealtimeMessagingService
 import org.springframework.data.domain.PageRequest
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import java.time.DayOfWeek
+import java.time.LocalDateTime
+import java.time.LocalTime
+import java.time.ZoneId
 
 @Service
 class NotificationService(
     private val repository: NotificationRepository,
     private val participantRepository: ChatRoomParticipantRepository,
     private val settingRepository: NotificationSettingRepository,
+    private val roomSettingRepository: ChatRoomNotificationSettingRepository,
     private val userRepository: UserRepository,
     private val realtimeMessagingService: RealtimeMessagingService,
 ) {
@@ -72,16 +81,68 @@ class NotificationService(
     @Transactional
     fun getSetting(userId: Long): NotificationSettingResponse = findOrCreateSetting(userId).toResponse()
 
+    @Transactional(readOnly = true)
+    fun getChatRoomSetting(
+        userId: Long,
+        roomId: Long,
+    ): ChatRoomNotificationSettingResponse {
+        requireParticipant(userId, roomId)
+        return ChatRoomNotificationSettingResponse(
+            roomId = roomId,
+            enabled = roomSettingRepository.findByUserIdAndChatRoomId(userId, roomId)?.enabled ?: true,
+        )
+    }
+
+    @Transactional
+    fun updateChatRoomSetting(
+        userId: Long,
+        roomId: Long,
+        enabled: Boolean,
+    ): ChatRoomNotificationSettingResponse {
+        val participant = requireParticipant(userId, roomId)
+        val setting =
+            roomSettingRepository
+                .findByUserIdAndChatRoomId(userId, roomId)
+                ?.also { it.update(enabled) }
+                ?: roomSettingRepository.save(
+                    ChatRoomNotificationSetting(user = participant.user, chatRoom = participant.chatRoom, enabled = enabled),
+                )
+        return ChatRoomNotificationSettingResponse(roomId, setting.enabled)
+    }
+
     @Transactional
     fun updateSetting(
         userId: Long,
-        chatMessageEnabled: Boolean,
+        chatNotificationMode: ChatNotificationMode,
         recruitmentDeadlineEnabled: Boolean,
         socialActivityEnabled: Boolean,
         marketingEnabled: Boolean,
+        doNotDisturbEnabled: Boolean,
+        doNotDisturbStartTime: LocalTime?,
+        doNotDisturbEndTime: LocalTime?,
+        doNotDisturbDays: Set<DayOfWeek>,
     ): NotificationSettingResponse {
+        if (doNotDisturbEnabled &&
+            (
+                doNotDisturbStartTime == null ||
+                    doNotDisturbEndTime == null ||
+                    doNotDisturbStartTime == doNotDisturbEndTime ||
+                    doNotDisturbDays.isEmpty()
+            )
+        ) {
+            throw BaseException(ErrorCode.BAD_REQUEST)
+        }
         val setting = findOrCreateSetting(userId)
-        setting.update(chatMessageEnabled, recruitmentDeadlineEnabled, socialActivityEnabled, marketingEnabled)
+        setting.update(
+            chatNotificationMode,
+            recruitmentDeadlineEnabled,
+            socialActivityEnabled,
+            marketingEnabled,
+            doNotDisturbEnabled,
+            doNotDisturbStartTime,
+            doNotDisturbEndTime,
+            doNotDisturbDays,
+        )
         return setting.toResponse()
     }
 
@@ -96,6 +157,8 @@ class NotificationService(
             .asSequence()
             .map { it.user }
             .filter { it.id != sender.id }
+            .filter { recipient -> roomSettingRepository.findByUserIdAndChatRoomId(recipient.id, message.chatRoom.id)?.enabled != false }
+            .filter { recipient -> allowsChatMessage(recipient, message) }
             .forEach { recipient ->
                 save(
                     recipient,
@@ -183,13 +246,30 @@ class NotificationService(
                     referenceId = referenceId,
                 ),
             )
-        realtimeMessagingService.sendNotification(recipient.id, notification.toResponse())
+        if (!isDoNotDisturbing(recipient)) {
+            realtimeMessagingService.sendNotification(recipient.id, notification.toResponse())
+        }
     }
 
     private fun allows(
         recipient: User,
         type: NotificationType,
     ): Boolean = settingRepository.findByUserId(recipient.id)?.allows(type) ?: true
+
+    private fun isDoNotDisturbing(recipient: User): Boolean =
+        settingRepository.findByUserId(recipient.id)?.isDoNotDisturbing(LocalDateTime.now(SERVICE_ZONE_ID)) ?: false
+
+    private fun allowsChatMessage(
+        recipient: User,
+        message: ChatMessage,
+    ): Boolean =
+        when (settingRepository.findByUserId(recipient.id)?.chatNotificationMode ?: ChatNotificationMode.ALL) {
+            ChatNotificationMode.ALL -> true
+            ChatNotificationMode.NONE -> false
+            ChatNotificationMode.MENTIONS_AND_REPLIES ->
+                message.replyTo?.sender?.id == recipient.id ||
+                    message.mentionedUsers.any { it.id == recipient.id }
+        }
 
     private fun findOrCreateSetting(userId: Long): NotificationSetting =
         settingRepository.findByUserId(userId)
@@ -199,17 +279,28 @@ class NotificationService(
                 ),
             )
 
+    private fun requireParticipant(
+        userId: Long,
+        roomId: Long,
+    ) = participantRepository.findByChatRoomIdAndUserId(roomId, userId)
+        ?: throw BaseException(ErrorCode.CHAT_ROOM_NOT_PARTICIPANT)
+
     companion object {
         private const val DEADLINE_REFERENCE_MULTIPLIER = 100_000L
+        private val SERVICE_ZONE_ID = ZoneId.of("Asia/Seoul")
     }
 }
 
 private fun NotificationSetting.toResponse() =
     NotificationSettingResponse(
-        chatMessageEnabled = chatMessageEnabled,
+        chatNotificationMode = chatNotificationMode,
         recruitmentDeadlineEnabled = recruitmentDeadlineEnabled,
         socialActivityEnabled = socialActivityEnabled,
         marketingEnabled = marketingEnabled,
+        doNotDisturbEnabled = doNotDisturbEnabled,
+        doNotDisturbStartTime = doNotDisturbStartTime,
+        doNotDisturbEndTime = doNotDisturbEndTime,
+        doNotDisturbDays = doNotDisturbDays,
     )
 
 private fun Notification.toResponse() =

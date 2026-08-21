@@ -4,12 +4,15 @@ import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.security.SecurityRequirement
 import io.swagger.v3.oas.annotations.tags.Tag
 import jakarta.validation.Valid
+import kr.hanchae.moyeotrip.controller.chat.request.CreateChatPollRequest
 import kr.hanchae.moyeotrip.controller.chat.request.CreateChatRoomNoticeRequest
 import kr.hanchae.moyeotrip.controller.chat.request.CreateChatRoomRequest
+import kr.hanchae.moyeotrip.controller.chat.request.CreateSettlementMemoRequest
 import kr.hanchae.moyeotrip.controller.chat.request.JoinChatRoomRequest
 import kr.hanchae.moyeotrip.controller.chat.request.KickChatRoomMemberRequest
 import kr.hanchae.moyeotrip.controller.chat.request.MyChatRoomFilter
 import kr.hanchae.moyeotrip.controller.chat.request.SendChatMessageRequest
+import kr.hanchae.moyeotrip.controller.chat.request.ShareTourismContentRequest
 import kr.hanchae.moyeotrip.controller.chat.request.UpdateChatRoomNoticeRequest
 import kr.hanchae.moyeotrip.controller.chat.request.UpdateChatRoomStatusRequest
 import kr.hanchae.moyeotrip.controller.chat.request.UpdateMeetingInfoRequest
@@ -21,6 +24,7 @@ import kr.hanchae.moyeotrip.controller.chat.response.ChatRoomFavoriteResponse
 import kr.hanchae.moyeotrip.controller.chat.response.ChatRoomKickHistoryResponse
 import kr.hanchae.moyeotrip.controller.chat.response.ChatRoomMemberListResponse
 import kr.hanchae.moyeotrip.controller.chat.response.ChatRoomNoticeHistoryResponse
+import kr.hanchae.moyeotrip.controller.chat.response.CurrentTravelRoadmapResponse
 import kr.hanchae.moyeotrip.controller.chat.response.JoinApplicationResponse
 import kr.hanchae.moyeotrip.controller.chat.response.JoinChatRoomResponse
 import kr.hanchae.moyeotrip.controller.chat.response.JoinEligibilityResponse
@@ -242,6 +246,67 @@ class ChatRoomController(
     ): ResponseEntity<ChatMessageResponse> =
         ResponseEntity.status(HttpStatus.CREATED).body(chatRoomService.sendMessage(userId, roomId, request))
 
+    @Operation(summary = "채팅 사진 공유", description = "현재 참가자가 최대 20MB 이미지 한 장을 공유합니다.")
+    @PostMapping("/{roomId}/messages/images", consumes = [MediaType.MULTIPART_FORM_DATA_VALUE])
+    fun shareImage(
+        @LoginUserId userId: Long,
+        @PathVariable roomId: Long,
+        @RequestPart("image") image: MultipartFile,
+        @RequestPart("caption", required = false) caption: String?,
+    ): ResponseEntity<ChatMessageResponse> =
+        ResponseEntity.status(HttpStatus.CREATED).body(chatRoomService.shareImage(userId, roomId, image, caption))
+
+    @Operation(summary = "채팅 관광 장소 공유")
+    @PostMapping("/{roomId}/messages/tourism-contents")
+    fun shareTourismContent(
+        @LoginUserId userId: Long,
+        @PathVariable roomId: Long,
+        @Valid @RequestBody request: ShareTourismContentRequest,
+    ): ResponseEntity<ChatMessageResponse> =
+        ResponseEntity.status(HttpStatus.CREATED).body(chatRoomService.shareTourismContent(userId, roomId, request))
+
+    @Operation(summary = "채팅 만날 위치 공유", description = "호스트가 채팅방에 등록한 집합 위치 좌표와 상세 장소를 공유합니다.")
+    @PostMapping("/{roomId}/messages/locations")
+    fun shareLocation(
+        @LoginUserId userId: Long,
+        @PathVariable roomId: Long,
+    ): ResponseEntity<ChatMessageResponse> = ResponseEntity.status(HttpStatus.CREATED).body(chatRoomService.shareLocation(userId, roomId))
+
+    @Operation(summary = "채팅 투표 개최", description = "선택지는 2~5개이며 anonymous를 생략하면 익명 투표입니다.")
+    @PostMapping("/{roomId}/messages/polls")
+    fun createPoll(
+        @LoginUserId userId: Long,
+        @PathVariable roomId: Long,
+        @Valid @RequestBody request: CreateChatPollRequest,
+    ): ResponseEntity<ChatMessageResponse> =
+        ResponseEntity.status(HttpStatus.CREATED).body(chatRoomService.createPoll(userId, roomId, request))
+
+    @Operation(summary = "채팅 투표 참여 또는 선택 변경")
+    @PutMapping("/{roomId}/messages/{messageId}/poll-options/{optionId}/vote")
+    fun votePoll(
+        @LoginUserId userId: Long,
+        @PathVariable roomId: Long,
+        @PathVariable messageId: Long,
+        @PathVariable optionId: Long,
+    ): ChatMessageResponse = chatRoomService.votePoll(userId, roomId, messageId, optionId)
+
+    @Operation(summary = "채팅 투표 참여 취소")
+    @DeleteMapping("/{roomId}/messages/{messageId}/vote")
+    fun cancelPollVote(
+        @LoginUserId userId: Long,
+        @PathVariable roomId: Long,
+        @PathVariable messageId: Long,
+    ): ChatMessageResponse = chatRoomService.cancelPollVote(userId, roomId, messageId)
+
+    @Operation(summary = "채팅 정산 메모 공유", description = "송금 기능 없이 정산 내용을 메모 카드로 공유합니다.")
+    @PostMapping("/{roomId}/messages/settlement-memos")
+    fun shareSettlementMemo(
+        @LoginUserId userId: Long,
+        @PathVariable roomId: Long,
+        @Valid @RequestBody request: CreateSettlementMemoRequest,
+    ): ResponseEntity<ChatMessageResponse> =
+        ResponseEntity.status(HttpStatus.CREATED).body(chatRoomService.shareSettlementMemo(userId, roomId, request))
+
     @Operation(summary = "채팅 메시지 커서 조회", description = "beforeMessageId보다 오래된 메시지를 조회하며 응답 메시지는 오래된 순서로 반환합니다.")
     @GetMapping("/{roomId}/messages")
     fun getMessages(
@@ -250,4 +315,11 @@ class ChatRoomController(
         @RequestParam(required = false) beforeMessageId: Long?,
         @RequestParam(defaultValue = "50") limit: Int,
     ): ChatMessagePageResponse = chatRoomService.getMessages(userId, roomId, beforeMessageId, limit)
+
+    @Operation(summary = "현재 여행 로드맵", description = "확정된 여행 당일의 전체 장소 진행 상태와 현재·다음 일정을 반환합니다.")
+    @GetMapping("/{roomId}/roadmap/current")
+    fun getCurrentRoadmap(
+        @LoginUserId userId: Long,
+        @PathVariable roomId: Long,
+    ): CurrentTravelRoadmapResponse = chatRoomService.getCurrentRoadmap(userId, roomId)
 }

@@ -1,7 +1,10 @@
 package kr.hanchae.moyeotrip.controller.notification.response
 
+import kr.hanchae.moyeotrip.entity.notification.ChatNotificationMode
 import kr.hanchae.moyeotrip.entity.notification.NotificationType
+import java.time.DayOfWeek
 import java.time.LocalDateTime
+import java.time.LocalTime
 
 data class NotificationPageResponse(
     val notifications: List<NotificationResponse>,
@@ -20,8 +23,17 @@ data class NotificationResponse(
 )
 
 data class NotificationSettingResponse(
-    val chatMessageEnabled: Boolean,
+    val chatNotificationMode: ChatNotificationMode,
     val recruitmentDeadlineEnabled: Boolean,
     val socialActivityEnabled: Boolean,
     val marketingEnabled: Boolean,
+    val doNotDisturbEnabled: Boolean,
+    val doNotDisturbStartTime: LocalTime?,
+    val doNotDisturbEndTime: LocalTime?,
+    val doNotDisturbDays: Set<DayOfWeek>,
+)
+
+data class ChatRoomNotificationSettingResponse(
+    val roomId: Long,
+    val enabled: Boolean,
 )

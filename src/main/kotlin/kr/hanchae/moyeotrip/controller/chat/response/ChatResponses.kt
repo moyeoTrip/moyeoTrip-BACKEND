@@ -190,6 +190,53 @@ data class ChatMessageResponse(
     val senderNickname: String,
     val content: String,
     val createdAt: LocalDateTime,
+    val imageUrl: String? = null,
+    val tourismContent: SharedTourismContentResponse? = null,
+    val location: SharedLocationResponse? = null,
+    val poll: ChatPollResponse? = null,
+    val replyTo: RepliedChatMessageResponse? = null,
+    val mentions: List<MentionedChatUserResponse> = emptyList(),
+)
+
+data class MentionedChatUserResponse(
+    val userId: Long,
+    val nickname: String,
+)
+
+data class RepliedChatMessageResponse(
+    val messageId: Long,
+    val senderNickname: String,
+    val content: String,
+)
+
+data class SharedTourismContentResponse(
+    val contentId: Long,
+    val title: String,
+    val address: String?,
+    val thumbnail: String?,
+    val latitude: Double?,
+    val longitude: Double?,
+)
+
+data class SharedLocationResponse(
+    val latitude: Double,
+    val longitude: Double,
+    val name: String?,
+)
+
+data class ChatPollResponse(
+    val question: String,
+    val anonymous: Boolean,
+    val totalVoteCount: Int,
+    val options: List<ChatPollOptionResponse>,
+)
+
+data class ChatPollOptionResponse(
+    val optionId: Long,
+    val text: String,
+    val voteCount: Int,
+    val votedByMe: Boolean,
+    val voterNicknames: List<String>?,
 )
 
 data class ChatMessagePageResponse(
@@ -197,6 +244,32 @@ data class ChatMessagePageResponse(
     val nextCursor: Long?,
     val hasNext: Boolean,
 )
+
+data class CurrentTravelRoadmapResponse(
+    val active: Boolean,
+    val dayNumber: Int?,
+    val totalDays: Int,
+    val currentPlace: TravelRoadmapPlaceResponse?,
+    val nextPlace: TravelRoadmapPlaceResponse?,
+    val places: List<TravelRoadmapPlaceResponse>,
+)
+
+data class TravelRoadmapPlaceResponse(
+    val contentId: Long,
+    val sequence: Int,
+    val title: String,
+    val thumbnail: String?,
+    val latitude: Double?,
+    val longitude: Double?,
+    val scheduledAt: LocalDateTime?,
+    val progress: TravelRoadmapProgress,
+)
+
+enum class TravelRoadmapProgress {
+    COMPLETED,
+    CURRENT,
+    UPCOMING,
+}
 
 data class MyChatRoomSummaryResponse(
     val roomId: Long,

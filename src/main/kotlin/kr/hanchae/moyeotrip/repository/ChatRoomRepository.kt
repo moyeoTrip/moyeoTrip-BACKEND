@@ -10,6 +10,23 @@ import org.springframework.data.repository.query.Param
 import java.time.LocalDate
 
 interface ChatRoomRepository : JpaRepository<ChatRoom, Long> {
+    @Query(
+        """
+        SELECT room FROM ChatRoom room
+        WHERE room.status = :status
+          AND room.startDate = :date
+          AND NOT EXISTS (
+              SELECT message.id FROM ChatMessage message
+              WHERE message.chatRoom = room AND message.systemEventKey = :eventKey
+          )
+        """,
+    )
+    fun findAllStartingRoomsWithoutSystemEvent(
+        @Param("status") status: ChatRoomStatus,
+        @Param("date") date: LocalDate,
+        @Param("eventKey") eventKey: String,
+    ): List<ChatRoom>
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT room FROM ChatRoom room WHERE room.id = :id")
     fun findByIdForUpdate(

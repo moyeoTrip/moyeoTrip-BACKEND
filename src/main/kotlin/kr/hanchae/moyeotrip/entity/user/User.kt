@@ -1,7 +1,9 @@
 package kr.hanchae.moyeotrip.entity.user
 
 import jakarta.persistence.CascadeType
+import jakarta.persistence.CollectionTable
 import jakarta.persistence.Column
+import jakarta.persistence.ElementCollection
 import jakarta.persistence.Embedded
 import jakarta.persistence.Entity
 import jakarta.persistence.EnumType
@@ -9,9 +11,13 @@ import jakarta.persistence.Enumerated
 import jakarta.persistence.GeneratedValue
 import jakarta.persistence.GenerationType
 import jakarta.persistence.Id
+import jakarta.persistence.JoinColumn
+import jakarta.persistence.JoinTable
+import jakarta.persistence.ManyToMany
 import jakarta.persistence.OneToMany
 import jakarta.persistence.Table
 import kr.hanchae.moyeotrip.entity.BaseModifiableEntity
+import kr.hanchae.moyeotrip.entity.tour.LegalDongCode
 import java.time.LocalDate
 import kotlin.math.roundToInt
 
@@ -39,6 +45,26 @@ class User(
 
     @OneToMany(mappedBy = "user", cascade = [CascadeType.ALL], orphanRemoval = true)
     private val authIdentities: MutableSet<UserAuthIdentity> = linkedSetOf()
+
+    @ElementCollection
+    @CollectionTable(name = "user_travel_styles", joinColumns = [JoinColumn(name = "user_id")])
+    @Enumerated(EnumType.STRING)
+    @Column(name = "travel_style", length = 30)
+    private val selectedTravelStyles: MutableSet<TravelStyle> = linkedSetOf()
+
+    @ManyToMany
+    @JoinTable(
+        name = "user_interested_legal_dongs",
+        joinColumns = [JoinColumn(name = "user_id")],
+        inverseJoinColumns = [JoinColumn(name = "legal_dong_code_id")],
+    )
+    private val selectedInterestedRegions: MutableSet<LegalDongCode> = linkedSetOf()
+
+    val travelStyles: Set<TravelStyle>
+        get() = selectedTravelStyles.toSet()
+
+    val interestedRegions: Set<LegalDongCode>
+        get() = selectedInterestedRegions.toSet()
 
     @Column(unique = true)
     var fcmToken: String? = null
@@ -87,6 +113,23 @@ class User(
         checkNotNull(information) { "닉네임을 설정한 사용자만 프로필 이미지를 선택할 수 있습니다." }
             .profileFileName = fileName
         signupState = SignupState.SIGNUP_COMPLETE
+    }
+
+    fun updateProfile(
+        introduction: String?,
+        travelStyles: Set<TravelStyle>,
+        interestedRegions: Set<LegalDongCode>,
+        birthDate: LocalDate,
+        gender: Gender,
+    ) {
+        val information = checkNotNull(information) { "프로필 설정이 필요합니다." }
+        information.introduction = introduction
+        information.birthDate = birthDate
+        information.gender = gender
+        selectedTravelStyles.clear()
+        selectedTravelStyles.addAll(travelStyles)
+        selectedInterestedRegions.clear()
+        selectedInterestedRegions.addAll(interestedRegions)
     }
 
     fun canGenerateProfileImage(): Boolean = profileImageGenerationCount < MAX_PROFILE_IMAGE_GENERATION_COUNT

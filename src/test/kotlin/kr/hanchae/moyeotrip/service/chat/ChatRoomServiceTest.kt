@@ -1,15 +1,19 @@
 package kr.hanchae.moyeotrip.service.chat
 
+import kr.hanchae.moyeotrip.controller.chat.request.CreateChatPollRequest
 import kr.hanchae.moyeotrip.controller.chat.request.CreateChatRoomRequest
 import kr.hanchae.moyeotrip.controller.chat.request.CreateCustomCourseRequest
 import kr.hanchae.moyeotrip.controller.chat.request.CustomCoursePlaceRequest
 import kr.hanchae.moyeotrip.controller.chat.request.JoinChatRoomRequest
 import kr.hanchae.moyeotrip.controller.chat.request.MyChatRoomFilter
+import kr.hanchae.moyeotrip.controller.chat.request.SendChatMessageRequest
 import kr.hanchae.moyeotrip.controller.chat.request.UpdateMeetingInfoRequest
+import kr.hanchae.moyeotrip.controller.chat.response.TravelRoadmapProgress
 import kr.hanchae.moyeotrip.controller.tour.request.UpdateTravelCourseRequest
 import kr.hanchae.moyeotrip.entity.chat.ChatMessage
 import kr.hanchae.moyeotrip.entity.chat.ChatMessageType
 import kr.hanchae.moyeotrip.entity.chat.ChatParticipantRole
+import kr.hanchae.moyeotrip.entity.chat.ChatPollOption
 import kr.hanchae.moyeotrip.entity.chat.ChatRoom
 import kr.hanchae.moyeotrip.entity.chat.ChatRoomFavorite
 import kr.hanchae.moyeotrip.entity.chat.ChatRoomJoinApplication
@@ -35,6 +39,8 @@ import kr.hanchae.moyeotrip.entity.user.UserRole
 import kr.hanchae.moyeotrip.exception.BaseException
 import kr.hanchae.moyeotrip.exception.ErrorCode
 import kr.hanchae.moyeotrip.repository.ChatMessageRepository
+import kr.hanchae.moyeotrip.repository.ChatPollOptionRepository
+import kr.hanchae.moyeotrip.repository.ChatPollVoteRepository
 import kr.hanchae.moyeotrip.repository.ChatRoomFavoriteRepository
 import kr.hanchae.moyeotrip.repository.ChatRoomJoinApplicationRepository
 import kr.hanchae.moyeotrip.repository.ChatRoomKickHistoryRepository
@@ -59,6 +65,7 @@ import org.mockito.Mockito.mock
 import org.mockito.Mockito.verify
 import org.mockito.Mockito.verifyNoInteractions
 import org.mockito.Mockito.`when`
+import org.springframework.web.multipart.MultipartFile
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
@@ -69,6 +76,8 @@ class ChatRoomServiceTest {
     private val participantRepository = mock(ChatRoomParticipantRepository::class.java)
     private val applicationRepository = mock(ChatRoomJoinApplicationRepository::class.java)
     private val messageRepository = mock(ChatMessageRepository::class.java)
+    private val pollOptionRepository = mock(ChatPollOptionRepository::class.java)
+    private val pollVoteRepository = mock(ChatPollVoteRepository::class.java)
     private val courseRepository = mock(TravelCourseRepository::class.java)
     private val placeRepository = mock(TravelCoursePlaceRepository::class.java)
     private val tagRepository = mock(TravelCourseTagRepository::class.java)
@@ -87,6 +96,8 @@ class ChatRoomServiceTest {
             participantRepository,
             applicationRepository,
             messageRepository,
+            pollOptionRepository,
+            pollVoteRepository,
             courseRepository,
             placeRepository,
             tagRepository,
@@ -100,6 +111,105 @@ class ChatRoomServiceTest {
             notificationService,
             realtimeMessagingService,
         )
+
+    @Test
+    fun `채팅 사진은 20MB를 초과하면 공유할 수 없다`() {
+        val image = mock(MultipartFile::class.java)
+        `when`(image.isEmpty).thenReturn(false)
+        `when`(image.size).thenReturn(20L * 1024 * 1024 + 1)
+        `when`(image.contentType).thenReturn("image/jpeg")
+
+        val exception =
+            assertThrows(BaseException::class.java) {
+                service.shareImage(2L, 10L, image, null)
+            }
+
+        assertEquals(ErrorCode.BAD_REQUEST, exception.errorCode)
+        verifyNoInteractions(messageRepository)
+    }
+
+    @Test
+    fun `같은 채팅방 참가자가 아닌 사용자는 멘션할 수 없다`() {
+        val member = user(2L)
+        val room = room(user(1L))
+        val participant = ChatRoomParticipant(chatRoom = room, user = member, role = ChatParticipantRole.MEMBER)
+        `when`(participantRepository.findByChatRoomIdAndUserId(10L, 2L)).thenReturn(participant)
+        `when`(participantRepository.findAllByChatRoomIdOrderByCreatedDateTimeAsc(10L)).thenReturn(listOf(participant))
+
+        val exception =
+            assertThrows(BaseException::class.java) {
+                service.sendMessage(2L, 10L, SendChatMessageRequest("안녕하세요", mentionedUserIds = setOf(99L)))
+            }
+
+        assertEquals(ErrorCode.BAD_REQUEST, exception.errorCode)
+        verify(messageRepository, org.mockito.Mockito.never()).saveAndFlush(any(ChatMessage::class.java))
+    }
+
+    @Test
+    fun `투표는 익명이 기본이고 두 개부터 다섯 개 선택지를 저장한다`() {
+        val member = user(2L)
+        val room = room(user(1L))
+        val participant = ChatRoomParticipant(chatRoom = room, user = member, role = ChatParticipantRole.MEMBER)
+        val savedMessage = mock(ChatMessage::class.java)
+        `when`(participantRepository.findByChatRoomIdAndUserId(10L, 2L)).thenReturn(participant)
+        `when`(messageRepository.saveAndFlush(any(ChatMessage::class.java))).thenReturn(savedMessage)
+        `when`(savedMessage.id).thenReturn(30L)
+        `when`(savedMessage.type).thenReturn(ChatMessageType.POLL)
+        `when`(savedMessage.sender).thenReturn(member)
+        `when`(savedMessage.content).thenReturn("어디서 만날까요?")
+        `when`(savedMessage.pollAnonymous).thenReturn(true)
+        `when`(savedMessage.createdDateTime).thenReturn(LocalDateTime.now())
+        `when`(pollOptionRepository.findAllByMessageIdOrderBySequenceAsc(30L)).thenReturn(emptyList())
+        `when`(pollVoteRepository.findAllByMessageId(30L)).thenReturn(emptyList())
+        val messageCaptor = ArgumentCaptor.forClass(ChatMessage::class.java)
+
+        service.createPoll(
+            2L,
+            10L,
+            CreateChatPollRequest(question = "어디서 만날까요?", options = listOf("서울역", "용산역")),
+        )
+
+        verify(messageRepository).saveAndFlush(messageCaptor.capture())
+        assertEquals(ChatMessageType.POLL, messageCaptor.value.type)
+        assertEquals(true, messageCaptor.value.pollAnonymous)
+        verify(pollOptionRepository).saveAllAndFlush(org.mockito.Mockito.anyList<ChatPollOption>())
+    }
+
+    @Test
+    fun `여행 당일 현재 시각을 기준으로 현재 장소와 다음 일정을 계산한다`() {
+        val host = user(1L)
+        val member = user(2L)
+        val today = LocalDate.of(2026, 8, 21)
+        val contentType = TourismContentType(12, "관광지")
+        val course = TravelCourse(id = 5L, type = TravelCourseType.CUSTOM, owner = host, title = "서울 코스")
+        course.addCustomPlace(TourismContent(contentId = 101L, contentType = contentType, title = "서울역"), 1, 1, LocalTime.of(9, 0))
+        course.addCustomPlace(TourismContent(contentId = 102L, contentType = contentType, title = "남산"), 1, 2, LocalTime.of(11, 0))
+        course.addCustomPlace(TourismContent(contentId = 103L, contentType = contentType, title = "한강"), 1, 3, LocalTime.of(14, 0))
+        val room =
+            room(
+                host = host,
+                course = course,
+                startDate = today,
+                endDate = today.plusDays(1),
+                recruitmentDeadlineDate = today,
+                status = ChatRoomStatus.CONFIRMED,
+            )
+        `when`(participantRepository.findByChatRoomIdAndUserId(10L, 2L))
+            .thenReturn(ChatRoomParticipant(chatRoom = room, user = member, role = ChatParticipantRole.MEMBER))
+
+        val response = service.getCurrentRoadmap(2L, 10L, LocalDateTime.of(today, LocalTime.NOON))
+
+        assertEquals(true, response.active)
+        assertEquals(1, response.dayNumber)
+        assertEquals("남산", response.currentPlace?.title)
+        assertEquals(TravelRoadmapProgress.CURRENT, response.currentPlace?.progress)
+        assertEquals("한강", response.nextPlace?.title)
+        assertEquals(LocalTime.of(14, 0), response.nextPlace?.scheduledAt?.toLocalTime())
+        assertEquals(
+            listOf(TravelRoadmapProgress.COMPLETED, TravelRoadmapProgress.CURRENT, TravelRoadmapProgress.UPCOMING),
+            response.places.map { it.progress },
+        )
+    }
 
     @Test
     fun `채팅방 참가자가 아니어도 채팅방 상세를 조회할 수 있다`() {
