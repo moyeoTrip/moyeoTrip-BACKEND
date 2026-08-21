@@ -35,6 +35,8 @@ class ChatRoom(
     val roomTitle: String,
     @Column(length = 500)
     val description: String? = null,
+    @Column(length = 1000)
+    val thumbnail: String? = null,
     @Column(name = "max_participants", nullable = false)
     val maxParticipants: Int,
     @Column(name = "start_date", nullable = false)
@@ -160,7 +162,7 @@ class ChatRoom(
     fun canAcceptJoinApplication(today: LocalDate = LocalDate.now()): Boolean =
         status != ChatRoomStatus.CANCELLED && today < startDate.minusDays(1)
 
-    fun dDay(today: LocalDate = LocalDate.now()): Long = ChronoUnit.DAYS.between(today, startDate)
+    fun recruitmentDDay(today: LocalDate = LocalDate.now()): Long = ChronoUnit.DAYS.between(today, recruitmentDeadlineDate)
 }
 
 enum class ChatRoomStatus {

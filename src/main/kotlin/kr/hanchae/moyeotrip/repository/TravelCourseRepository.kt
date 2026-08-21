@@ -5,6 +5,7 @@ import kr.hanchae.moyeotrip.entity.tour.TravelCourseType
 import org.springframework.data.domain.Pageable
 import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.data.jpa.repository.Query
+import org.springframework.data.repository.query.Param
 
 interface TravelCourseRepository : JpaRepository<TravelCourse, Long> {
     fun findByIdAndType(
@@ -13,6 +14,19 @@ interface TravelCourseRepository : JpaRepository<TravelCourse, Long> {
     ): TravelCourse?
 
     fun findAllByTypeOrderByCreatedDateTimeDesc(type: TravelCourseType): List<TravelCourse>
+
+    @Query(
+        """
+        SELECT DISTINCT course FROM TravelCourse course
+        JOIN course.courseTags tag
+        WHERE course.type = :type AND tag.id = :tagId
+        ORDER BY course.createdDateTime DESC
+        """,
+    )
+    fun findAllByTypeAndTagIdOrderByCreatedDateTimeDesc(
+        @Param("type") type: TravelCourseType,
+        @Param("tagId") tagId: Long,
+    ): List<TravelCourse>
 
     fun existsByTypeAndTitle(
         type: TravelCourseType,

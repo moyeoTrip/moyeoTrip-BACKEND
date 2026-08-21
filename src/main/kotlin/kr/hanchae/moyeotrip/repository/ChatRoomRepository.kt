@@ -35,6 +35,17 @@ interface ChatRoomRepository : JpaRepository<ChatRoom, Long> {
         endDate: LocalDate,
     ): List<ChatRoom>
 
+    fun findFirstByCourseIdAndHostIdAndStatusOrderByStartDateAsc(
+        courseId: Long,
+        hostId: Long,
+        status: ChatRoomStatus,
+    ): ChatRoom?
+
+    fun countByCourseIdAndStatusNot(
+        courseId: Long,
+        status: ChatRoomStatus,
+    ): Long
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query(
         """

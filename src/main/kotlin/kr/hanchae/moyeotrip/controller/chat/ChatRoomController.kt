@@ -7,6 +7,8 @@ import jakarta.validation.Valid
 import kr.hanchae.moyeotrip.controller.chat.request.CreateChatRoomNoticeRequest
 import kr.hanchae.moyeotrip.controller.chat.request.CreateChatRoomRequest
 import kr.hanchae.moyeotrip.controller.chat.request.JoinChatRoomRequest
+import kr.hanchae.moyeotrip.controller.chat.request.KickChatRoomMemberRequest
+import kr.hanchae.moyeotrip.controller.chat.request.MyChatRoomFilter
 import kr.hanchae.moyeotrip.controller.chat.request.SendChatMessageRequest
 import kr.hanchae.moyeotrip.controller.chat.request.UpdateChatRoomNoticeRequest
 import kr.hanchae.moyeotrip.controller.chat.request.UpdateChatRoomStatusRequest
@@ -15,15 +17,20 @@ import kr.hanchae.moyeotrip.controller.chat.response.ApproveJoinApplicationRespo
 import kr.hanchae.moyeotrip.controller.chat.response.ChatMessagePageResponse
 import kr.hanchae.moyeotrip.controller.chat.response.ChatMessageResponse
 import kr.hanchae.moyeotrip.controller.chat.response.ChatRoomDetailResponse
-import kr.hanchae.moyeotrip.controller.chat.response.ChatRoomNoticeResponse
+import kr.hanchae.moyeotrip.controller.chat.response.ChatRoomFavoriteResponse
+import kr.hanchae.moyeotrip.controller.chat.response.ChatRoomKickHistoryResponse
+import kr.hanchae.moyeotrip.controller.chat.response.ChatRoomMemberListResponse
+import kr.hanchae.moyeotrip.controller.chat.response.ChatRoomNoticeHistoryResponse
 import kr.hanchae.moyeotrip.controller.chat.response.JoinApplicationResponse
 import kr.hanchae.moyeotrip.controller.chat.response.JoinChatRoomResponse
+import kr.hanchae.moyeotrip.controller.chat.response.JoinEligibilityResponse
 import kr.hanchae.moyeotrip.controller.chat.response.LeaveChatRoomResponse
 import kr.hanchae.moyeotrip.controller.chat.response.MyChatRoomSummaryResponse
 import kr.hanchae.moyeotrip.controller.chat.response.MyWaitingChatRoomResponse
 import kr.hanchae.moyeotrip.service.chat.ChatRoomService
 import kr.hanchae.moyeotrip.utils.LoginUserId
 import org.springframework.http.HttpStatus
+import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.DeleteMapping
 import org.springframework.web.bind.annotation.GetMapping
@@ -33,7 +40,9 @@ import org.springframework.web.bind.annotation.PutMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestParam
+import org.springframework.web.bind.annotation.RequestPart
 import org.springframework.web.bind.annotation.RestController
+import org.springframework.web.multipart.MultipartFile
 
 @Tag(name = "채팅방", description = "여행 채팅방, 참가자, 대기열 및 메시지 API")
 @SecurityRequirement(name = "Authorization")
@@ -43,19 +52,27 @@ class ChatRoomController(
     private val chatRoomService: ChatRoomService,
 ) {
     @Operation(summary = "채팅방 생성", description = "생성한 사용자가 호스트이자 첫 참가자가 됩니다.")
-    @PostMapping
+    @PostMapping(consumes = [MediaType.MULTIPART_FORM_DATA_VALUE])
     fun createRoom(
         @LoginUserId userId: Long,
-        @Valid @RequestBody request: CreateChatRoomRequest,
-    ): ResponseEntity<Unit> = ResponseEntity.status(HttpStatus.CREATED).body(chatRoomService.createRoom(userId, request))
+        @Valid @RequestPart("request") request: CreateChatRoomRequest,
+        @RequestPart("thumbnail", required = false) thumbnail: MultipartFile?,
+    ): ResponseEntity<Unit> = ResponseEntity.status(HttpStatus.CREATED).body(chatRoomService.createRoom(userId, request, thumbnail))
 
-    @Operation(summary = "내 채팅방 목록", description = "안 읽은 메시지 수와 최근 메시지 정보를 함께 반환합니다.")
+    @Operation(
+        summary = "내 채팅방 목록",
+        description = "모집중·확정·종료 상태로 필터링하며 인원, 마감 D-day, 안 읽은 수와 최근 메시지를 반환합니다.",
+    )
     @GetMapping("/my")
     fun getMyRooms(
         @LoginUserId userId: Long,
-    ): List<MyChatRoomSummaryResponse> = chatRoomService.getMyRooms(userId)
+        @RequestParam(defaultValue = "ALL") filter: MyChatRoomFilter,
+    ): List<MyChatRoomSummaryResponse> = chatRoomService.getMyRooms(userId, filter)
 
-    @Operation(summary = "내 참가 대기 채팅방 목록", description = "승인 대기 여부와 승인 후 대기열 순번을 반환합니다.")
+    @Operation(
+        summary = "내 신청중 채팅방 목록",
+        description = "호스트 승인 대기(PENDING)와 승인 후 자리 대기(WAITLISTED) 신청만 반환합니다.",
+    )
     @GetMapping("/my-waiting")
     fun getMyWaitingRooms(
         @LoginUserId userId: Long,
@@ -64,8 +81,16 @@ class ChatRoomController(
     @Operation(summary = "채팅방 상세 조회")
     @GetMapping("/{roomId}")
     fun getRoom(
+        @LoginUserId userId: Long,
         @PathVariable roomId: Long,
-    ): ChatRoomDetailResponse = chatRoomService.getRoom(roomId)
+    ): ChatRoomDetailResponse = chatRoomService.getRoom(userId, roomId)
+
+    @Operation(summary = "채팅방 찜 상태 토글", description = "호출할 때마다 찜 상태를 반전하고 변경된 상태를 반환합니다.")
+    @PostMapping("/{roomId}/favorite")
+    fun toggleRoomFavorite(
+        @LoginUserId userId: Long,
+        @PathVariable roomId: Long,
+    ): ChatRoomFavoriteResponse = chatRoomService.toggleRoomFavorite(userId, roomId)
 
     @Operation(summary = "집합 정보 수정", description = "여행 확정 전까지 채팅방 호스트가 집합 좌표, 상세 안내와 시간을 수정합니다.")
     @PutMapping("/{roomId}/meeting-info")
@@ -85,6 +110,23 @@ class ChatRoomController(
         @PathVariable roomId: Long,
         @Valid @RequestBody request: JoinChatRoomRequest,
     ): JoinChatRoomResponse = chatRoomService.applyToJoin(userId, roomId, request)
+
+    @Operation(summary = "채팅방 참가 신청 취소", description = "호스트 승인 대기 또는 승인 후 대기열에 있는 본인의 신청을 취소합니다.")
+    @DeleteMapping("/{roomId}/applications/me")
+    fun cancelJoinApplication(
+        @LoginUserId userId: Long,
+        @PathVariable roomId: Long,
+    ): ResponseEntity<Void> {
+        chatRoomService.cancelJoinApplication(userId, roomId)
+        return ResponseEntity.noContent().build()
+    }
+
+    @Operation(summary = "채팅방 참가 신청 가능 여부", description = "모집 상태, 기존 참가·신청 여부, 성별과 만 나이 조건을 확인합니다.")
+    @GetMapping("/{roomId}/join-eligibility")
+    fun getJoinEligibility(
+        @LoginUserId userId: Long,
+        @PathVariable roomId: Long,
+    ): JoinEligibilityResponse = chatRoomService.getJoinEligibility(userId, roomId)
 
     @Operation(summary = "승인 대기 신청 목록", description = "호스트에게만 신청자의 프로필과 소개를 제공합니다.")
     @GetMapping("/{roomId}/applications")
@@ -119,14 +161,31 @@ class ChatRoomController(
         @PathVariable roomId: Long,
     ): LeaveChatRoomResponse = chatRoomService.leaveRoom(userId, roomId)
 
-    @Operation(summary = "멤버 강퇴", description = "호스트가 참가 멤버를 방에서 제외하고 빈자리에 승인된 대기자를 승격합니다.")
+    @Operation(
+        summary = "채팅방 동행자 목록",
+        description = "현재·최대 인원, 승인된 대기 인원과 각 동행자의 프로필·닉네임·완료 여행 횟수를 반환합니다.",
+    )
+    @GetMapping("/{roomId}/members")
+    fun getMembers(
+        @LoginUserId userId: Long,
+        @PathVariable roomId: Long,
+    ): ChatRoomMemberListResponse = chatRoomService.getMembers(userId, roomId)
+
+    @Operation(summary = "내 강퇴 이력", description = "로그인한 본인이 강퇴된 사유만 최신순으로 반환합니다.")
+    @GetMapping("/my-kick-histories")
+    fun getMyKickHistories(
+        @LoginUserId userId: Long,
+    ): List<ChatRoomKickHistoryResponse> = chatRoomService.getMyKickHistories(userId)
+
+    @Operation(summary = "멤버 강퇴", description = "필수 사유를 비공개 이력으로 저장하고 빈자리에 승인된 대기자를 승격합니다.")
     @DeleteMapping("/{roomId}/members/{memberId}")
     fun kickMember(
         @LoginUserId userId: Long,
         @PathVariable roomId: Long,
         @PathVariable memberId: Long,
+        @Valid @RequestBody request: KickChatRoomMemberRequest,
     ): ResponseEntity<Void> {
-        chatRoomService.kickMember(userId, roomId, memberId)
+        chatRoomService.kickMember(userId, roomId, memberId, request.reason)
         return ResponseEntity.noContent().build()
     }
 
@@ -148,11 +207,14 @@ class ChatRoomController(
         @PathVariable roomId: Long,
         @Valid @RequestBody request: CreateChatRoomNoticeRequest,
     ): ResponseEntity<Void> {
-        chatRoomService.createNotice(userId, roomId, request.notice)
+        chatRoomService.createNotice(userId, roomId, request.notice, request.pinned)
         return ResponseEntity.status(HttpStatus.CREATED).build()
     }
 
-    @Operation(summary = "채팅방 공지 변경·삭제", description = "공지 내용이 null이면 noticeId에 해당하는 공지를 삭제합니다.")
+    @Operation(
+        summary = "채팅방 공지 변경·삭제",
+        description = "내용과 고정 상태를 변경합니다. notice와 pinned가 모두 null이면 공지를 삭제합니다.",
+    )
     @PutMapping("/{roomId}/notices/{noticeId}")
     fun updateNotice(
         @LoginUserId userId: Long,
@@ -160,16 +222,16 @@ class ChatRoomController(
         @PathVariable noticeId: Long,
         @Valid @RequestBody request: UpdateChatRoomNoticeRequest,
     ): ResponseEntity<Void> {
-        chatRoomService.updateNotice(userId, roomId, noticeId, request.notice)
+        chatRoomService.updateNotice(userId, roomId, noticeId, request.notice, request.pinned)
         return ResponseEntity.noContent().build()
     }
 
-    @Operation(summary = "채팅방 공지 이력", description = "최신 공지부터 과거 공지와 공지 해제 기록을 반환합니다.")
+    @Operation(summary = "채팅방 공지 이력", description = "고정 공지와 고정하지 않은 공지를 각각 생성일 내림차순으로 반환합니다.")
     @GetMapping("/{roomId}/notices")
     fun getNoticeHistory(
         @LoginUserId userId: Long,
         @PathVariable roomId: Long,
-    ): List<ChatRoomNoticeResponse> = chatRoomService.getNoticeHistory(userId, roomId)
+    ): ChatRoomNoticeHistoryResponse = chatRoomService.getNoticeHistory(userId, roomId)
 
     @Operation(summary = "채팅 메시지 전송", description = "현재 참가자만 메시지를 보낼 수 있습니다.")
     @PostMapping("/{roomId}/messages")

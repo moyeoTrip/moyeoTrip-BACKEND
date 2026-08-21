@@ -17,6 +17,7 @@ data class ChatRoomDetailResponse(
     val roomId: Long,
     val title: String,
     val description: String?,
+    val thumbnail: String?,
     val tripType: TripType,
     val startDate: LocalDate,
     val endDate: LocalDate?,
@@ -34,12 +35,14 @@ data class ChatRoomDetailResponse(
     val minimumAge: Int?,
     val maximumAge: Int?,
     val joinApprovalMode: JoinApprovalMode,
-    val dDay: Long,
+    val recruitmentDDay: Long,
     val hostId: Long,
     val hostProfileImageUrl: String?,
     val participantCount: Int,
     val maxParticipants: Int,
     val status: ChatRoomStatus,
+    val favorite: Boolean,
+    val latestPinnedNotice: ChatRoomNoticeResponse?,
     val participants: List<ChatParticipantResponse>,
 )
 
@@ -79,6 +82,23 @@ data class TravelCourseInformationResponse(
     val places: List<TravelCoursePlaceResponse>,
 )
 
+data class PublicTravelCourseDetailResponse(
+    val courseId: Long,
+    val title: String,
+    val description: String?,
+    val creatorNickname: String?,
+    val creatorTravelStartDate: LocalDate?,
+    val creatorTravelEndDate: LocalDate?,
+    val chatRoomCount: Long,
+    val travelTime: String,
+    val distanceKm: Double,
+    val averageRating: Double?,
+    val ratingCount: Long,
+    val tags: List<TravelCourseTagResponse>,
+    val thumbnail: String?,
+    val places: List<TravelCoursePlaceResponse>,
+)
+
 data class TravelCoursePlaceResponse(
     val contentId: Long,
     val dayNumber: Int,
@@ -95,12 +115,40 @@ data class ChatParticipantResponse(
     val profileImageUrl: String?,
 )
 
+data class ChatRoomMemberListResponse(
+    val participantCount: Int,
+    val maxParticipants: Int,
+    val waitlistCount: Int,
+    val members: List<ChatRoomMemberResponse>,
+)
+
+data class ChatRoomMemberResponse(
+    val userId: Long,
+    val nickname: String,
+    val profileImageUrl: String?,
+    val completedTripCount: Int,
+    val host: Boolean,
+    val me: Boolean,
+)
+
+data class ChatRoomKickHistoryResponse(
+    val kickHistoryId: Long,
+    val roomId: Long,
+    val roomTitle: String,
+    val reason: String,
+    val kickedAt: LocalDateTime,
+)
+
 data class JoinChatRoomResponse(
     val roomId: Long,
     val result: JoinResult,
 )
 
 enum class JoinResult { JOINED, WAITLISTED, PENDING_APPROVAL }
+
+data class JoinEligibilityResponse(
+    val canApply: Boolean,
+)
 
 data class JoinApplicationResponse(
     val applicationId: Long,
@@ -153,8 +201,12 @@ data class ChatMessagePageResponse(
 data class MyChatRoomSummaryResponse(
     val roomId: Long,
     val title: String,
+    val thumbnail: String?,
     val status: ChatRoomStatus,
-    val dDay: Long,
+    val ended: Boolean,
+    val recruitmentDDay: Long,
+    val participantCount: Int,
+    val maxParticipants: Int,
     val unreadMessageCount: Long,
     val latestMessage: LatestChatMessageResponse,
 )
@@ -162,11 +214,26 @@ data class MyChatRoomSummaryResponse(
 data class MyWaitingChatRoomResponse(
     val roomId: Long,
     val title: String,
-    val startDate: LocalDate,
-    val dDay: Long,
-    val roomStatus: ChatRoomStatus,
+    val thumbnail: String?,
     val applicationStatus: JoinApplicationStatus,
     val waitlistPosition: Int?,
+    val tripType: TripType,
+    val startDate: LocalDate,
+    val endDate: LocalDate?,
+    val tripNights: Int,
+    val tripDays: Int,
+    val dayTripStartTime: LocalTime?,
+    val dayTripEndTime: LocalTime?,
+    val meetingDateTime: LocalDateTime,
+    val meetingLatitude: Double?,
+    val meetingLongitude: Double?,
+    val meetingDetails: String?,
+    val participantCount: Int,
+    val maxParticipants: Int,
+)
+
+data class ChatRoomFavoriteResponse(
+    val favorite: Boolean,
 )
 
 data class LatestChatMessageResponse(
@@ -179,6 +246,12 @@ data class LatestChatMessageResponse(
 data class ChatRoomNoticeResponse(
     val noticeId: Long,
     val content: String?,
+    val pinned: Boolean,
     val authorNickname: String,
     val createdAt: LocalDateTime,
+)
+
+data class ChatRoomNoticeHistoryResponse(
+    val pinnedNotices: List<ChatRoomNoticeResponse>,
+    val unpinnedNotices: List<ChatRoomNoticeResponse>,
 )

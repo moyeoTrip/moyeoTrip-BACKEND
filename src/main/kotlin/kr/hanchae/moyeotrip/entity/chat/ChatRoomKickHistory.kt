@@ -13,26 +13,20 @@ import kr.hanchae.moyeotrip.entity.BaseTimeEntity
 import kr.hanchae.moyeotrip.entity.user.User
 
 @Entity
-@Table(name = "chat_room_notices")
-class ChatRoomNotice(
+@Table(name = "chat_room_kick_histories")
+class ChatRoomKickHistory(
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
     val id: Long = 0L,
+    @Column(name = "chat_room_id", nullable = false, updatable = false)
+    val chatRoomId: Long,
+    @Column(name = "room_title", nullable = false, updatable = false, length = 100)
+    val roomTitle: String,
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "chat_room_id", nullable = false, updatable = false)
-    val chatRoom: ChatRoom,
+    @JoinColumn(name = "kicked_user_id", nullable = false, updatable = false)
+    val kickedUser: User,
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "author_id", nullable = false, updatable = false)
-    val author: User,
-    @Column(length = 1000)
-    var content: String?,
-    @Column(nullable = false, columnDefinition = "NUMBER(1)")
-    var pinned: Boolean = false,
-) : BaseTimeEntity() {
-    fun updateContent(content: String) {
-        this.content = content
-    }
-
-    fun updatePinned(pinned: Boolean) {
-        this.pinned = pinned
-    }
-}
+    @JoinColumn(name = "kicked_by_id", nullable = false, updatable = false)
+    val kickedBy: User,
+    @Column(nullable = false, updatable = false, length = 500)
+    val reason: String,
+) : BaseTimeEntity()

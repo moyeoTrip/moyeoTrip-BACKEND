@@ -27,9 +27,9 @@ interface ChatRoomParticipantRepository : JpaRepository<ChatRoomParticipant, Lon
         """
         SELECT COUNT(participant) FROM ChatRoomParticipant participant
         WHERE participant.user.id = :userId
-          AND participant.role = kr.hanchae.moyeotrip.entity.chat.ChatParticipantRole.MEMBER
-          AND participant.chatRoom.status = kr.hanchae.moyeotrip.entity.chat.ChatRoomStatus.CONFIRMED
-          AND participant.chatRoom.startDate < CURRENT_DATE
+          AND participant.chatRoom.status = CONFIRMED
+          AND ((participant.chatRoom.endDate IS NULL AND participant.chatRoom.startDate < CURRENT_DATE)
+               OR participant.chatRoom.endDate < CURRENT_DATE)
         """,
     )
     fun countCompletedTrips(

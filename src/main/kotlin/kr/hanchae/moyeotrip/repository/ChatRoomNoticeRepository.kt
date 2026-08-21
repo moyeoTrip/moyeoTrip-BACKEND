@@ -4,9 +4,9 @@ import kr.hanchae.moyeotrip.entity.chat.ChatRoomNotice
 import org.springframework.data.jpa.repository.JpaRepository
 
 interface ChatRoomNoticeRepository : JpaRepository<ChatRoomNotice, Long> {
-    fun findFirstByChatRoomIdAndContentIsNotNullOrderByIdDesc(chatRoomId: Long): ChatRoomNotice?
+    fun findFirstByChatRoomIdAndPinnedTrueAndContentIsNotNullOrderByCreatedDateTimeDescIdDesc(chatRoomId: Long): ChatRoomNotice?
 
-    fun findAllByChatRoomIdOrderByIdDesc(chatRoomId: Long): List<ChatRoomNotice>
+    fun findAllByChatRoomIdAndContentIsNotNullOrderByCreatedDateTimeDescIdDesc(chatRoomId: Long): List<ChatRoomNotice>
 
     fun findByIdAndChatRoomId(
         id: Long,
