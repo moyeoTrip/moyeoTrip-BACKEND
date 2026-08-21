@@ -12,11 +12,33 @@ ALTER TABLE chat_messages ADD CONSTRAINT fk_chat_message_tourism_content
 ALTER TABLE chat_messages ADD CONSTRAINT ck_chat_message_poll_anonymous
     CHECK (poll_anonymous IN (0, 1));
 
-ALTER TABLE chat_messages DROP CONSTRAINT ck_chat_message_type;
+DECLARE
+    constraint_count NUMBER;
+BEGIN
+    SELECT COUNT(*) INTO constraint_count
+    FROM user_constraints
+    WHERE table_name = 'CHAT_MESSAGES'
+      AND constraint_name = 'CK_CHAT_MESSAGE_TYPE';
+    IF constraint_count > 0 THEN
+        EXECUTE IMMEDIATE 'ALTER TABLE chat_messages DROP CONSTRAINT ck_chat_message_type';
+    END IF;
+END;
+/
 ALTER TABLE chat_messages ADD CONSTRAINT ck_chat_message_type CHECK (
     message_type IN ('USER', 'SYSTEM', 'IMAGE', 'TOURISM_CONTENT', 'LOCATION', 'POLL', 'SETTLEMENT_MEMO')
 );
-ALTER TABLE chat_messages DROP CONSTRAINT ck_chat_message_sender;
+DECLARE
+    constraint_count NUMBER;
+BEGIN
+    SELECT COUNT(*) INTO constraint_count
+    FROM user_constraints
+    WHERE table_name = 'CHAT_MESSAGES'
+      AND constraint_name = 'CK_CHAT_MESSAGE_SENDER';
+    IF constraint_count > 0 THEN
+        EXECUTE IMMEDIATE 'ALTER TABLE chat_messages DROP CONSTRAINT ck_chat_message_sender';
+    END IF;
+END;
+/
 ALTER TABLE chat_messages ADD CONSTRAINT ck_chat_message_sender CHECK (
     (message_type = 'SYSTEM' AND sender_id IS NULL) OR
     (message_type <> 'SYSTEM' AND sender_id IS NOT NULL)
@@ -44,5 +66,4 @@ CREATE TABLE chat_poll_votes (
     CONSTRAINT uk_chat_poll_vote_message_user UNIQUE (message_id, user_id)
 );
 
-CREATE INDEX ix_chat_poll_options_message ON chat_poll_options(message_id, option_sequence);
 CREATE INDEX ix_chat_poll_votes_message ON chat_poll_votes(message_id);

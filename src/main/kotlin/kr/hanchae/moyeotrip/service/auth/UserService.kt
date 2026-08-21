@@ -9,9 +9,8 @@ import kr.hanchae.moyeotrip.controller.user.response.ProfileImageCandidateRespon
 import kr.hanchae.moyeotrip.controller.user.response.ProfileImageCandidatesResponse
 import kr.hanchae.moyeotrip.controller.user.response.ProfileImageGenerationResponse
 import kr.hanchae.moyeotrip.controller.user.response.ProfileImageSelectionResponse
-import kr.hanchae.moyeotrip.controller.user.response.ProfileOptionResponse
 import kr.hanchae.moyeotrip.controller.user.response.ProfileOptionsResponse
-import kr.hanchae.moyeotrip.entity.user.TravelStyle
+import kr.hanchae.moyeotrip.controller.user.response.TravelStyleResponse
 import kr.hanchae.moyeotrip.entity.user.User
 import kr.hanchae.moyeotrip.entity.user.UserProfileImage
 import kr.hanchae.moyeotrip.exception.BaseException
@@ -19,6 +18,7 @@ import kr.hanchae.moyeotrip.exception.ErrorCode
 import kr.hanchae.moyeotrip.exception.UserNotFoundException
 import kr.hanchae.moyeotrip.repository.LegalDongCodeRepository
 import kr.hanchae.moyeotrip.repository.ObjectStorageRepository
+import kr.hanchae.moyeotrip.repository.TravelStyleRepository
 import kr.hanchae.moyeotrip.repository.UserProfileImageRepository
 import kr.hanchae.moyeotrip.repository.UserRepository
 import kr.hanchae.moyeotrip.utils.jwt.JwtUtil
@@ -38,6 +38,7 @@ class UserService(
     private val profileImagePromptFactory: ProfileImagePromptFactory,
     private val userProfileImageRepository: UserProfileImageRepository,
     private val legalDongCodeRepository: LegalDongCodeRepository,
+    private val travelStyleRepository: TravelStyleRepository,
     private val jwtUtil: JwtUtil,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
@@ -59,17 +60,20 @@ class UserService(
         if (Period.between(request.birthDate, LocalDate.now()).years < MINIMUM_PROFILE_AGE) {
             throw BaseException(ErrorCode.MINIMUM_SIGNUP_AGE_NOT_MET)
         }
-        val interestedRegions =
-            legalDongCodeRepository.findAllByRegionCodeAndSignguCodeIn(
-                GYEONGSANGBUKDO_REGION_CODE,
-                request.interestedRegionCodes,
-            )
-        if (interestedRegions.map { it.signguCode }.toSet() != request.interestedRegionCodes) {
+        val interestedRegions = legalDongCodeRepository.findAllById(request.interestedRegionIds)
+        if (
+            interestedRegions.map { it.id }.toSet() != request.interestedRegionIds ||
+            interestedRegions.any { it.regionCode != GYEONGSANGBUKDO_REGION_CODE }
+        ) {
+            throw BaseException(ErrorCode.BAD_REQUEST)
+        }
+        val travelStyles = travelStyleRepository.findAllById(request.travelStyleIds)
+        if (travelStyles.map { it.id }.toSet() != request.travelStyleIds) {
             throw BaseException(ErrorCode.BAD_REQUEST)
         }
         user.updateProfile(
             introduction = request.introduction?.trim()?.takeIf(String::isNotEmpty),
-            travelStyles = request.travelStyles,
+            travelStyles = travelStyles.toSet(),
             interestedRegions = interestedRegions.toSet(),
             birthDate = request.birthDate,
             gender = request.gender,
@@ -80,11 +84,14 @@ class UserService(
     @Transactional(readOnly = true)
     fun getProfileOptions(): ProfileOptionsResponse =
         ProfileOptionsResponse(
-            travelStyles = TravelStyle.entries.map { ProfileOptionResponse(it, it.label) },
+            travelStyles =
+                travelStyleRepository
+                    .findAllByOrderByLabelAsc()
+                    .map { TravelStyleResponse(it.id, it.label) },
             interestedRegions =
                 legalDongCodeRepository
                     .findAllByRegionCodeOrderBySignguNameAsc(GYEONGSANGBUKDO_REGION_CODE)
-                    .map { InterestedRegionResponse(it.signguCode, it.signguName) },
+                    .map { InterestedRegionResponse(it.id, it.signguName) },
         )
 
     @Transactional
@@ -183,8 +190,8 @@ class UserService(
             nickname = information.nickname,
             profileImageUrl = information.profileFileName?.let(objectStorageRepository::getDownloadUrl),
             introduction = information.introduction,
-            travelStyles = travelStyles,
-            interestedRegions = interestedRegions.sortedBy { it.signguName }.map { InterestedRegionResponse(it.signguCode, it.signguName) },
+            travelStyles = travelStyles.sortedBy { it.label }.map { TravelStyleResponse(it.id, it.label) },
+            interestedRegions = interestedRegions.sortedBy { it.signguName }.map { InterestedRegionResponse(it.id, it.signguName) },
             birthDate = information.birthDate,
             gender = information.gender,
         )

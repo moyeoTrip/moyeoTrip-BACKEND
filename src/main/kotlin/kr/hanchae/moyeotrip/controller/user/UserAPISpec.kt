@@ -10,7 +10,6 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse
 import io.swagger.v3.oas.annotations.responses.ApiResponses
 import io.swagger.v3.oas.annotations.security.SecurityRequirement
 import io.swagger.v3.oas.annotations.tags.Tag
-import kr.hanchae.moyeotrip.config.security.CustomUserDto
 import kr.hanchae.moyeotrip.config.swagger.SwaggerTag
 import kr.hanchae.moyeotrip.controller.user.request.ProfileImageSelectionRequest
 import kr.hanchae.moyeotrip.controller.user.response.ProfileImageCandidatesResponse
@@ -54,7 +53,7 @@ interface UserAPISpec {
         ],
     )
     fun withdraw(
-        @Parameter(hidden = true) principal: CustomUserDto,
+        @Parameter(hidden = true) userId: Long,
     )
 
     @Operation(
@@ -114,7 +113,7 @@ interface UserAPISpec {
         ],
     )
     fun generateProfileImage(
-        @Parameter(hidden = true) principal: CustomUserDto,
+        @Parameter(hidden = true) userId: Long,
     ): ProfileImageGenerationResponse
 
     @Operation(
@@ -144,7 +143,7 @@ interface UserAPISpec {
         ],
     )
     fun getProfileImages(
-        @Parameter(hidden = true) principal: CustomUserDto,
+        @Parameter(hidden = true) userId: Long,
     ): ProfileImageCandidatesResponse
 
     @Operation(
@@ -185,7 +184,7 @@ interface UserAPISpec {
         ],
     )
     fun selectProfileImage(
-        @Parameter(hidden = true) principal: CustomUserDto,
+        @Parameter(hidden = true) userId: Long,
         @RequestBody(
             description = "선택할 본인 소유의 프로필 이미지 후보 ID",
             required = true,

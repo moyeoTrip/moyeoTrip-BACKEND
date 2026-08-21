@@ -1,19 +1,22 @@
 package kr.hanchae.moyeotrip.controller.user
 
 import jakarta.validation.Valid
-import kr.hanchae.moyeotrip.config.security.CustomUserDto
 import kr.hanchae.moyeotrip.controller.user.request.ProfileImageSelectionRequest
 import kr.hanchae.moyeotrip.controller.user.request.UpdateProfileRequest
+import kr.hanchae.moyeotrip.controller.user.response.FollowListResponse
+import kr.hanchae.moyeotrip.controller.user.response.FollowResponse
 import kr.hanchae.moyeotrip.controller.user.response.MyProfileResponse
 import kr.hanchae.moyeotrip.controller.user.response.ProfileImageCandidatesResponse
 import kr.hanchae.moyeotrip.controller.user.response.ProfileImageGenerationResponse
 import kr.hanchae.moyeotrip.controller.user.response.ProfileImageSelectionResponse
 import kr.hanchae.moyeotrip.controller.user.response.ProfileOptionsResponse
 import kr.hanchae.moyeotrip.service.auth.UserService
+import kr.hanchae.moyeotrip.service.user.FollowService
+import kr.hanchae.moyeotrip.utils.LoginUserId
 import org.springframework.http.HttpStatus
-import org.springframework.security.core.annotation.AuthenticationPrincipal
 import org.springframework.web.bind.annotation.DeleteMapping
 import org.springframework.web.bind.annotation.GetMapping
+import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.PutMapping
 import org.springframework.web.bind.annotation.RequestBody
@@ -25,17 +28,34 @@ import org.springframework.web.bind.annotation.RestController
 @RequestMapping("/api/v1/users/me")
 class UserController(
     private val userService: UserService,
+    private val followService: FollowService,
 ) : UserAPISpec {
+    @PostMapping("/following/{userId}")
+    fun toggleFollow(
+        @LoginUserId loginUserId: Long,
+        @PathVariable userId: Long,
+    ): FollowResponse = followService.toggleFollow(loginUserId, userId)
+
+    @GetMapping("/followers")
+    fun getFollowers(
+        @LoginUserId userId: Long,
+    ): FollowListResponse = followService.getFollowers(userId)
+
+    @GetMapping("/following")
+    fun getFollowing(
+        @LoginUserId userId: Long,
+    ): FollowListResponse = followService.getFollowing(userId)
+
     @GetMapping("/profile")
     fun getProfile(
-        @AuthenticationPrincipal principal: CustomUserDto,
-    ): MyProfileResponse = userService.getProfile(principal.username.toLong())
+        @LoginUserId userId: Long,
+    ): MyProfileResponse = userService.getProfile(userId)
 
     @PutMapping("/profile")
     fun updateProfile(
-        @AuthenticationPrincipal principal: CustomUserDto,
+        @LoginUserId userId: Long,
         @Valid @RequestBody request: UpdateProfileRequest,
-    ): MyProfileResponse = userService.updateProfile(principal.username.toLong(), request)
+    ): MyProfileResponse = userService.updateProfile(userId, request)
 
     @GetMapping("/profile/options")
     fun getProfileOptions(): ProfileOptionsResponse = userService.getProfileOptions()
@@ -43,24 +63,24 @@ class UserController(
     @DeleteMapping
     @ResponseStatus(HttpStatus.NO_CONTENT)
     override fun withdraw(
-        @AuthenticationPrincipal principal: CustomUserDto,
+        @LoginUserId userId: Long,
     ) {
-        userService.withdraw(principal.username.toLong())
+        userService.withdraw(userId)
     }
 
     @PostMapping("/profile-images")
     override fun generateProfileImage(
-        @AuthenticationPrincipal principal: CustomUserDto,
-    ): ProfileImageGenerationResponse = userService.generateProfileImage(principal.username.toLong())
+        @LoginUserId userId: Long,
+    ): ProfileImageGenerationResponse = userService.generateProfileImage(userId)
 
     @GetMapping("/profile-images")
     override fun getProfileImages(
-        @AuthenticationPrincipal principal: CustomUserDto,
-    ): ProfileImageCandidatesResponse = userService.getProfileImages(principal.username.toLong())
+        @LoginUserId userId: Long,
+    ): ProfileImageCandidatesResponse = userService.getProfileImages(userId)
 
     @PutMapping("/profile-image")
     override fun selectProfileImage(
-        @AuthenticationPrincipal principal: CustomUserDto,
+        @LoginUserId userId: Long,
         @Valid @RequestBody request: ProfileImageSelectionRequest,
-    ): ProfileImageSelectionResponse = userService.selectProfileImage(principal.username.toLong(), request.profileImageId)
+    ): ProfileImageSelectionResponse = userService.selectProfileImage(userId, request.profileImageId)
 }

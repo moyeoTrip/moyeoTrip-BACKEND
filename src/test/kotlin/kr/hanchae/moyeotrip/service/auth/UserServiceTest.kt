@@ -17,6 +17,7 @@ import kr.hanchae.moyeotrip.exception.ErrorCode
 import kr.hanchae.moyeotrip.exception.UserNotFoundException
 import kr.hanchae.moyeotrip.repository.LegalDongCodeRepository
 import kr.hanchae.moyeotrip.repository.ObjectStorageRepository
+import kr.hanchae.moyeotrip.repository.TravelStyleRepository
 import kr.hanchae.moyeotrip.repository.UserProfileImageRepository
 import kr.hanchae.moyeotrip.repository.UserRepository
 import kr.hanchae.moyeotrip.utils.jwt.JwtUtil
@@ -42,6 +43,7 @@ class UserServiceTest {
     private val profileImageGenerationClient = mock(ProfileImageGenerationClient::class.java)
     private val userProfileImageRepository = mock(UserProfileImageRepository::class.java)
     private val legalDongCodeRepository = mock(LegalDongCodeRepository::class.java)
+    private val travelStyleRepository = mock(TravelStyleRepository::class.java)
     private val promptFactory = ProfileImagePromptFactory()
     private val jwtUtil = mock(JwtUtil::class.java)
     private val service =
@@ -52,6 +54,7 @@ class UserServiceTest {
             promptFactory,
             userProfileImageRepository,
             legalDongCodeRepository,
+            travelStyleRepository,
             jwtUtil,
         )
 
@@ -180,24 +183,29 @@ class UserServiceTest {
         val birthDate = LocalDate.now().minusYears(25)
         val andong = LegalDongCode(id = 1L, regionCode = "47", signguCode = "47170", regionName = "경상북도", signguName = "안동시")
         val pohang = LegalDongCode(id = 2L, regionCode = "47", signguCode = "47110", regionName = "경상북도", signguName = "포항시")
+        val nature = TravelStyle(id = 1L, label = "자연")
+        val photography = TravelStyle(id = 2L, label = "사진")
         `when`(userRepository.findByIdForUpdate(7L)).thenReturn(user)
-        `when`(legalDongCodeRepository.findAllByRegionCodeAndSignguCodeIn("47", setOf("47170", "47110")))
+        `when`(legalDongCodeRepository.findAllById(setOf(1L, 2L)))
             .thenReturn(listOf(andong, pohang))
+        `when`(travelStyleRepository.findAllById(setOf(1L, 2L)))
+            .thenReturn(listOf(nature, photography))
 
         val response =
             service.updateProfile(
                 7L,
                 UpdateProfileRequest(
                     introduction = "  느긋한 여행을 좋아해요  ",
-                    travelStyles = setOf(TravelStyle.NATURE, TravelStyle.PHOTOGRAPHY),
-                    interestedRegionCodes = setOf("47170", "47110"),
+                    travelStyleIds = setOf(1L, 2L),
+                    interestedRegionIds = setOf(1L, 2L),
                     birthDate = birthDate,
                     gender = Gender.F,
                 ),
             )
 
         assertEquals("느긋한 여행을 좋아해요", response.introduction)
-        assertEquals(setOf(TravelStyle.NATURE, TravelStyle.PHOTOGRAPHY), response.travelStyles)
+        assertEquals(listOf(2L, 1L), response.travelStyles.map { it.id })
+        assertEquals(listOf("사진", "자연"), response.travelStyles.map { it.label })
         assertEquals(setOf("안동시", "포항시"), response.interestedRegions.map { it.signguName }.toSet())
         assertEquals(birthDate, response.birthDate)
         assertEquals(Gender.F, response.gender)

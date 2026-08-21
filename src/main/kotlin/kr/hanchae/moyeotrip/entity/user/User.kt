@@ -1,9 +1,7 @@
 package kr.hanchae.moyeotrip.entity.user
 
 import jakarta.persistence.CascadeType
-import jakarta.persistence.CollectionTable
 import jakarta.persistence.Column
-import jakarta.persistence.ElementCollection
 import jakarta.persistence.Embedded
 import jakarta.persistence.Entity
 import jakarta.persistence.EnumType
@@ -46,10 +44,12 @@ class User(
     @OneToMany(mappedBy = "user", cascade = [CascadeType.ALL], orphanRemoval = true)
     private val authIdentities: MutableSet<UserAuthIdentity> = linkedSetOf()
 
-    @ElementCollection
-    @CollectionTable(name = "user_travel_styles", joinColumns = [JoinColumn(name = "user_id")])
-    @Enumerated(EnumType.STRING)
-    @Column(name = "travel_style", length = 30)
+    @ManyToMany
+    @JoinTable(
+        name = "user_travel_styles",
+        joinColumns = [JoinColumn(name = "user_id")],
+        inverseJoinColumns = [JoinColumn(name = "travel_style_id")],
+    )
     private val selectedTravelStyles: MutableSet<TravelStyle> = linkedSetOf()
 
     @ManyToMany
