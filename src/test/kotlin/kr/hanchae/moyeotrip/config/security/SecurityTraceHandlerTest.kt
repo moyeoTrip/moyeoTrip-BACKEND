@@ -86,4 +86,9 @@ class SecurityTraceHandlerTest {
         assertTrue(PERMITTED_URL_PATTERNS.contains("/actuator/health"))
         assertTrue(PERMITTED_URL_PATTERNS.contains("/actuator/health/**"))
     }
+
+    @Test
+    fun `회원가입 전 약관 조회 경로는 인증 없이 허용한다`() {
+        assertTrue(PERMITTED_URL_PATTERNS.contains("/api/v1/terms/**"))
+    }
 }

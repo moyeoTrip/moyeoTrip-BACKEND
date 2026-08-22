@@ -82,6 +82,10 @@ class NotificationSetting(
         selectedDoNotDisturbDays.addAll(doNotDisturbDays)
     }
 
+    fun updateMarketingEnabled(marketingEnabled: Boolean) {
+        this.marketingEnabled = marketingEnabled
+    }
+
     fun allows(type: NotificationType): Boolean =
         when (type) {
             NotificationType.CHAT_MESSAGE_RECEIVED -> chatNotificationMode != ChatNotificationMode.NONE

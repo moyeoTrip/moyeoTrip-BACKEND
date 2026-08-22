@@ -10,6 +10,8 @@ import kr.hanchae.moyeotrip.controller.auth.request.KakaoAuthorizationCodeReques
 import kr.hanchae.moyeotrip.controller.auth.request.KakaoCustomTokenRequest
 import kr.hanchae.moyeotrip.controller.client.KakaoTokenInfoResponse
 import kr.hanchae.moyeotrip.entity.notification.NotificationSetting
+import kr.hanchae.moyeotrip.entity.terms.AgreementTerm
+import kr.hanchae.moyeotrip.entity.terms.AgreementTermCode
 import kr.hanchae.moyeotrip.entity.user.Gender
 import kr.hanchae.moyeotrip.entity.user.NicknameColor
 import kr.hanchae.moyeotrip.entity.user.ProviderType
@@ -19,10 +21,12 @@ import kr.hanchae.moyeotrip.entity.user.UserAuthIdentity
 import kr.hanchae.moyeotrip.entity.user.UserRole
 import kr.hanchae.moyeotrip.exception.BaseException
 import kr.hanchae.moyeotrip.exception.ErrorCode
+import kr.hanchae.moyeotrip.repository.AgreementTermRepository
 import kr.hanchae.moyeotrip.repository.NicknameCandidateRepository
 import kr.hanchae.moyeotrip.repository.NotificationSettingRepository
 import kr.hanchae.moyeotrip.repository.UserAuthIdentityRepository
 import kr.hanchae.moyeotrip.repository.UserRepository
+import kr.hanchae.moyeotrip.repository.UserTermsAgreementRepository
 import kr.hanchae.moyeotrip.utils.jwt.JwtUtil
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -47,6 +51,8 @@ class AuthServiceTest {
     private lateinit var userAuthIdentityRepository: UserAuthIdentityRepository
     private lateinit var nicknameCandidateRepository: NicknameCandidateRepository
     private lateinit var notificationSettingRepository: NotificationSettingRepository
+    private lateinit var agreementTermRepository: AgreementTermRepository
+    private lateinit var userTermsAgreementRepository: UserTermsAgreementRepository
     private lateinit var authService: AuthService
 
     @BeforeEach
@@ -58,6 +64,8 @@ class AuthServiceTest {
         userAuthIdentityRepository = mock(UserAuthIdentityRepository::class.java)
         nicknameCandidateRepository = mock(NicknameCandidateRepository::class.java)
         notificationSettingRepository = mock(NotificationSettingRepository::class.java)
+        agreementTermRepository = mock(AgreementTermRepository::class.java)
+        userTermsAgreementRepository = mock(UserTermsAgreementRepository::class.java)
         authService =
             AuthService(
                 userRepository,
@@ -73,6 +81,8 @@ class AuthServiceTest {
                 userAuthIdentityRepository,
                 nicknameCandidateRepository,
                 notificationSettingRepository,
+                agreementTermRepository,
+                userTermsAgreementRepository,
             )
     }
 
@@ -105,6 +115,7 @@ class AuthServiceTest {
             )
         `when`(userRepository.existsByInformationNickname("따스한 사슴 1234")).thenReturn(false)
         `when`(userAuthIdentityRepository.findByProviderTypeAndProviderUserId(ProviderType.EMAIL, "firebase-uid")).thenReturn(null)
+        `when`(agreementTermRepository.findAllByActiveTrueOrderByIdAsc()).thenReturn(requiredTerms())
         `when`(userRepository.save(any(User::class.java))).thenAnswer { it.arguments[0] as User }
         `when`(jwtUtil.generateAccessToken(0L, "따스한 사슴 1234")).thenReturn("access-token")
         `when`(jwtUtil.generateRotateId()).thenReturn("rotate-id")
@@ -119,6 +130,7 @@ class AuthServiceTest {
                     gender = Gender.F,
                     birthDate = minimumAgeBirthDate,
                     fcmToken = "fcm-token",
+                    agreedTermIds = setOf(1L, 2L),
                 ),
             )
 
@@ -139,7 +151,63 @@ class AuthServiceTest {
         assertTrue(savedSetting.value.chatMessageEnabled)
         assertTrue(savedSetting.value.recruitmentDeadlineEnabled)
         assertTrue(savedSetting.value.socialActivityEnabled)
+        assertFalse(savedSetting.value.marketingEnabled)
+    }
+
+    @Test
+    fun `마케팅 약관에 동의하면 마케팅 알림을 기본 활성화한다`() {
+        val identity = FirebaseIdentity("firebase-uid", "user@example.com", ProviderType.EMAIL)
+        `when`(firebaseAuthenticationClient.verifyIdToken("id-token")).thenReturn(identity)
+        `when`(userAuthIdentityRepository.findByProviderTypeAndProviderUserId(ProviderType.EMAIL, "firebase-uid")).thenReturn(null)
+        `when`(userRepository.findByEmail("user@example.com")).thenReturn(null)
+        `when`(agreementTermRepository.findAllByActiveTrueOrderByIdAsc()).thenReturn(requiredTerms())
+        `when`(nicknameCandidateRepository.consume("selection-token")).thenReturn(mapOf("따스한 사슴 1234" to NicknameColor.RED))
+        `when`(userRepository.existsByInformationNickname("따스한 사슴 1234")).thenReturn(false)
+        `when`(userRepository.save(any(User::class.java))).thenAnswer { it.arguments[0] as User }
+        `when`(jwtUtil.generateAccessToken(0L, "따스한 사슴 1234")).thenReturn("access-token")
+        `when`(jwtUtil.generateRotateId()).thenReturn("rotate-id")
+        `when`(jwtUtil.generateRefreshToken(0L, "rotate-id")).thenReturn("refresh-token")
+
+        authService.signupWithFirebase(
+            FirebaseSignupRequest(
+                idToken = "id-token",
+                nicknameSelectionToken = "selection-token",
+                nickname = "따스한 사슴 1234",
+                gender = Gender.F,
+                birthDate = LocalDate.now().minusYears(20),
+                agreedTermIds = setOf(1L, 2L, 3L),
+            ),
+        )
+
+        val savedSetting = org.mockito.ArgumentCaptor.forClass(NotificationSetting::class.java)
+        verify(notificationSettingRepository).save(savedSetting.capture())
         assertTrue(savedSetting.value.marketingEnabled)
+    }
+
+    @Test
+    fun `필수 약관에 동의하지 않으면 Firebase 회원가입을 할 수 없다`() {
+        val identity = FirebaseIdentity("firebase-uid", "user@example.com", ProviderType.EMAIL)
+        `when`(firebaseAuthenticationClient.verifyIdToken("id-token")).thenReturn(identity)
+        `when`(userAuthIdentityRepository.findByProviderTypeAndProviderUserId(ProviderType.EMAIL, "firebase-uid")).thenReturn(null)
+        `when`(userRepository.findByEmail("user@example.com")).thenReturn(null)
+        `when`(agreementTermRepository.findAllByActiveTrueOrderByIdAsc()).thenReturn(requiredTerms())
+
+        val exception =
+            assertThrows(BaseException::class.java) {
+                authService.signupWithFirebase(
+                    FirebaseSignupRequest(
+                        idToken = "id-token",
+                        nicknameSelectionToken = "selection-token",
+                        nickname = "따스한 사슴 1234",
+                        gender = Gender.F,
+                        birthDate = LocalDate.now().minusYears(20),
+                        agreedTermIds = setOf(1L),
+                    ),
+                )
+            }
+
+        assertEquals(ErrorCode.REQUIRED_TERMS_NOT_AGREED, exception.errorCode)
+        verifyNoInteractions(nicknameCandidateRepository, notificationSettingRepository, userTermsAgreementRepository)
     }
 
     @Test
@@ -163,7 +231,12 @@ class AuthServiceTest {
             }
 
         assertEquals(ErrorCode.MINIMUM_SIGNUP_AGE_NOT_MET, exception.errorCode)
-        verifyNoInteractions(nicknameCandidateRepository, notificationSettingRepository)
+        verifyNoInteractions(
+            nicknameCandidateRepository,
+            notificationSettingRepository,
+            agreementTermRepository,
+            userTermsAgreementRepository,
+        )
     }
 
     @Test
@@ -353,4 +426,32 @@ class AuthServiceTest {
 
         assertEquals(ErrorCode.AUTH_IDENTITY_ALREADY_LINKED, exception.errorCode)
     }
+
+    private fun requiredTerms(): List<AgreementTerm> =
+        listOf(
+            AgreementTerm(
+                id = 1L,
+                code = AgreementTermCode.SERVICE,
+                title = "[필수] 모여트립 이용약관",
+                required = true,
+                content = "# 이용약관",
+                version = "2026.08.23",
+            ),
+            AgreementTerm(
+                id = 2L,
+                code = AgreementTermCode.PRIVACY_COLLECTION,
+                title = "[필수] 개인정보 수집 및 이용 동의",
+                required = true,
+                content = "# 개인정보 수집 및 이용 동의",
+                version = "2026.08.23",
+            ),
+            AgreementTerm(
+                id = 3L,
+                code = AgreementTermCode.MARKETING,
+                title = "[선택] 마케팅 정보 수신 동의",
+                required = false,
+                content = "# 마케팅 정보 수신 동의",
+                version = "2026.08.23",
+            ),
+        )
 }

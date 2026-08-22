@@ -59,4 +59,10 @@ data class FirebaseSignupRequest(
         nullable = true,
     )
     val fcmToken: String? = null,
+    @field:Schema(
+        description = "회원가입 시 동의한 현재 활성 약관 ID 목록. 필수 약관 ID는 모두 포함해야 하며, 마케팅 약관 ID를 제외하면 마케팅 알림은 기본 비활성화됩니다.",
+        example = "[1, 2, 3]",
+        requiredMode = Schema.RequiredMode.REQUIRED,
+    )
+    val agreedTermIds: Set<Long> = emptySet(),
 )

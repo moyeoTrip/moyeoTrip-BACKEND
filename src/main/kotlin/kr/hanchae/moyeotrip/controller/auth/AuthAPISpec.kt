@@ -260,11 +260,12 @@ interface AuthAPISpec {
             **FE 호출 순서**
             1. /api/v1/auth/login에서 isNewUser=true와 USER_INFO_REQUIRED를 확인합니다.
             2. /api/v1/auth/nickname-candidates에서 후보와 selectionToken을 발급받습니다.
-            3. 선택한 닉네임·성별·생년월일과 Firebase ID Token을 이 API에 전달합니다.
+            3. /api/v1/terms에서 현재 약관을 조회한 뒤, 필수 약관 ID 전체와 선택 동의한 약관 ID를 agreedTermIds에 담아 선택한 닉네임·성별·생년월일·Firebase ID Token과 함께 전달합니다.
             4. 응답의 PROFILE_IMAGE_REQUIRED에 따라 프로필 이미지 생성·선택 단계를 이어갑니다.
 
             Kakao도 Custom Token으로 Firebase 로그인한 뒤 받은 Firebase ID Token을 사용합니다.
             이미 다른 사용자에게 연결된 인증 수단이나 기존 이메일 계정을 자동 병합하지 않습니다.
+            마케팅 약관은 선택 동의이며, 해당 약관 ID를 agreedTermIds에 포함하지 않으면 마케팅 알림은 기본으로 꺼집니다.
         """,
     )
     @SecurityRequirements
@@ -319,7 +320,9 @@ interface AuthAPISpec {
     )
     fun signup(
         @RequestBody(
-            description = "모든 제공자가 공통으로 사용하는 회원가입 정보. idToken에는 Firebase ID Token을 전달하며 Kakao Custom Token 자체는 허용하지 않습니다.",
+            description =
+                "모든 제공자가 공통으로 사용하는 회원가입 정보. 현재 활성 필수 약관 ID를 agreedTermIds에 모두 포함해야 하며, " +
+                    "idToken에는 Firebase ID Token을 전달합니다. Kakao Custom Token 자체는 허용하지 않습니다.",
             required = true,
         ) request: FirebaseSignupRequest,
     ): ResponseEntity<ServiceTokensResponse>

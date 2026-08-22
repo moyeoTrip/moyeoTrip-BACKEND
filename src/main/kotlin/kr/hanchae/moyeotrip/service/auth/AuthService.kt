@@ -15,6 +15,9 @@ import kr.hanchae.moyeotrip.controller.auth.response.LinkedProvidersResponse
 import kr.hanchae.moyeotrip.controller.auth.response.ServiceTokensResponse
 import kr.hanchae.moyeotrip.controller.client.KakaoTokenInfoResponse
 import kr.hanchae.moyeotrip.entity.notification.NotificationSetting
+import kr.hanchae.moyeotrip.entity.terms.AgreementTerm
+import kr.hanchae.moyeotrip.entity.terms.AgreementTermCode
+import kr.hanchae.moyeotrip.entity.terms.UserTermsAgreement
 import kr.hanchae.moyeotrip.entity.user.NicknameColor
 import kr.hanchae.moyeotrip.entity.user.ProviderType
 import kr.hanchae.moyeotrip.entity.user.SignupState
@@ -28,10 +31,12 @@ import kr.hanchae.moyeotrip.exception.ErrorCode
 import kr.hanchae.moyeotrip.exception.InvalidRefreshTokenException
 import kr.hanchae.moyeotrip.exception.KakaoClientException
 import kr.hanchae.moyeotrip.exception.UserNotFoundException
+import kr.hanchae.moyeotrip.repository.AgreementTermRepository
 import kr.hanchae.moyeotrip.repository.NicknameCandidateRepository
 import kr.hanchae.moyeotrip.repository.NotificationSettingRepository
 import kr.hanchae.moyeotrip.repository.UserAuthIdentityRepository
 import kr.hanchae.moyeotrip.repository.UserRepository
+import kr.hanchae.moyeotrip.repository.UserTermsAgreementRepository
 import kr.hanchae.moyeotrip.utils.jwt.JwtUtil
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -51,6 +56,8 @@ class AuthService(
     private val userAuthIdentityRepository: UserAuthIdentityRepository,
     private val nicknameCandidateRepository: NicknameCandidateRepository,
     private val notificationSettingRepository: NotificationSettingRepository,
+    private val agreementTermRepository: AgreementTermRepository,
+    private val userTermsAgreementRepository: UserTermsAgreementRepository,
 ) {
     fun createKakaoCustomToken(request: KakaoCustomTokenRequest): FirebaseCustomTokenResponse = createKakaoCustomToken(request.accessToken)
 
@@ -158,6 +165,7 @@ class AuthService(
         }
 
         validateMinimumSignupAge(request.birthDate)
+        val agreedTerms = validateAndFindAgreedTerms(request.agreedTermIds)
 
         val nicknameColor = validateNicknameSelection(request.nicknameSelectionToken, request.nickname)
         val nickname = request.nickname
@@ -175,6 +183,8 @@ class AuthService(
             )
             request.fcmToken?.let(existingUser::changeFcmToken)
             existingUser.recordLogin()
+            recordMissingAgreements(existingUser, agreedTerms)
+            updateMarketingNotification(existingUser, agreedTerms.hasMarketingConsent())
             return makeTokens(existingUser)
         }
 
@@ -191,7 +201,13 @@ class AuthService(
         request.fcmToken?.let(user::changeFcmToken)
         user.recordLogin()
         val savedUser = userRepository.save(user)
-        notificationSettingRepository.save(NotificationSetting(user = savedUser))
+        userTermsAgreementRepository.saveAll(agreedTerms.map { UserTermsAgreement(user = savedUser, agreementTerm = it) })
+        notificationSettingRepository.save(
+            NotificationSetting(
+                user = savedUser,
+                marketingEnabled = agreedTerms.hasMarketingConsent(),
+            ),
+        )
         return makeTokens(savedUser)
     }
 
@@ -200,6 +216,50 @@ class AuthService(
             throw BaseException(ErrorCode.MINIMUM_SIGNUP_AGE_NOT_MET)
         }
     }
+
+    private fun validateAndFindAgreedTerms(agreedTermIds: Set<Long>): List<AgreementTerm> {
+        val activeTerms = agreementTermRepository.findAllByActiveTrueOrderByIdAsc()
+        val activeTermsById = activeTerms.associateBy(AgreementTerm::id)
+        if (!activeTermsById.keys.containsAll(agreedTermIds)) {
+            throw BaseException(ErrorCode.INVALID_TERMS_AGREEMENT)
+        }
+        if (activeTerms.any { it.required && it.id !in agreedTermIds }) {
+            throw BaseException(ErrorCode.REQUIRED_TERMS_NOT_AGREED)
+        }
+        return activeTerms.filter { it.id in agreedTermIds }
+    }
+
+    private fun recordMissingAgreements(
+        user: User,
+        agreedTerms: List<AgreementTerm>,
+    ) {
+        val agreedTermIds = agreedTerms.mapTo(linkedSetOf()) { it.id }
+        val recordedTermIds =
+            userTermsAgreementRepository
+                .findAllByUserIdAndAgreementTermIdIn(user.id, agreedTermIds)
+                .mapTo(hashSetOf()) { it.agreementTerm.id }
+        val agreements =
+            agreedTerms
+                .filter { it.id !in recordedTermIds }
+                .map { UserTermsAgreement(user = user, agreementTerm = it) }
+        if (agreements.isNotEmpty()) {
+            userTermsAgreementRepository.saveAll(agreements)
+        }
+    }
+
+    private fun updateMarketingNotification(
+        user: User,
+        marketingEnabled: Boolean,
+    ) {
+        val setting = notificationSettingRepository.findByUserId(user.id)
+        if (setting == null) {
+            notificationSettingRepository.save(NotificationSetting(user = user, marketingEnabled = marketingEnabled))
+            return
+        }
+        setting.updateMarketingEnabled(marketingEnabled)
+    }
+
+    private fun List<AgreementTerm>.hasMarketingConsent(): Boolean = any { it.code == AgreementTermCode.MARKETING }
 
     fun linkFirebaseIdentity(
         userId: Long,

@@ -20,6 +20,8 @@ enum class ErrorCode(
     INVALID_CHAT_ROOM_AGE_RESTRICTION(HttpStatus.BAD_REQUEST, 40009, "최소 나이는 최대 나이보다 작거나 같아야 합니다."),
     CHAT_JOIN_APPLICATION_MESSAGE_REQUIRED(HttpStatus.BAD_REQUEST, 40010, "수동 승인 모임은 호스트에게 전할 말을 입력해야 합니다."),
     MINIMUM_SIGNUP_AGE_NOT_MET(HttpStatus.BAD_REQUEST, 40011, "만 20세 이상만 가입할 수 있습니다."),
+    REQUIRED_TERMS_NOT_AGREED(HttpStatus.BAD_REQUEST, 40012, "필수 약관에 모두 동의해야 회원가입할 수 있습니다."),
+    INVALID_TERMS_AGREEMENT(HttpStatus.BAD_REQUEST, 40013, "현재 가입에 사용할 수 없는 약관이 포함되어 있습니다."),
 
     // UNAUTHORIZED는 40100부터 시작
     UNAUTHORIZED(HttpStatus.UNAUTHORIZED, 40100, "인증되지 않은 사용자입니다."),
@@ -47,6 +49,7 @@ enum class ErrorCode(
     NOTIFICATION_NOT_FOUND(HttpStatus.NOT_FOUND, 40410, "알림을 찾을 수 없습니다."),
     CHAT_ROOM_NOTICE_NOT_FOUND(HttpStatus.NOT_FOUND, 40411, "채팅방 공지를 찾을 수 없습니다."),
     TRAVEL_COURSE_TAG_NOT_FOUND(HttpStatus.NOT_FOUND, 40412, "여행 코스 태그를 찾을 수 없습니다."),
+    AGREEMENT_TERM_NOT_FOUND(HttpStatus.NOT_FOUND, 40413, "현재 활성 상태인 약관을 찾을 수 없습니다."),
 
     // 리소스 충돌은 40900부터 시작
     ALREADY_EXIST_NICKNAME(HttpStatus.CONFLICT, 40900, "이미 사용중인 닉네임입니다."),
