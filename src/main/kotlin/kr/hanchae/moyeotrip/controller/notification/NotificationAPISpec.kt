@@ -4,6 +4,7 @@ import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.Parameter
 import io.swagger.v3.oas.annotations.security.SecurityRequirement
 import io.swagger.v3.oas.annotations.tags.Tag
+import kr.hanchae.moyeotrip.controller.chat.response.ChatRoomKickHistoryResponse
 import kr.hanchae.moyeotrip.controller.notification.request.UpdateChatRoomNotificationSettingRequest
 import kr.hanchae.moyeotrip.controller.notification.request.UpdateNotificationSettingRequest
 import kr.hanchae.moyeotrip.controller.notification.response.ChatRoomNotificationSettingResponse
@@ -22,6 +23,12 @@ interface NotificationAPISpec {
         unreadOnly: Boolean,
     ): NotificationPageResponse
 
+    @Operation(summary = "강퇴 알림 상세 조회", description = "로그인 사용자에게 발송된 강퇴 알림의 채팅방 제목, 강퇴 사유와 강퇴 시각을 반환합니다.")
+    fun getKickHistory(
+        @Parameter(hidden = true) userId: Long,
+        notificationId: Long,
+    ): ChatRoomKickHistoryResponse
+
     @Operation(summary = "알림 읽음 처리", description = "로그인 사용자 소유의 알림 한 건을 읽음 상태로 변경합니다.")
     fun markRead(
         @Parameter(hidden = true) userId: Long,
@@ -33,12 +40,12 @@ interface NotificationAPISpec {
         @Parameter(hidden = true) userId: Long,
     ): ResponseEntity<Void>
 
-    @Operation(summary = "내 알림 설정 조회", description = "채팅, 모집 마감, 소셜 활동, 마케팅 및 방해 금지 시간대 설정을 반환합니다.")
+    @Operation(summary = "방해 금지 설정 조회", description = "방해 금지 사용 여부와 적용 시간·요일을 반환합니다. 기본 알림 수신 설정은 내 프로필 조회에서 반환합니다.")
     fun getSetting(
         @Parameter(hidden = true) userId: Long,
     ): NotificationSettingResponse
 
-    @Operation(summary = "내 알림 설정 변경", description = "전체 알림 종류와 방해 금지 사용 여부·시간·요일을 한 번에 변경합니다.")
+    @Operation(summary = "내 알림 설정 변경", description = "기본 알림 수신 설정과 방해 금지 사용 여부·시간·요일을 한 번에 변경합니다. 응답에는 방해 금지 상세 설정을 반환합니다.")
     fun updateSetting(
         @Parameter(hidden = true) userId: Long,
         request: UpdateNotificationSettingRequest,

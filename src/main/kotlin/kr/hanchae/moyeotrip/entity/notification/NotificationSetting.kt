@@ -89,6 +89,7 @@ class NotificationSetting(
             NotificationType.FRIEND_REQUEST, NotificationType.FRIEND_ACCEPTED, NotificationType.FEED_LIKE -> socialActivityEnabled
             NotificationType.MARKETING -> marketingEnabled
             NotificationType.CHAT_ROOM_CREATED,
+            NotificationType.CHAT_ROOM_KICKED,
             NotificationType.TRAVEL_COURSE_UPDATED,
             NotificationType.MEETING_INFO_UPDATED,
             -> true

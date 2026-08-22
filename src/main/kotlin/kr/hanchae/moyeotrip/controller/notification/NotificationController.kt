@@ -1,5 +1,6 @@
 package kr.hanchae.moyeotrip.controller.notification
 
+import kr.hanchae.moyeotrip.controller.chat.response.ChatRoomKickHistoryResponse
 import kr.hanchae.moyeotrip.controller.notification.request.UpdateChatRoomNotificationSettingRequest
 import kr.hanchae.moyeotrip.controller.notification.request.UpdateNotificationSettingRequest
 import kr.hanchae.moyeotrip.controller.notification.response.ChatRoomNotificationSettingResponse
@@ -28,6 +29,12 @@ class NotificationController(
         @RequestParam(defaultValue = "20") size: Int,
         @RequestParam(defaultValue = "false") unreadOnly: Boolean,
     ): NotificationPageResponse = notificationService.getNotifications(userId, lastId, size.coerceIn(1, 100), unreadOnly)
+
+    @GetMapping("/{notificationId}/kick-history")
+    override fun getKickHistory(
+        @LoginUserId userId: Long,
+        @PathVariable notificationId: Long,
+    ): ChatRoomKickHistoryResponse = notificationService.getKickHistory(userId, notificationId)
 
     @PutMapping("/{notificationId}/read")
     override fun markRead(

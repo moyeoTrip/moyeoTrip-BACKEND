@@ -1,29 +1,38 @@
 package kr.hanchae.moyeotrip.service.notification
 
+import kr.hanchae.moyeotrip.entity.BaseTimeEntity
 import kr.hanchae.moyeotrip.entity.chat.ChatMessage
 import kr.hanchae.moyeotrip.entity.chat.ChatMessageType
 import kr.hanchae.moyeotrip.entity.chat.ChatParticipantRole
 import kr.hanchae.moyeotrip.entity.chat.ChatRoom
+import kr.hanchae.moyeotrip.entity.chat.ChatRoomKickHistory
 import kr.hanchae.moyeotrip.entity.chat.ChatRoomParticipant
 import kr.hanchae.moyeotrip.entity.notification.ChatNotificationMode
 import kr.hanchae.moyeotrip.entity.notification.ChatRoomNotificationSetting
+import kr.hanchae.moyeotrip.entity.notification.Notification
 import kr.hanchae.moyeotrip.entity.notification.NotificationSetting
+import kr.hanchae.moyeotrip.entity.notification.NotificationType
 import kr.hanchae.moyeotrip.entity.tour.TravelCourse
 import kr.hanchae.moyeotrip.entity.tour.TravelCourseType
 import kr.hanchae.moyeotrip.entity.user.NicknameColor
 import kr.hanchae.moyeotrip.entity.user.User
 import kr.hanchae.moyeotrip.entity.user.UserInformation
 import kr.hanchae.moyeotrip.entity.user.UserRole
+import kr.hanchae.moyeotrip.repository.ChatRoomKickHistoryRepository
 import kr.hanchae.moyeotrip.repository.ChatRoomNotificationSettingRepository
 import kr.hanchae.moyeotrip.repository.ChatRoomParticipantRepository
 import kr.hanchae.moyeotrip.repository.NotificationRepository
 import kr.hanchae.moyeotrip.repository.NotificationSettingRepository
 import kr.hanchae.moyeotrip.repository.UserRepository
 import kr.hanchae.moyeotrip.service.realtime.RealtimeMessagingService
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import org.mockito.ArgumentCaptor
+import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito.mock
+import org.mockito.Mockito.verify
 import org.mockito.Mockito.verifyNoInteractions
 import org.mockito.Mockito.`when`
 import java.time.DayOfWeek
@@ -33,6 +42,7 @@ import java.time.LocalTime
 
 class NotificationServiceTest {
     private val notificationRepository = mock(NotificationRepository::class.java)
+    private val kickHistoryRepository = mock(ChatRoomKickHistoryRepository::class.java)
     private val participantRepository = mock(ChatRoomParticipantRepository::class.java)
     private val settingRepository = mock(NotificationSettingRepository::class.java)
     private val roomSettingRepository = mock(ChatRoomNotificationSettingRepository::class.java)
@@ -41,6 +51,7 @@ class NotificationServiceTest {
     private val service =
         NotificationService(
             notificationRepository,
+            kickHistoryRepository,
             participantRepository,
             settingRepository,
             roomSettingRepository,
@@ -112,6 +123,71 @@ class NotificationServiceTest {
         assertFalse(setting.isDoNotDisturbing(LocalDateTime.of(2026, 8, 25, 23, 0)))
     }
 
+    @Test
+    fun `강퇴 알림을 클릭하면 수신자 본인의 강퇴 이력을 반환한다`() {
+        val host = user(1L, "호스트")
+        val kickedUser = user(2L, "강퇴된 사용자")
+        val kickedAt = LocalDateTime.of(2026, 8, 23, 12, 0)
+        val notification =
+            Notification(
+                id = 101L,
+                recipient = kickedUser,
+                type = NotificationType.CHAT_ROOM_KICKED,
+                content = "테스트 방 모임에서 강퇴되었어요.",
+                chatRoomId = 10L,
+                referenceId = 44L,
+            )
+        val history =
+            ChatRoomKickHistory(
+                id = 44L,
+                chatRoomId = 10L,
+                roomTitle = "테스트 방",
+                kickedUser = kickedUser,
+                kickedBy = host,
+                reason = "반복적인 약속 불이행",
+            ).withCreatedAt(kickedAt)
+        `when`(notificationRepository.findByIdAndRecipientId(101L, 2L)).thenReturn(notification)
+        `when`(kickHistoryRepository.findByIdAndKickedUserId(44L, 2L)).thenReturn(history)
+
+        val response = service.getKickHistory(2L, 101L)
+
+        assertEquals(44L, response.kickHistoryId)
+        assertEquals(10L, response.roomId)
+        assertEquals("테스트 방", response.roomTitle)
+        assertEquals("반복적인 약속 불이행", response.reason)
+        assertEquals(kickedAt, response.kickedAt)
+        verify(kickHistoryRepository).findByIdAndKickedUserId(44L, 2L)
+    }
+
+    @Test
+    fun `강퇴 시 당사자에게 강퇴 이력을 참조하는 알림을 생성한다`() {
+        val host = user(1L, "호스트")
+        val kickedUser = user(2L, "강퇴된 사용자")
+        val history =
+            ChatRoomKickHistory(
+                id = 44L,
+                chatRoomId = 10L,
+                roomTitle = "테스트 방",
+                kickedUser = kickedUser,
+                kickedBy = host,
+                reason = "반복적인 약속 불이행",
+            )
+        `when`(notificationRepository.existsByRecipientIdAndTypeAndReferenceId(2L, NotificationType.CHAT_ROOM_KICKED, 44L))
+            .thenReturn(false)
+        `when`(notificationRepository.save(any(Notification::class.java)))
+            .thenAnswer { (it.arguments[0] as Notification).withCreatedAt(LocalDateTime.of(2026, 8, 23, 12, 0)) }
+        val notificationCaptor = ArgumentCaptor.forClass(Notification::class.java)
+
+        service.notifyChatRoomMemberKicked(history)
+
+        verify(notificationRepository).save(notificationCaptor.capture())
+        assertEquals(2L, notificationCaptor.value.recipient.id)
+        assertEquals(NotificationType.CHAT_ROOM_KICKED, notificationCaptor.value.type)
+        assertEquals("테스트 방 모임에서 강퇴되었어요.", notificationCaptor.value.content)
+        assertEquals(10L, notificationCaptor.value.chatRoomId)
+        assertEquals(44L, notificationCaptor.value.referenceId)
+    }
+
     private fun user(
         id: Long,
         nickname: String,
@@ -133,4 +209,12 @@ class NotificationServiceTest {
             recruitmentDeadlineDate = LocalDate.now().plusDays(5),
             meetingDateTime = LocalDate.now().plusDays(10).atStartOfDay(),
         )
+
+    private fun <T : BaseTimeEntity> T.withCreatedAt(createdAt: LocalDateTime): T {
+        BaseTimeEntity::class.java
+            .getDeclaredField("createdDateTime")
+            .apply { isAccessible = true }
+            .set(this, createdAt)
+        return this
+    }
 }

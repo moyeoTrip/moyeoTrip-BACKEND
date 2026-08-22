@@ -3,6 +3,8 @@ package kr.hanchae.moyeotrip.service.auth
 import kr.hanchae.moyeotrip.client.ProfileImageGenerationClient
 import kr.hanchae.moyeotrip.client.ProfileImagePromptFactory
 import kr.hanchae.moyeotrip.controller.user.request.UpdateProfileRequest
+import kr.hanchae.moyeotrip.entity.notification.ChatNotificationMode
+import kr.hanchae.moyeotrip.entity.notification.NotificationSetting
 import kr.hanchae.moyeotrip.entity.tour.LegalDongCode
 import kr.hanchae.moyeotrip.entity.user.Gender
 import kr.hanchae.moyeotrip.entity.user.NicknameColor
@@ -16,6 +18,7 @@ import kr.hanchae.moyeotrip.exception.BaseException
 import kr.hanchae.moyeotrip.exception.ErrorCode
 import kr.hanchae.moyeotrip.exception.UserNotFoundException
 import kr.hanchae.moyeotrip.repository.LegalDongCodeRepository
+import kr.hanchae.moyeotrip.repository.NotificationSettingRepository
 import kr.hanchae.moyeotrip.repository.ObjectStorageRepository
 import kr.hanchae.moyeotrip.repository.TravelStyleRepository
 import kr.hanchae.moyeotrip.repository.UserProfileImageRepository
@@ -44,6 +47,7 @@ class UserServiceTest {
     private val userProfileImageRepository = mock(UserProfileImageRepository::class.java)
     private val legalDongCodeRepository = mock(LegalDongCodeRepository::class.java)
     private val travelStyleRepository = mock(TravelStyleRepository::class.java)
+    private val notificationSettingRepository = mock(NotificationSettingRepository::class.java)
     private val promptFactory = ProfileImagePromptFactory()
     private val jwtUtil = mock(JwtUtil::class.java)
     private val service =
@@ -55,8 +59,30 @@ class UserServiceTest {
             userProfileImageRepository,
             legalDongCodeRepository,
             travelStyleRepository,
+            notificationSettingRepository,
             jwtUtil,
         )
+
+    @Test
+    fun `내 프로필에 기본 알림 수신 설정과 방해 금지 설정을 함께 반환한다`() {
+        val user = profileImageRequiredUser()
+        val notificationSetting =
+            NotificationSetting(
+                user = user,
+                chatNotificationMode = ChatNotificationMode.MENTIONS_AND_REPLIES,
+                recruitmentDeadlineEnabled = false,
+                socialActivityEnabled = true,
+                marketingEnabled = false,
+            )
+        `when`(userRepository.findById(7L)).thenReturn(Optional.of(user))
+        `when`(notificationSettingRepository.findByUserId(7L)).thenReturn(notificationSetting)
+
+        val response = service.getProfile(7L)
+
+        assertEquals(ChatNotificationMode.MENTIONS_AND_REPLIES, response.chatNotificationMode)
+        assertFalse(response.recruitmentDeadlineEnabled)
+        assertFalse(response.marketingEnabled)
+    }
 
     @Test
     fun `이미지를 생성해도 현재 프로필에는 적용하지 않고 후보로 보관한다`() {

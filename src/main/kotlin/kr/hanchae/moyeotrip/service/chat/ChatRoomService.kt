@@ -691,17 +691,19 @@ class ChatRoomService(
                 ?.takeIf { it.role == ChatParticipantRole.MEMBER }
                 ?: throw BaseException(ErrorCode.CHAT_ROOM_MEMBER_NOT_FOUND)
         val normalizedReason = reason.trim().takeIf(String::isNotEmpty) ?: throw BaseException(ErrorCode.BAD_REQUEST)
-        kickHistoryRepository.save(
-            ChatRoomKickHistory(
-                chatRoomId = room.id,
-                roomTitle = room.roomTitle,
-                kickedUser = participant.user,
-                kickedBy = room.host,
-                reason = normalizedReason,
-            ),
-        )
+        val kickHistory =
+            kickHistoryRepository.save(
+                ChatRoomKickHistory(
+                    chatRoomId = room.id,
+                    roomTitle = room.roomTitle,
+                    kickedUser = participant.user,
+                    kickedBy = room.host,
+                    reason = normalizedReason,
+                ),
+            )
         participantRepository.delete(participant)
         participantRepository.flush()
+        notificationService.notifyChatRoomMemberKicked(kickHistory)
         saveSystemMessage(room, "${participant.user.nickname()}님이 모임에서 제외되었어요.")
         promoteFirstApprovedWaiter(room)
     }

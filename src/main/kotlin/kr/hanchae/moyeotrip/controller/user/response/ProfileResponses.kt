@@ -1,6 +1,7 @@
 package kr.hanchae.moyeotrip.controller.user.response
 
 import io.swagger.v3.oas.annotations.media.Schema
+import kr.hanchae.moyeotrip.entity.notification.ChatNotificationMode
 import kr.hanchae.moyeotrip.entity.user.Gender
 import java.time.LocalDate
 
@@ -20,6 +21,14 @@ data class MyProfileResponse(
     val birthDate: LocalDate?,
     @field:Schema(description = "성별", example = "F")
     val gender: Gender,
+    @field:Schema(description = "채팅 메시지 알림 수신 방식", example = "ALL")
+    val chatNotificationMode: ChatNotificationMode,
+    @field:Schema(description = "모집 마감 임박 알림 수신 여부", example = "true")
+    val recruitmentDeadlineEnabled: Boolean,
+    @field:Schema(description = "친구 요청·피드 반응 등 소셜 활동 알림 수신 여부", example = "true")
+    val socialActivityEnabled: Boolean,
+    @field:Schema(description = "이벤트·추천 등 마케팅 알림 수신 여부", example = "false")
+    val marketingEnabled: Boolean,
 )
 
 @Schema(description = "프로필 수정 화면의 선택 항목 목록")

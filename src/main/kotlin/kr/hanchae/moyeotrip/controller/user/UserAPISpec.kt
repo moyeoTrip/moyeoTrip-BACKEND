@@ -27,7 +27,7 @@ import kr.hanchae.moyeotrip.exception.ErrorResponse
 interface UserAPISpec {
     @Operation(
         summary = "내 프로필 조회",
-        description = "자기소개, 여행 스타일, 관심 경북 지역, 생년월일과 성별을 포함한 내 프로필을 반환합니다.",
+        description = "자기소개, 여행 스타일, 관심 경북 지역, 생년월일, 성별과 기본 알림 수신 설정을 포함한 내 프로필을 반환합니다.",
     )
     @SecurityRequirement(name = "Authorization")
     fun getProfile(

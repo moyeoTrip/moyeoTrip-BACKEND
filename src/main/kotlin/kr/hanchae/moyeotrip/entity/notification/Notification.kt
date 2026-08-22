@@ -44,6 +44,7 @@ class Notification(
 
 enum class NotificationType {
     CHAT_ROOM_CREATED,
+    CHAT_ROOM_KICKED,
     CHAT_MESSAGE_RECEIVED,
     TRAVEL_COURSE_UPDATED,
     MEETING_INFO_UPDATED,

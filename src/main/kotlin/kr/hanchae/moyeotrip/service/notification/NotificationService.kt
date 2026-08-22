@@ -1,11 +1,13 @@
 package kr.hanchae.moyeotrip.service.notification
 
+import kr.hanchae.moyeotrip.controller.chat.response.ChatRoomKickHistoryResponse
 import kr.hanchae.moyeotrip.controller.notification.response.ChatRoomNotificationSettingResponse
 import kr.hanchae.moyeotrip.controller.notification.response.NotificationPageResponse
 import kr.hanchae.moyeotrip.controller.notification.response.NotificationResponse
 import kr.hanchae.moyeotrip.controller.notification.response.NotificationSettingResponse
 import kr.hanchae.moyeotrip.entity.chat.ChatMessage
 import kr.hanchae.moyeotrip.entity.chat.ChatRoom
+import kr.hanchae.moyeotrip.entity.chat.ChatRoomKickHistory
 import kr.hanchae.moyeotrip.entity.feed.Feed
 import kr.hanchae.moyeotrip.entity.notification.ChatNotificationMode
 import kr.hanchae.moyeotrip.entity.notification.ChatRoomNotificationSetting
@@ -17,6 +19,7 @@ import kr.hanchae.moyeotrip.entity.user.Friendship
 import kr.hanchae.moyeotrip.entity.user.User
 import kr.hanchae.moyeotrip.exception.BaseException
 import kr.hanchae.moyeotrip.exception.ErrorCode
+import kr.hanchae.moyeotrip.repository.ChatRoomKickHistoryRepository
 import kr.hanchae.moyeotrip.repository.ChatRoomNotificationSettingRepository
 import kr.hanchae.moyeotrip.repository.ChatRoomParticipantRepository
 import kr.hanchae.moyeotrip.repository.NotificationRepository
@@ -34,6 +37,7 @@ import java.time.ZoneId
 @Service
 class NotificationService(
     private val repository: NotificationRepository,
+    private val kickHistoryRepository: ChatRoomKickHistoryRepository,
     private val participantRepository: ChatRoomParticipantRepository,
     private val settingRepository: NotificationSettingRepository,
     private val roomSettingRepository: ChatRoomNotificationSettingRepository,
@@ -79,6 +83,23 @@ class NotificationService(
     @Transactional
     fun markAllRead(userId: Long) {
         repository.findAllByRecipientIdAndReadDateTimeIsNull(userId).forEach(Notification::markRead)
+    }
+
+    @Transactional(readOnly = true)
+    fun getKickHistory(
+        userId: Long,
+        notificationId: Long,
+    ): ChatRoomKickHistoryResponse {
+        val notification =
+            repository.findByIdAndRecipientId(notificationId, userId)
+                ?: throw BaseException(ErrorCode.NOTIFICATION_NOT_FOUND)
+        if (notification.type != NotificationType.CHAT_ROOM_KICKED) {
+            throw BaseException(ErrorCode.BAD_REQUEST)
+        }
+        return kickHistoryRepository
+            .findByIdAndKickedUserId(notification.referenceId, userId)
+            ?.toResponse()
+            ?: throw BaseException(ErrorCode.NOTIFICATION_NOT_FOUND)
     }
 
     @Transactional
@@ -151,6 +172,16 @@ class NotificationService(
 
     fun notifyRoomCreated(room: ChatRoom) {
         save(room.host, NotificationType.CHAT_ROOM_CREATED, "${room.roomTitle} 모임이 만들어졌어요 ✨", room.id, room.id)
+    }
+
+    fun notifyChatRoomMemberKicked(kickHistory: ChatRoomKickHistory) {
+        save(
+            recipient = kickHistory.kickedUser,
+            type = NotificationType.CHAT_ROOM_KICKED,
+            content = "${kickHistory.roomTitle} 모임에서 강퇴되었어요.",
+            chatRoomId = kickHistory.chatRoomId,
+            referenceId = kickHistory.id,
+        )
     }
 
     fun notifyMessage(message: ChatMessage) {
@@ -337,10 +368,6 @@ class NotificationService(
 
 private fun NotificationSetting.toResponse() =
     NotificationSettingResponse(
-        chatNotificationMode = chatNotificationMode,
-        recruitmentDeadlineEnabled = recruitmentDeadlineEnabled,
-        socialActivityEnabled = socialActivityEnabled,
-        marketingEnabled = marketingEnabled,
         doNotDisturbEnabled = doNotDisturbEnabled,
         doNotDisturbStartTime = doNotDisturbStartTime,
         doNotDisturbEndTime = doNotDisturbEndTime,
@@ -356,4 +383,13 @@ private fun Notification.toResponse() =
         referenceId = referenceId,
         read = readDateTime != null,
         createdAt = createdDateTime,
+    )
+
+private fun ChatRoomKickHistory.toResponse() =
+    ChatRoomKickHistoryResponse(
+        kickHistoryId = id,
+        roomId = chatRoomId,
+        roomTitle = roomTitle,
+        reason = reason,
+        kickedAt = createdDateTime,
     )

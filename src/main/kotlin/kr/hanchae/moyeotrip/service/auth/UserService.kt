@@ -11,12 +11,14 @@ import kr.hanchae.moyeotrip.controller.user.response.ProfileImageGenerationRespo
 import kr.hanchae.moyeotrip.controller.user.response.ProfileImageSelectionResponse
 import kr.hanchae.moyeotrip.controller.user.response.ProfileOptionsResponse
 import kr.hanchae.moyeotrip.controller.user.response.TravelStyleResponse
+import kr.hanchae.moyeotrip.entity.notification.ChatNotificationMode
 import kr.hanchae.moyeotrip.entity.user.User
 import kr.hanchae.moyeotrip.entity.user.UserProfileImage
 import kr.hanchae.moyeotrip.exception.BaseException
 import kr.hanchae.moyeotrip.exception.ErrorCode
 import kr.hanchae.moyeotrip.exception.UserNotFoundException
 import kr.hanchae.moyeotrip.repository.LegalDongCodeRepository
+import kr.hanchae.moyeotrip.repository.NotificationSettingRepository
 import kr.hanchae.moyeotrip.repository.ObjectStorageRepository
 import kr.hanchae.moyeotrip.repository.TravelStyleRepository
 import kr.hanchae.moyeotrip.repository.UserProfileImageRepository
@@ -39,6 +41,7 @@ class UserService(
     private val userProfileImageRepository: UserProfileImageRepository,
     private val legalDongCodeRepository: LegalDongCodeRepository,
     private val travelStyleRepository: TravelStyleRepository,
+    private val notificationSettingRepository: NotificationSettingRepository,
     private val jwtUtil: JwtUtil,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
@@ -186,6 +189,7 @@ class UserService(
 
     private fun User.toProfileResponse(): MyProfileResponse {
         val information = checkNotNull(information)
+        val notificationSetting = notificationSettingRepository.findByUserId(id)
         return MyProfileResponse(
             nickname = information.nickname,
             profileImageUrl = information.profileFileName?.let(objectStorageRepository::getDownloadUrl),
@@ -194,6 +198,10 @@ class UserService(
             interestedRegions = interestedRegions.sortedBy { it.signguName }.map { InterestedRegionResponse(it.id, it.signguName) },
             birthDate = information.birthDate,
             gender = information.gender,
+            chatNotificationMode = notificationSetting?.chatNotificationMode ?: ChatNotificationMode.ALL,
+            recruitmentDeadlineEnabled = notificationSetting?.recruitmentDeadlineEnabled ?: true,
+            socialActivityEnabled = notificationSetting?.socialActivityEnabled ?: true,
+            marketingEnabled = notificationSetting?.marketingEnabled ?: true,
         )
     }
 

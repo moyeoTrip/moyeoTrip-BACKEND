@@ -437,6 +437,7 @@ class ChatRoomServiceTest {
         val participant = ChatRoomParticipant(chatRoom = room, user = member, role = ChatParticipantRole.MEMBER)
         `when`(roomRepository.findByIdForUpdate(10L)).thenReturn(room)
         `when`(participantRepository.findByChatRoomIdAndUserId(10L, 2L)).thenReturn(participant)
+        `when`(kickHistoryRepository.save(any(ChatRoomKickHistory::class.java))).thenAnswer { it.arguments[0] }
         `when`(messageRepository.saveAndFlush(any(ChatMessage::class.java))).thenAnswer { it.arguments[0] }
         val kickHistoryCaptor = ArgumentCaptor.forClass(ChatRoomKickHistory::class.java)
         val messageCaptor = ArgumentCaptor.forClass(ChatMessage::class.java)
@@ -444,6 +445,7 @@ class ChatRoomServiceTest {
         service.kickMember(1L, 10L, 2L, "  반복적인 약속 불이행  ")
 
         verify(kickHistoryRepository).save(kickHistoryCaptor.capture())
+        verify(notificationService).notifyChatRoomMemberKicked(kickHistoryCaptor.value)
         verify(messageRepository).saveAndFlush(messageCaptor.capture())
         assertEquals("반복적인 약속 불이행", kickHistoryCaptor.value.reason)
         assertEquals(false, messageCaptor.value.content.contains("약속 불이행"))
