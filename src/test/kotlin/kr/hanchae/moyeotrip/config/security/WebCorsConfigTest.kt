@@ -11,11 +11,11 @@ import org.springframework.mock.web.MockHttpServletResponse
 import org.springframework.web.cors.DefaultCorsProcessor
 
 class WebCorsConfigTest {
-    private val allowedOrigin = "https://moyeotrip.github.io"
+    private val allowedOrigin = "https://moyeo-trip.jayden-bin.cc"
     private val source = WebCorsConfig(WebCorsProperties(listOf(allowedOrigin), 7200)).corsConfigurationSource()
 
     @Test
-    fun `허용된 GitHub Pages origin의 preflight 요청에 CORS 헤더를 응답한다`() {
+    fun `허용된 배포 origin의 preflight 요청에 CORS 헤더를 응답한다`() {
         val request = preflightRequest(allowedOrigin)
         val response = MockHttpServletResponse()
 
@@ -38,7 +38,7 @@ class WebCorsConfigTest {
     }
 
     @Test
-    fun `기본 CORS origin은 와일드카드 없이 로컬 Web과 GitHub Pages만 포함한다`() {
+    fun `기본 CORS origin은 와일드카드 없이 로컬 Web과 배포 Web만 포함한다`() {
         assertTrue(WebCorsProperties.DEFAULT_ALLOWED_ORIGINS.contains("http://localhost:4173"))
         assertTrue(WebCorsProperties.DEFAULT_ALLOWED_ORIGINS.contains(allowedOrigin))
         assertFalse(WebCorsProperties.DEFAULT_ALLOWED_ORIGINS.contains("*"))

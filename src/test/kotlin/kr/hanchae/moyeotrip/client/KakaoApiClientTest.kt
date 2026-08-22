@@ -55,7 +55,7 @@ class KakaoApiClientTest {
                 KakaoProperties(
                     appId = 1234L,
                     restApiKey = "rest-api-key",
-                    clientSecret = "client-secret",
+                    clientSecret = " ",
                     allowedRedirectUris = emptyList(),
                 ),
             )

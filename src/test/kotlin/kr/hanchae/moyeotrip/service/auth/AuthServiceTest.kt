@@ -68,7 +68,7 @@ class AuthServiceTest {
                     appId = 987654L,
                     restApiKey = "rest-api-key",
                     clientSecret = "client-secret",
-                    allowedRedirectUris = listOf("https://moyeotrip.github.io/moyeoTrip-Web/auth/kakao/callback"),
+                    allowedRedirectUris = listOf("https://moyeo-trip.jayden-bin.cc/moyeoTrip-Web/auth/kakao/callback"),
                 ),
                 userAuthIdentityRepository,
                 nicknameCandidateRepository,
@@ -190,7 +190,7 @@ class AuthServiceTest {
 
     @Test
     fun `Web 카카오 인가 코드는 액세스 토큰 교환과 앱 검증 후 Firebase 토큰으로 변환한다`() {
-        val redirectUri = "https://moyeotrip.github.io/moyeoTrip-Web/auth/kakao/callback"
+        val redirectUri = "https://moyeo-trip.jayden-bin.cc/moyeoTrip-Web/auth/kakao/callback"
         `when`(kakaoClient.exchangeAuthorizationCode("authorization-code", redirectUri)).thenReturn("kakao-access-token")
         `when`(kakaoClient.getTokenInfo("kakao-access-token")).thenReturn(KakaoTokenInfoResponse(12345L, 987654L, 3600L))
         `when`(firebaseAuthenticationClient.createKakaoCustomToken("12345")).thenReturn("firebase-custom-token")
@@ -216,7 +216,7 @@ class AuthServiceTest {
 
     @Test
     fun `Kakao가 인가 코드를 거부하면 안전한 인증 오류로 변환한다`() {
-        val redirectUri = "https://moyeotrip.github.io/moyeoTrip-Web/auth/kakao/callback"
+        val redirectUri = "https://moyeo-trip.jayden-bin.cc/moyeoTrip-Web/auth/kakao/callback"
         `when`(kakaoClient.exchangeAuthorizationCode("expired-code", redirectUri))
             .thenThrow(HttpClientErrorException(HttpStatus.BAD_REQUEST, "response containing credentials"))
 

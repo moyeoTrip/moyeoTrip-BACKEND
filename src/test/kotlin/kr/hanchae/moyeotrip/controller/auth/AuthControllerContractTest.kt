@@ -27,7 +27,7 @@ class AuthControllerContractTest {
         val request =
             KakaoAuthorizationCodeRequest(
                 code = "authorization-code",
-                redirectUri = "https://moyeotrip.github.io/moyeoTrip-Web/auth/kakao/callback",
+                redirectUri = "https://moyeo-trip.jayden-bin.cc/moyeoTrip-Web/auth/kakao/callback",
             )
         `when`(authService.createKakaoCustomToken(request))
             .thenReturn(FirebaseCustomTokenResponse("firebase-custom-token"))
@@ -40,7 +40,7 @@ class AuthControllerContractTest {
                         """
                         {
                           "code": "authorization-code",
-                          "redirectUri": "https://moyeotrip.github.io/moyeoTrip-Web/auth/kakao/callback"
+                          "redirectUri": "https://moyeo-trip.jayden-bin.cc/moyeoTrip-Web/auth/kakao/callback"
                         }
                         """.trimIndent(),
                     ),
@@ -59,7 +59,7 @@ class AuthControllerContractTest {
                         """
                         {
                           "code": "",
-                          "redirectUri": "https://moyeotrip.github.io/moyeoTrip-Web/auth/kakao/callback"
+                          "redirectUri": "https://moyeo-trip.jayden-bin.cc/moyeoTrip-Web/auth/kakao/callback"
                         }
                         """.trimIndent(),
                     ),
