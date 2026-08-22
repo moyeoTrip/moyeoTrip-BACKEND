@@ -17,6 +17,7 @@ import jakarta.persistence.Table
 import kr.hanchae.moyeotrip.entity.BaseModifiableEntity
 import kr.hanchae.moyeotrip.entity.tour.LegalDongCode
 import java.time.LocalDate
+import java.time.LocalDateTime
 import kotlin.math.roundToInt
 
 @Entity
@@ -70,6 +71,10 @@ class User(
     var fcmToken: String? = null
         protected set
 
+    @Column(name = "last_login_datetime")
+    var lastLoginDateTime: LocalDateTime? = null
+        protected set
+
     @Column(nullable = false)
     var profileImageGenerationCount: Int = 0
         protected set
@@ -85,6 +90,10 @@ class User(
 
     fun changeFcmToken(token: String) {
         this.fcmToken = token
+    }
+
+    fun recordLogin(at: LocalDateTime = LocalDateTime.now()) {
+        lastLoginDateTime = at
     }
 
     fun addAuthIdentity(
