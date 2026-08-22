@@ -81,6 +81,9 @@ dependencies {
     implementation("io.awspring.cloud:spring-cloud-aws-starter-s3:4.0.2")
     runtimeOnly("org.flywaydb:flyway-database-oracle")
 
+    // Image
+    runtimeOnly("com.github.usefulness:webp-imageio:0.11.0")
+
     // Documents
     implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.3")
 

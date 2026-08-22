@@ -1,5 +1,6 @@
 package kr.hanchae.moyeotrip.repository
 
+import io.awspring.cloud.s3.ObjectMetadata
 import io.awspring.cloud.s3.S3Template
 import kr.hanchae.moyeotrip.config.properties.StorageS3Properties
 import org.springframework.stereotype.Repository
@@ -24,11 +25,17 @@ class ObjectStorageRepository(
     fun getDownloadUrl(key: String): String = "${storageS3Properties.cdnUrl}/$key"
 
     fun uploadGeneratedProfileImage(imageBytes: ByteArray): String =
-        upload(
-            USER_PROFILE_IMAGE_PATH,
-            generateFileName(PROFILE_IMAGE_EXTENSION),
-            ByteArrayInputStream(imageBytes),
-        )
+        s3Template
+            .upload(
+                storageS3Properties.bucket,
+                USER_PROFILE_IMAGE_PATH + generateFileName(PROFILE_IMAGE_EXTENSION),
+                ByteArrayInputStream(imageBytes),
+                ObjectMetadata
+                    .builder()
+                    .contentType(PROFILE_IMAGE_CONTENT_TYPE)
+                    .contentLength(imageBytes.size.toLong())
+                    .build(),
+            ).filename
 
     fun delete(key: String) { // 참고로 delete는 실시간 반영되지 않음
         s3Template.deleteObject(storageS3Properties.bucket, key)
@@ -43,7 +50,8 @@ class ObjectStorageRepository(
 
     companion object {
         const val USER_PROFILE_IMAGE_PATH = "user/profile/image/"
-        private const val PROFILE_IMAGE_EXTENSION = "png"
+        private const val PROFILE_IMAGE_EXTENSION = "webp"
+        private const val PROFILE_IMAGE_CONTENT_TYPE = "image/webp"
 
         fun generateFileName(extension: String): String = "${UUID.randomUUID()}.$extension" // 중복나지 않도록 UUID 사용
     }

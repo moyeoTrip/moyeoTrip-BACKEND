@@ -23,6 +23,7 @@ import kr.hanchae.moyeotrip.repository.ObjectStorageRepository
 import kr.hanchae.moyeotrip.repository.TravelStyleRepository
 import kr.hanchae.moyeotrip.repository.UserProfileImageRepository
 import kr.hanchae.moyeotrip.repository.UserRepository
+import kr.hanchae.moyeotrip.utils.ProfileImageOptimizer
 import kr.hanchae.moyeotrip.utils.jwt.JwtUtil
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
@@ -42,6 +43,7 @@ class UserService(
     private val legalDongCodeRepository: LegalDongCodeRepository,
     private val travelStyleRepository: TravelStyleRepository,
     private val notificationSettingRepository: NotificationSettingRepository,
+    private val profileImageOptimizer: ProfileImageOptimizer,
     private val jwtUtil: JwtUtil,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
@@ -111,7 +113,7 @@ class UserService(
         val information = checkNotNull(user.information)
         val prompt = profileImagePromptFactory.create(information.nickname, information.nicknameColor)
         val imageBytes = profileImageGenerationClient.generate(prompt)
-        val generatedImageKey = objectStorageRepository.uploadGeneratedProfileImage(imageBytes)
+        val generatedImageKey = objectStorageRepository.uploadGeneratedProfileImage(profileImageOptimizer.optimizeToHdWebp(imageBytes))
         scheduleGeneratedImageCleanupOnRollback(generatedImageKey)
         val profileImage =
             userProfileImageRepository.save(

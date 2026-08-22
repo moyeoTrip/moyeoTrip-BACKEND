@@ -23,6 +23,7 @@ import kr.hanchae.moyeotrip.repository.ObjectStorageRepository
 import kr.hanchae.moyeotrip.repository.TravelStyleRepository
 import kr.hanchae.moyeotrip.repository.UserProfileImageRepository
 import kr.hanchae.moyeotrip.repository.UserRepository
+import kr.hanchae.moyeotrip.utils.ProfileImageOptimizer
 import kr.hanchae.moyeotrip.utils.jwt.JwtUtil
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -48,6 +49,7 @@ class UserServiceTest {
     private val legalDongCodeRepository = mock(LegalDongCodeRepository::class.java)
     private val travelStyleRepository = mock(TravelStyleRepository::class.java)
     private val notificationSettingRepository = mock(NotificationSettingRepository::class.java)
+    private val profileImageOptimizer = mock(ProfileImageOptimizer::class.java)
     private val promptFactory = ProfileImagePromptFactory()
     private val jwtUtil = mock(JwtUtil::class.java)
     private val service =
@@ -60,6 +62,7 @@ class UserServiceTest {
             legalDongCodeRepository,
             travelStyleRepository,
             notificationSettingRepository,
+            profileImageOptimizer,
             jwtUtil,
         )
 
@@ -88,11 +91,13 @@ class UserServiceTest {
     fun `이미지를 생성해도 현재 프로필에는 적용하지 않고 후보로 보관한다`() {
         val user = profileImageRequiredUser()
         val imageBytes = byteArrayOf(1, 2, 3)
+        val optimizedImageBytes = byteArrayOf(4, 5, 6)
         val imageKey = "user/profile/image/generated.png"
         val prompt = promptFactory.create("따스한 사슴 2347", NicknameColor.BLUE)
         `when`(userRepository.findByIdForUpdate(7L)).thenReturn(user)
         `when`(profileImageGenerationClient.generate(prompt)).thenReturn(imageBytes)
-        `when`(objectStorageRepository.uploadGeneratedProfileImage(imageBytes)).thenReturn(imageKey)
+        `when`(profileImageOptimizer.optimizeToHdWebp(imageBytes)).thenReturn(optimizedImageBytes)
+        `when`(objectStorageRepository.uploadGeneratedProfileImage(optimizedImageBytes)).thenReturn(imageKey)
         `when`(userProfileImageRepository.save(any(UserProfileImage::class.java)))
             .thenReturn(UserProfileImage(id = 12L, user = user, fileName = imageKey))
         `when`(objectStorageRepository.getDownloadUrl(imageKey))
