@@ -3,6 +3,7 @@ package kr.hanchae.moyeotrip.controller.user.response
 import io.swagger.v3.oas.annotations.media.Schema
 import kr.hanchae.moyeotrip.entity.user.SignupState
 
+@Schema(description = "프로필 이미지 후보 생성 결과")
 data class ProfileImageGenerationResponse(
     @field:Schema(description = "이번 요청에서 생성된 후보 이미지")
     val candidate: ProfileImageCandidateResponse,

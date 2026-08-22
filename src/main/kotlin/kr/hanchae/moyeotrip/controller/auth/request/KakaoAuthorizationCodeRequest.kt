@@ -4,6 +4,7 @@ import io.swagger.v3.oas.annotations.media.Schema
 import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.Size
 
+@Schema(description = "카카오 인가 코드로 Firebase Custom Token을 발급하는 요청")
 data class KakaoAuthorizationCodeRequest(
     @field:Schema(
         description = "Kakao.Auth.authorize()가 redirect URI로 전달한 일회성 인가 코드",

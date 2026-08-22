@@ -19,52 +19,52 @@ import org.springframework.web.bind.annotation.RestController
 @RequestMapping("/api/v1/users/me")
 class FriendController(
     private val friendService: FriendService,
-) {
+) : FriendAPISpec {
     @PostMapping("/friend-requests/{userId}")
     @ResponseStatus(HttpStatus.CREATED)
-    fun sendRequest(
+    override fun sendRequest(
         @LoginUserId loginUserId: Long,
         @PathVariable userId: Long,
     ): FriendRequestResponse = friendService.sendRequest(loginUserId, userId)
 
     @PostMapping("/friend-requests/{requestId}/accept")
-    fun acceptRequest(
+    override fun acceptRequest(
         @LoginUserId userId: Long,
         @PathVariable requestId: Long,
     ): FriendResponse = friendService.acceptRequest(userId, requestId)
 
     @PostMapping("/friend-requests/{requestId}/reject")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    fun rejectRequest(
+    override fun rejectRequest(
         @LoginUserId userId: Long,
         @PathVariable requestId: Long,
     ) = friendService.rejectRequest(userId, requestId)
 
     @DeleteMapping("/friend-requests/{requestId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    fun cancelRequest(
+    override fun cancelRequest(
         @LoginUserId userId: Long,
         @PathVariable requestId: Long,
     ) = friendService.cancelRequest(userId, requestId)
 
     @GetMapping("/friend-requests/received")
-    fun getReceivedRequests(
+    override fun getReceivedRequests(
         @LoginUserId userId: Long,
     ): FriendRequestListResponse = friendService.getReceivedRequests(userId)
 
     @GetMapping("/friend-requests/sent")
-    fun getSentRequests(
+    override fun getSentRequests(
         @LoginUserId userId: Long,
     ): FriendRequestListResponse = friendService.getSentRequests(userId)
 
     @GetMapping("/friends")
-    fun getFriends(
+    override fun getFriends(
         @LoginUserId userId: Long,
     ): FriendListResponse = friendService.getFriends(userId)
 
     @DeleteMapping("/friends/{friendId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    fun deleteFriend(
+    override fun deleteFriend(
         @LoginUserId userId: Long,
         @PathVariable friendId: Long,
     ) = friendService.deleteFriend(userId, friendId)

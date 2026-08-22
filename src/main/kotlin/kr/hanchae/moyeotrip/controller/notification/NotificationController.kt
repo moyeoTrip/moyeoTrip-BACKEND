@@ -1,8 +1,5 @@
 package kr.hanchae.moyeotrip.controller.notification
 
-import io.swagger.v3.oas.annotations.Operation
-import io.swagger.v3.oas.annotations.security.SecurityRequirement
-import io.swagger.v3.oas.annotations.tags.Tag
 import kr.hanchae.moyeotrip.controller.notification.request.UpdateChatRoomNotificationSettingRequest
 import kr.hanchae.moyeotrip.controller.notification.request.UpdateNotificationSettingRequest
 import kr.hanchae.moyeotrip.controller.notification.response.ChatRoomNotificationSettingResponse
@@ -19,25 +16,21 @@ import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
 
-@Tag(name = "알림", description = "모임 및 채팅 알림 API")
-@SecurityRequirement(name = "Authorization")
 @RestController
 @RequestMapping("/api/v1/notifications")
 class NotificationController(
     private val notificationService: NotificationService,
-) {
-    @Operation(summary = "내 알림 목록")
+) : NotificationAPISpec {
     @GetMapping
-    fun getNotifications(
+    override fun getNotifications(
         @LoginUserId userId: Long,
         @RequestParam(required = false) lastId: Long?,
         @RequestParam(defaultValue = "20") size: Int,
         @RequestParam(defaultValue = "false") unreadOnly: Boolean,
     ): NotificationPageResponse = notificationService.getNotifications(userId, lastId, size.coerceIn(1, 100), unreadOnly)
 
-    @Operation(summary = "알림 읽음 처리")
     @PutMapping("/{notificationId}/read")
-    fun markRead(
+    override fun markRead(
         @LoginUserId userId: Long,
         @PathVariable notificationId: Long,
     ): ResponseEntity<Void> {
@@ -45,24 +38,21 @@ class NotificationController(
         return ResponseEntity.noContent().build()
     }
 
-    @Operation(summary = "알림 모두 읽음 처리")
     @PutMapping("/read-all")
-    fun markAllRead(
+    override fun markAllRead(
         @LoginUserId userId: Long,
     ): ResponseEntity<Void> {
         notificationService.markAllRead(userId)
         return ResponseEntity.noContent().build()
     }
 
-    @Operation(summary = "내 알림 설정 조회")
     @GetMapping("/settings")
-    fun getSetting(
+    override fun getSetting(
         @LoginUserId userId: Long,
     ): NotificationSettingResponse = notificationService.getSetting(userId)
 
-    @Operation(summary = "내 알림 설정 변경")
     @PutMapping("/settings")
-    fun updateSetting(
+    override fun updateSetting(
         @LoginUserId userId: Long,
         @RequestBody request: UpdateNotificationSettingRequest,
     ): NotificationSettingResponse =
@@ -78,16 +68,14 @@ class NotificationController(
             request.doNotDisturbDays,
         )
 
-    @Operation(summary = "채팅방별 알림 설정 조회", description = "별도 설정이 없으면 기본값은 켜짐입니다.")
     @GetMapping("/settings/chat-rooms/{roomId}")
-    fun getChatRoomSetting(
+    override fun getChatRoomSetting(
         @LoginUserId userId: Long,
         @PathVariable roomId: Long,
     ): ChatRoomNotificationSettingResponse = notificationService.getChatRoomSetting(userId, roomId)
 
-    @Operation(summary = "채팅방별 알림 켜기·끄기")
     @PutMapping("/settings/chat-rooms/{roomId}")
-    fun updateChatRoomSetting(
+    override fun updateChatRoomSetting(
         @LoginUserId userId: Long,
         @PathVariable roomId: Long,
         @RequestBody request: UpdateChatRoomNotificationSettingRequest,

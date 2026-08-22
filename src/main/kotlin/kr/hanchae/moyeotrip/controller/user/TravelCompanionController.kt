@@ -17,15 +17,15 @@ import org.springframework.web.bind.annotation.RestController
 @RequestMapping("/api/v1")
 class TravelCompanionController(
     private val travelCompanionService: TravelCompanionService,
-) {
+) : TravelCompanionAPISpec {
     @GetMapping("/chat-rooms/{roomId}/companions")
-    fun getTripCompanions(
+    override fun getTripCompanions(
         @LoginUserId userId: Long,
         @PathVariable roomId: Long,
     ): List<TripCompanionResponse> = travelCompanionService.getTripCompanions(userId, roomId)
 
     @PutMapping("/chat-rooms/{roomId}/companions/{companionId}/review")
-    fun reviewCompanion(
+    override fun reviewCompanion(
         @LoginUserId userId: Long,
         @PathVariable roomId: Long,
         @PathVariable companionId: Long,
@@ -33,7 +33,7 @@ class TravelCompanionController(
     ): TripCompanionResponse = travelCompanionService.reviewCompanion(userId, roomId, companionId, request)
 
     @GetMapping("/users/me/travel-dex")
-    fun getMyTravelDex(
+    override fun getMyTravelDex(
         @LoginUserId userId: Long,
     ): TravelDexResponse = travelCompanionService.getMyTravelDex(userId)
 }

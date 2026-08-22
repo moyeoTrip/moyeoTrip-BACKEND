@@ -7,6 +7,7 @@ import jakarta.validation.constraints.Size
 import kr.hanchae.moyeotrip.entity.user.Gender
 import java.time.LocalDate
 
+@Schema(description = "Firebase 인증 사용자 회원가입 요청")
 data class FirebaseSignupRequest(
     @field:Schema(
         description =

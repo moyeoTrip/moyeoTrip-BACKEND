@@ -4,6 +4,7 @@ import io.swagger.v3.oas.annotations.media.Schema
 import kr.hanchae.moyeotrip.entity.user.ProviderType
 import kr.hanchae.moyeotrip.entity.user.SignupState
 
+@Schema(description = "Firebase 로그인 결과와 회원가입 진행 상태")
 data class FirebaseLoginResponse(
     @field:Schema(
         description = "기존 회원에게 발급되는 서비스 access token. 신규 회원이면 null",

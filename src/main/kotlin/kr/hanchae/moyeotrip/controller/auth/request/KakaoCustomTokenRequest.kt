@@ -3,6 +3,7 @@ package kr.hanchae.moyeotrip.controller.auth.request
 import io.swagger.v3.oas.annotations.media.Schema
 import jakarta.validation.constraints.NotBlank
 
+@Schema(description = "카카오 access token으로 Firebase Custom Token을 발급하는 요청")
 data class KakaoCustomTokenRequest(
     @field:Schema(
         description = "카카오 SDK 로그인으로 발급된 access token. Firebase 토큰이나 카카오 인가 코드가 아닙니다.",

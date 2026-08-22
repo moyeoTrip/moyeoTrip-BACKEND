@@ -26,18 +26,18 @@ class UserController(
     private val userService: UserService,
 ) : UserAPISpec {
     @GetMapping("/profile")
-    fun getProfile(
+    override fun getProfile(
         @LoginUserId userId: Long,
     ): MyProfileResponse = userService.getProfile(userId)
 
     @PutMapping("/profile")
-    fun updateProfile(
+    override fun updateProfile(
         @LoginUserId userId: Long,
         @Valid @RequestBody request: UpdateProfileRequest,
     ): MyProfileResponse = userService.updateProfile(userId, request)
 
     @GetMapping("/profile/options")
-    fun getProfileOptions(): ProfileOptionsResponse = userService.getProfileOptions()
+    override fun getProfileOptions(): ProfileOptionsResponse = userService.getProfileOptions()
 
     @DeleteMapping
     @ResponseStatus(HttpStatus.NO_CONTENT)

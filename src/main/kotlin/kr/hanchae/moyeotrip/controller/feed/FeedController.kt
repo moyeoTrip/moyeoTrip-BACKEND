@@ -27,16 +27,16 @@ import org.springframework.web.multipart.MultipartFile
 @RequestMapping("/api/v1/feeds")
 class FeedController(
     private val feedService: FeedService,
-) {
+) : FeedAPISpec {
     @PostMapping(consumes = [MediaType.MULTIPART_FORM_DATA_VALUE])
-    fun createFeed(
+    override fun createFeed(
         @LoginUserId userId: Long,
         @Valid @RequestPart("request") request: CreateFeedRequest,
         @RequestPart("images") images: List<MultipartFile>,
     ): ResponseEntity<FeedResponse> = ResponseEntity.status(HttpStatus.CREATED).body(feedService.createFeed(userId, request, images))
 
     @GetMapping
-    fun getFeeds(
+    override fun getFeeds(
         @LoginUserId userId: Long,
         @RequestParam(defaultValue = "DISCOVER") tab: FeedTab,
         @RequestParam(required = false) beforeFeedId: Long?,
@@ -44,25 +44,25 @@ class FeedController(
     ): FeedPageResponse = feedService.getFeeds(userId, tab, beforeFeedId, limit)
 
     @GetMapping("/{feedId}")
-    fun getFeed(
+    override fun getFeed(
         @LoginUserId userId: Long,
         @PathVariable feedId: Long,
     ): FeedResponse = feedService.getFeed(userId, feedId)
 
     @PostMapping("/{feedId}/like")
-    fun toggleLike(
+    override fun toggleLike(
         @LoginUserId userId: Long,
         @PathVariable feedId: Long,
     ): FeedLikeResponse = feedService.toggleLike(userId, feedId)
 
     @GetMapping("/{feedId}/comments")
-    fun getComments(
+    override fun getComments(
         @LoginUserId userId: Long,
         @PathVariable feedId: Long,
     ): List<FeedCommentResponse> = feedService.getComments(userId, feedId)
 
     @PostMapping("/{feedId}/comments")
-    fun createComment(
+    override fun createComment(
         @LoginUserId userId: Long,
         @PathVariable feedId: Long,
         @Valid @RequestBody request: CreateFeedCommentRequest,

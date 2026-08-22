@@ -12,9 +12,12 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement
 import io.swagger.v3.oas.annotations.tags.Tag
 import kr.hanchae.moyeotrip.config.swagger.SwaggerTag
 import kr.hanchae.moyeotrip.controller.user.request.ProfileImageSelectionRequest
+import kr.hanchae.moyeotrip.controller.user.request.UpdateProfileRequest
+import kr.hanchae.moyeotrip.controller.user.response.MyProfileResponse
 import kr.hanchae.moyeotrip.controller.user.response.ProfileImageCandidatesResponse
 import kr.hanchae.moyeotrip.controller.user.response.ProfileImageGenerationResponse
 import kr.hanchae.moyeotrip.controller.user.response.ProfileImageSelectionResponse
+import kr.hanchae.moyeotrip.controller.user.response.ProfileOptionsResponse
 import kr.hanchae.moyeotrip.exception.ErrorResponse
 
 @Tag(
@@ -22,6 +25,32 @@ import kr.hanchae.moyeotrip.exception.ErrorResponse
     description = "로그인 사용자의 프로필 이미지 등 사용자 정보 관리 API",
 )
 interface UserAPISpec {
+    @Operation(
+        summary = "내 프로필 조회",
+        description = "자기소개, 여행 스타일, 관심 경북 지역, 생년월일과 성별을 포함한 내 프로필을 반환합니다.",
+    )
+    @SecurityRequirement(name = "Authorization")
+    fun getProfile(
+        @Parameter(hidden = true) userId: Long,
+    ): MyProfileResponse
+
+    @Operation(
+        summary = "내 프로필 수정",
+        description = "자기소개, 여행 스타일 ID 목록, 관심 지역 ID 목록, 생년월일과 성별을 변경합니다.",
+    )
+    @SecurityRequirement(name = "Authorization")
+    fun updateProfile(
+        @Parameter(hidden = true) userId: Long,
+        @RequestBody(description = "변경할 프로필 정보", required = true) request: UpdateProfileRequest,
+    ): MyProfileResponse
+
+    @Operation(
+        summary = "프로필 선택 항목 조회",
+        description = "프로필 수정 화면에 필요한 여행 스타일과 관심 지역 선택지를 반환합니다.",
+    )
+    @SecurityRequirement(name = "Authorization")
+    fun getProfileOptions(): ProfileOptionsResponse
+
     @Operation(
         summary = "회원 탈퇴",
         description = """

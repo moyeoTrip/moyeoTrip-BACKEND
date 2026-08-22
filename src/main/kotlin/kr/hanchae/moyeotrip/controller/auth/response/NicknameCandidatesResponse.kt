@@ -4,6 +4,7 @@ import io.swagger.v3.oas.annotations.media.ArraySchema
 import io.swagger.v3.oas.annotations.media.Schema
 import kr.hanchae.moyeotrip.entity.user.NicknameColor
 
+@Schema(description = "회원가입에 사용할 닉네임 후보와 일회성 선택 토큰")
 data class NicknameCandidatesResponse(
     @field:Schema(
         description = "후보 선택을 검증하는 일회성 토큰. 회원가입 요청에 선택한 닉네임과 함께 전달합니다.",
@@ -27,6 +28,7 @@ data class NicknameCandidatesResponse(
     val expiresInSeconds: Long,
 )
 
+@Schema(description = "선택 가능한 닉네임 후보 정보")
 data class NicknameCandidate(
     @field:Schema(description = "형용사 + 동물 이름 + 0000~9999의 4자리 숫자로 구성된 선택 가능한 닉네임", example = "따스한 사슴 0000")
     val nickname: String,

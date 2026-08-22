@@ -3,6 +3,7 @@ package kr.hanchae.moyeotrip.controller.auth.request
 import io.swagger.v3.oas.annotations.media.Schema
 import jakarta.validation.constraints.NotBlank
 
+@Schema(description = "Firebase ID Token으로 서비스 로그인하는 요청")
 data class FirebaseLoginRequest(
     @field:Schema(
         description =

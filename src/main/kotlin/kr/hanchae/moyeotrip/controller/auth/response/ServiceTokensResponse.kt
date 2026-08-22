@@ -3,6 +3,7 @@ package kr.hanchae.moyeotrip.controller.auth.response
 import io.swagger.v3.oas.annotations.media.Schema
 import kr.hanchae.moyeotrip.entity.user.SignupState
 
+@Schema(description = "서비스 access·refresh token 발급 결과")
 data class ServiceTokensResponse(
     @field:Schema(
         description = "보호 API의 Authorization Bearer 헤더에 사용할 서비스 access token",

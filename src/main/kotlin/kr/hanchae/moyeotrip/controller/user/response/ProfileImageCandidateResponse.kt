@@ -2,6 +2,7 @@ package kr.hanchae.moyeotrip.controller.user.response
 
 import io.swagger.v3.oas.annotations.media.Schema
 
+@Schema(description = "생성된 프로필 이미지 후보 정보")
 data class ProfileImageCandidateResponse(
     @field:Schema(description = "생성된 프로필 이미지 ID", example = "12")
     val profileImageId: Long,

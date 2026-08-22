@@ -15,21 +15,21 @@ import org.springframework.web.bind.annotation.RestController
 @RequestMapping("/api/v1/users/me/blocks")
 class UserBlockController(
     private val userBlockService: UserBlockService,
-) {
+) : UserBlockAPISpec {
     @PostMapping("/{userId}")
-    fun block(
+    override fun block(
         @LoginUserId loginUserId: Long,
         @PathVariable userId: Long,
     ): UserBlockResponse = userBlockService.block(loginUserId, userId)
 
     @DeleteMapping("/{userId}")
-    fun unblock(
+    override fun unblock(
         @LoginUserId loginUserId: Long,
         @PathVariable userId: Long,
     ): UserBlockResponse = userBlockService.unblock(loginUserId, userId)
 
     @GetMapping
-    fun getBlockedUsers(
+    override fun getBlockedUsers(
         @LoginUserId userId: Long,
     ): List<BlockedUserResponse> = userBlockService.getBlockedUsers(userId)
 }
