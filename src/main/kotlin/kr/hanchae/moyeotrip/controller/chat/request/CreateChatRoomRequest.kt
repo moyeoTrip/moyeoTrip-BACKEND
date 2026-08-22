@@ -14,7 +14,13 @@ import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
 
-@Schema(description = "여행 채팅방 생성 요청. 썸네일은 multipart thumbnail 파트로 선택해 전송합니다.")
+private const val CREATE_OVERNIGHT_CUSTOM_CHAT_ROOM_REQUEST_EXAMPLE =
+    """{"title":"주왕산 & 주산지 힐링 트레킹","description":"가을 단풍을 함께 즐길 동행자를 구해요.","maxParticipants":5,"tripType":"OVERNIGHT","startDate":"2026-09-12","endDate":"2026-09-13","recruitmentDeadlineDate":"2026-09-09","meetingLatitude":36.576,"meetingLongitude":128.97,"meetingDetails":"안동역 1번 출구 앞","meetingDateTime":"2026-09-12T08:30:00","participationFee":15000,"genderRestriction":"NONE","minimumAge":20,"maximumAge":39,"joinApprovalMode":"MANUAL","courseType":"CUSTOM","customCourse":{"title":"주왕산 단풍길 코스","description":"천천히 걷는 단풍 트레킹 코스","places":[{"contentId":126508,"dayNumber":1,"sequence":1,"visitTime":"09:00"},{"contentId":126508,"dayNumber":1,"sequence":2,"visitTime":"14:00"},{"contentId":126508,"dayNumber":2,"sequence":1,"visitTime":"09:00"},{"contentId":126508,"dayNumber":2,"sequence":2,"visitTime":"14:00"}],"tagIds":[1,4]}}"""
+
+@Schema(
+    description = "여행 채팅방 생성 요청. 썸네일은 multipart thumbnail 파트로 선택해 전송합니다.",
+    example = CREATE_OVERNIGHT_CUSTOM_CHAT_ROOM_REQUEST_EXAMPLE,
+)
 data class CreateChatRoomRequest(
     @field:Schema(description = "채팅방 제목", example = "주왕산 & 주산지 힐링 트레킹")
     @field:NotBlank
@@ -65,7 +71,7 @@ data class CreateChatRoomRequest(
     @field:Min(20)
     @field:Max(100)
     val maximumAge: Int? = null,
-    @field:Schema(description = "참가 신청 승인 방식", example = "HOST_APPROVAL")
+    @field:Schema(description = "참가 신청 승인 방식. AUTO는 자동 승인, MANUAL은 호스트 승인입니다.", example = "MANUAL")
     val joinApprovalMode: JoinApprovalMode,
     @field:Schema(description = "기존 공개 코스 또는 새 커스텀 코스 유형", example = "CUSTOM")
     val courseType: TravelCourseType,

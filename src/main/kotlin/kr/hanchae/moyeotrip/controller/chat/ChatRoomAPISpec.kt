@@ -3,8 +3,10 @@ package kr.hanchae.moyeotrip.controller.chat
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.Parameter
 import io.swagger.v3.oas.annotations.media.Content
+import io.swagger.v3.oas.annotations.media.Encoding
 import io.swagger.v3.oas.annotations.media.ExampleObject
 import io.swagger.v3.oas.annotations.media.Schema
+import io.swagger.v3.oas.annotations.parameters.RequestBody
 import io.swagger.v3.oas.annotations.responses.ApiResponse
 import io.swagger.v3.oas.annotations.responses.ApiResponses
 import io.swagger.v3.oas.annotations.tags.Tag
@@ -37,22 +39,70 @@ import kr.hanchae.moyeotrip.controller.chat.response.MyChatRoomSummaryResponse
 import kr.hanchae.moyeotrip.controller.chat.response.MyWaitingChatRoomResponse
 import kr.hanchae.moyeotrip.controller.chat.response.SearchChatRoomResponse
 import kr.hanchae.moyeotrip.exception.ErrorResponse
+import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
 import org.springframework.web.multipart.MultipartFile
 
 @Tag(name = "채팅방", description = "여행 채팅방, 참가자, 대기열 및 메시지 API")
 interface ChatRoomAPISpec {
-    @Operation(summary = "채팅방 생성", description = "생성한 사용자가 호스트이자 첫 참가자가 됩니다.")
+    @Operation(
+        summary = "채팅방 생성",
+        description = """
+            생성한 사용자가 호스트이자 첫 참가자가 됩니다.
+            `DAY_TRIP`은 종료 날짜 없이 시작·종료 시각을, `OVERNIGHT`은 시작일 이후의 종료 날짜만 입력합니다.
+            `PUBLIC` 코스는 courseId만, `CUSTOM` 코스는 customCourse만 입력합니다.
+        """,
+    )
     @ApiResponses(
         value = [
             ApiResponse(responseCode = "201", description = "채팅방 생성 성공"),
             ApiResponse(
                 responseCode = "400",
-                description = "인증·입력값·썸네일 또는 여행 코스 검증 실패",
+                description = "요청 본문·일정·나이 또는 커스텀 코스 구성 검증 실패",
                 content = [
                     Content(
                         schema = Schema(implementation = ErrorResponse::class),
-                        examples = [ExampleObject(value = ChatRoomSwaggerExamples.BAD_REQUEST)],
+                        examples = [
+                            ExampleObject(name = "요청 본문 또는 enum 값 오류", value = ChatRoomSwaggerExamples.BAD_REQUEST),
+                            ExampleObject(name = "당일·숙박 일정 입력 오류", value = ChatRoomSwaggerExamples.INVALID_TRIP_SCHEDULE),
+                            ExampleObject(name = "참가 나이 범위 오류", value = ChatRoomSwaggerExamples.INVALID_CHAT_ROOM_AGE_RESTRICTION),
+                            ExampleObject(name = "커스텀 코스 일차·순서 구성 오류", value = ChatRoomSwaggerExamples.INVALID_TRAVEL_COURSE_SCHEDULE),
+                        ],
+                    ),
+                ],
+            ),
+            ApiResponse(
+                responseCode = "401",
+                description = "서비스 Access Token이 없거나 유효하지 않음",
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [ExampleObject(value = ChatRoomSwaggerExamples.UNAUTHORIZED)],
+                    ),
+                ],
+            ),
+            ApiResponse(
+                responseCode = "404",
+                description = "로그인 사용자, 공개 코스, 커스텀 코스 장소 또는 코스 태그를 찾을 수 없음",
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [
+                            ExampleObject(name = "로그인 사용자 없음", value = ChatRoomSwaggerExamples.USER_NOT_FOUND),
+                            ExampleObject(name = "공개 여행 코스 없음", value = ChatRoomSwaggerExamples.TRAVEL_COURSE_NOT_FOUND),
+                            ExampleObject(name = "커스텀 코스 관광지 없음", value = ChatRoomSwaggerExamples.TOURISM_CONTENT_NOT_FOUND),
+                            ExampleObject(name = "커스텀 코스 태그 없음", value = ChatRoomSwaggerExamples.TRAVEL_COURSE_TAG_NOT_FOUND),
+                        ],
+                    ),
+                ],
+            ),
+            ApiResponse(
+                responseCode = "409",
+                description = "PUBLIC 코스와 CUSTOM 코스 입력 조합이 올바르지 않음",
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [ExampleObject(value = ChatRoomSwaggerExamples.INVALID_TRAVEL_COURSE_SELECTION)],
                     ),
                 ],
             ),
@@ -60,7 +110,21 @@ interface ChatRoomAPISpec {
     )
     fun createRoom(
         @Parameter(hidden = true) userId: Long,
+        @RequestBody(
+            description = "채팅방 생성 정보와 선택 썸네일을 multipart/form-data로 전송합니다. request 파트는 application/json입니다.",
+            required = true,
+            content = [
+                Content(
+                    mediaType = MediaType.MULTIPART_FORM_DATA_VALUE,
+                    encoding = [Encoding(name = "request", contentType = MediaType.APPLICATION_JSON_VALUE)],
+                ),
+            ],
+        )
+        @Parameter(
+            description = "채팅방 생성 JSON. 아래 예시는 바로 실행 가능한 1박 2일 커스텀 코스입니다.",
+        )
         request: CreateChatRoomRequest,
+        @Parameter(description = "선택 썸네일 이미지 파일")
         thumbnail: MultipartFile?,
     ): ResponseEntity<Unit>
 
@@ -809,8 +873,13 @@ interface ChatRoomAPISpec {
 
 private object ChatRoomSwaggerExamples {
     const val BAD_REQUEST = """{"code":40000,"errorMessage":"잘못된 요청입니다."}"""
+    const val INVALID_TRAVEL_COURSE_SCHEDULE = """{"code":40007,"errorMessage":"여행 일차마다 방문지를 최소 2개 편성해야 합니다."}"""
+    const val INVALID_TRIP_SCHEDULE = """{"code":40008,"errorMessage":"당일치기는 종료 날짜 없이 시간을, 1박 이상은 종료 날짜만 입력해야 합니다."}"""
+    const val INVALID_CHAT_ROOM_AGE_RESTRICTION = """{"code":40009,"errorMessage":"최소 나이는 최대 나이보다 작거나 같아야 합니다."}"""
     const val UNAUTHORIZED = """{"code":40100,"errorMessage":"인증되지 않은 사용자입니다."}"""
     const val FORBIDDEN = """{"code":40300,"errorMessage":"접근 권한이 없습니다."}"""
+    const val USER_NOT_FOUND = """{"code":40400,"errorMessage":"해당 유저를 찾을 수 없습니다."}"""
+    const val TRAVEL_COURSE_NOT_FOUND = """{"code":40403,"errorMessage":"공개된 여행 코스를 찾을 수 없습니다."}"""
     const val CHAT_ROOM_NOT_FOUND = """{"code":40405,"errorMessage":"채팅방을 찾을 수 없습니다."}"""
     const val CHAT_JOIN_APPLICATION_NOT_FOUND = """{"code":40404,"errorMessage":"참가 신청을 찾을 수 없습니다."}"""
     const val CHAT_ROOM_ALREADY_JOINED = """{"code":40906,"errorMessage":"이미 참가했거나 대기 중인 채팅방입니다."}"""
@@ -820,5 +889,7 @@ private object ChatRoomSwaggerExamples {
     const val RESOURCE_NOT_FOUND = """{"code":40402,"errorMessage":"요청한 리소스를 찾을 수 없습니다."}"""
     const val TOURISM_CONTENT_NOT_FOUND = """{"code":40408,"errorMessage":"관광 콘텐츠를 찾을 수 없습니다."}"""
     const val CHAT_ROOM_NOTICE_NOT_FOUND = """{"code":40411,"errorMessage":"채팅방 공지를 찾을 수 없습니다."}"""
+    const val TRAVEL_COURSE_TAG_NOT_FOUND = """{"code":40412,"errorMessage":"여행 코스 태그를 찾을 수 없습니다."}"""
+    const val INVALID_TRAVEL_COURSE_SELECTION = """{"code":40909,"errorMessage":"공개 코스 하나 또는 직접 구성한 코스 중 하나만 선택해야 합니다."}"""
     const val MEETING_INFO_NOT_EDITABLE = """{"code":40913,"errorMessage":"여행 확정 전까지만 집합 정보를 수정할 수 있습니다."}"""
 }

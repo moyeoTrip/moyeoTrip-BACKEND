@@ -57,7 +57,7 @@ data class ChatRoomDetailResponse(
     val minimumAge: Int?,
     @field:Schema(description = "참가 최대 만 나이. 제한이 없으면 null", example = "39", nullable = true)
     val maximumAge: Int?,
-    @field:Schema(description = "참가 신청 승인 방식", example = "HOST_APPROVAL")
+    @field:Schema(description = "참가 신청 승인 방식. AUTO는 자동 승인, MANUAL은 호스트 승인입니다.", example = "MANUAL")
     val joinApprovalMode: JoinApprovalMode,
     @field:Schema(description = "모집 마감까지 남은 일수", example = "3")
     val recruitmentDDay: Long,
