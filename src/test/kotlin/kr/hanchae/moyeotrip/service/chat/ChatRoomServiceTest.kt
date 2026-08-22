@@ -53,6 +53,7 @@ import kr.hanchae.moyeotrip.repository.TravelCoursePlaceRepository
 import kr.hanchae.moyeotrip.repository.TravelCourseRatingRepository
 import kr.hanchae.moyeotrip.repository.TravelCourseRepository
 import kr.hanchae.moyeotrip.repository.TravelCourseTagRepository
+import kr.hanchae.moyeotrip.repository.UserBlockRepository
 import kr.hanchae.moyeotrip.repository.UserRepository
 import kr.hanchae.moyeotrip.service.notification.NotificationService
 import kr.hanchae.moyeotrip.service.realtime.RealtimeMessagingService
@@ -86,6 +87,7 @@ class ChatRoomServiceTest {
     private val kickHistoryRepository = mock(ChatRoomKickHistoryRepository::class.java)
     private val tourismContentRepository = mock(TourismContentRepository::class.java)
     private val userRepository = mock(UserRepository::class.java)
+    private val userBlockRepository = mock(UserBlockRepository::class.java)
     private val objectStorageRepository = mock(ObjectStorageRepository::class.java)
     private val noticeRepository = mock(ChatRoomNoticeRepository::class.java)
     private val notificationService = mock(NotificationService::class.java)
@@ -106,11 +108,39 @@ class ChatRoomServiceTest {
             kickHistoryRepository,
             tourismContentRepository,
             userRepository,
+            userBlockRepository,
             objectStorageRepository,
             noticeRepository,
             notificationService,
             realtimeMessagingService,
         )
+
+    @Test
+    fun `모임 찾기는 차단 관계인 사용자가 속한 모임을 저장소 조회에서 제외한다`() {
+        `when`(userBlockRepository.findRelatedUserIds(1L)).thenReturn(listOf(2L, 3L))
+        `when`(
+            roomRepository.searchRooms(
+                1L,
+                listOf(2L, 3L),
+                "경주",
+                LocalDate.now(),
+                org.springframework.data.domain.PageRequest
+                    .of(0, 20),
+            ),
+        ).thenReturn(emptyList())
+
+        val response = service.searchRooms(1L, " 경주 ", 20)
+
+        assertEquals(emptyList<Any>(), response)
+        verify(roomRepository).searchRooms(
+            1L,
+            listOf(2L, 3L),
+            "경주",
+            LocalDate.now(),
+            org.springframework.data.domain.PageRequest
+                .of(0, 20),
+        )
+    }
 
     @Test
     fun `채팅 사진은 20MB를 초과하면 공유할 수 없다`() {
@@ -291,6 +321,32 @@ class ChatRoomServiceTest {
         assertEquals(false, response.single().ended)
         assertEquals(5L, response.single().recruitmentDDay)
         assertEquals(now, response.single().latestMessage.sentAt)
+    }
+
+    @Test
+    fun `지난 여행의 호스트이고 커스텀 코스가 미공개면 코스 공개 버튼을 표시한다`() {
+        val host = user(1L)
+        val course = TravelCourse(id = 5L, type = TravelCourseType.CUSTOM, owner = host, title = "직접 만든 코스")
+        val endedRoom =
+            room(
+                host = host,
+                course = course,
+                startDate = LocalDate.now().minusDays(2),
+                endDate = LocalDate.now().minusDays(1),
+                recruitmentDeadlineDate = LocalDate.now().minusDays(3),
+                status = ChatRoomStatus.CONFIRMED,
+            )
+        val participant = ChatRoomParticipant(chatRoom = endedRoom, user = host, role = ChatParticipantRole.HOST)
+        val latestMessage = mock(ChatMessage::class.java)
+        `when`(latestMessage.type).thenReturn(ChatMessageType.SYSTEM)
+        `when`(latestMessage.content).thenReturn("여행이 끝났어요.")
+        `when`(latestMessage.createdDateTime).thenReturn(LocalDateTime.now())
+        `when`(participantRepository.findAllByUserId(host.id)).thenReturn(listOf(participant))
+        `when`(messageRepository.findFirstByChatRoomIdOrderByIdDesc(endedRoom.id)).thenReturn(latestMessage)
+
+        val response = service.getMyRooms(host.id, MyChatRoomFilter.ENDED)
+
+        assertEquals(true, response.single().coursePublicationAvailable)
     }
 
     @Test

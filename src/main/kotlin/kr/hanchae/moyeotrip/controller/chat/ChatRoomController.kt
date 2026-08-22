@@ -31,6 +31,7 @@ import kr.hanchae.moyeotrip.controller.chat.response.JoinEligibilityResponse
 import kr.hanchae.moyeotrip.controller.chat.response.LeaveChatRoomResponse
 import kr.hanchae.moyeotrip.controller.chat.response.MyChatRoomSummaryResponse
 import kr.hanchae.moyeotrip.controller.chat.response.MyWaitingChatRoomResponse
+import kr.hanchae.moyeotrip.controller.chat.response.SearchChatRoomResponse
 import kr.hanchae.moyeotrip.service.chat.ChatRoomService
 import kr.hanchae.moyeotrip.utils.LoginUserId
 import org.springframework.http.HttpStatus
@@ -81,6 +82,14 @@ class ChatRoomController(
     fun getMyWaitingRooms(
         @LoginUserId userId: Long,
     ): List<MyWaitingChatRoomResponse> = chatRoomService.getMyWaitingRooms(userId)
+
+    @Operation(summary = "모임 검색", description = "채팅방명 검색을 지원하며 차단 관계인 사용자가 호스트 또는 참가자인 모임은 제외합니다.")
+    @GetMapping("/search")
+    fun searchRooms(
+        @LoginUserId userId: Long,
+        @RequestParam(required = false) keyword: String?,
+        @RequestParam(defaultValue = "20") limit: Int,
+    ): List<SearchChatRoomResponse> = chatRoomService.searchRooms(userId, keyword, limit)
 
     @Operation(summary = "채팅방 상세 조회")
     @GetMapping("/{roomId}")

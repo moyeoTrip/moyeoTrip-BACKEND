@@ -12,6 +12,7 @@ import kr.hanchae.moyeotrip.repository.ChatRoomRepository
 import kr.hanchae.moyeotrip.repository.TravelCourseRepository
 import kr.hanchae.moyeotrip.service.notification.NotificationService
 import kr.hanchae.moyeotrip.service.realtime.RealtimeMessagingService
+import kr.hanchae.moyeotrip.service.user.TravelCompanionService
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Component
 import org.springframework.transaction.annotation.Transactional
@@ -26,6 +27,7 @@ class ChatRoomLifecycleScheduler(
     private val courseRepository: TravelCourseRepository,
     private val notificationService: NotificationService,
     private val realtimeMessagingService: RealtimeMessagingService,
+    private val travelCompanionService: TravelCompanionService,
 ) {
     @Scheduled(cron = "0 0 13 * * *", zone = "Asia/Seoul")
     @Transactional
@@ -61,18 +63,16 @@ class ChatRoomLifecycleScheduler(
         roomRepository
             .findAllStartingRoomsWithoutSystemEvent(ChatRoomStatus.CONFIRMED, LocalDate.now(), TRIP_STARTED_EVENT_KEY)
             .forEach { room ->
-                saveSystemMessage(room, "오늘 여행이예요 🎒", TRIP_STARTED_EVENT_KEY)
+                saveSystemMessage(room, "오늘 여행이 시작됐어요 🎒", TRIP_STARTED_EVENT_KEY)
             }
     }
 
-    @Scheduled(cron = "0 0 0 * * *", zone = "Asia/Seoul")
+    @Scheduled(cron = "0 5 0 * * *", zone = "Asia/Seoul")
     @Transactional
-    fun publishCompletedTravelCourses() {
+    fun collectCompletedTripCompanions() {
         roomRepository
-            .findAllCompletedConfirmedRoomsForUpdate(ChatRoomStatus.CONFIRMED, LocalDate.now())
-            .map { it.course }
-            .distinctBy { it.id }
-            .forEach { it.publish() }
+            .findAllCompletedConfirmedRooms(ChatRoomStatus.CONFIRMED, LocalDate.now())
+            .forEach(travelCompanionService::collectCompletedTrip)
     }
 
     @Scheduled(cron = "0 0 0 * * *", zone = "Asia/Seoul")

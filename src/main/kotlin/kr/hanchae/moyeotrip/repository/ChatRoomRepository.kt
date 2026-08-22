@@ -3,6 +3,7 @@ package kr.hanchae.moyeotrip.repository
 import jakarta.persistence.LockModeType
 import kr.hanchae.moyeotrip.entity.chat.ChatRoom
 import kr.hanchae.moyeotrip.entity.chat.ChatRoomStatus
+import org.springframework.data.domain.Pageable
 import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.data.jpa.repository.Lock
 import org.springframework.data.jpa.repository.Query
@@ -10,6 +11,34 @@ import org.springframework.data.repository.query.Param
 import java.time.LocalDate
 
 interface ChatRoomRepository : JpaRepository<ChatRoom, Long> {
+    @Query(
+        """
+        SELECT room FROM ChatRoom room
+        WHERE room.status = RECRUITING
+          AND room.recruitmentDeadlineDate >= :today
+          AND (:keyword IS NULL OR LOWER(room.roomTitle) LIKE LOWER(CONCAT(CONCAT('%', :keyword), '%')))
+          AND room.host.id NOT IN :blockedUserIds
+          AND NOT EXISTS (
+              SELECT blockedParticipant.id FROM ChatRoomParticipant blockedParticipant
+              WHERE blockedParticipant.chatRoom = room
+                AND blockedParticipant.user.id IN :blockedUserIds
+          )
+          AND NOT EXISTS (
+              SELECT myParticipant.id FROM ChatRoomParticipant myParticipant
+              WHERE myParticipant.chatRoom = room
+                AND myParticipant.user.id = :userId
+          )
+        ORDER BY room.createdDateTime DESC, room.id DESC
+        """,
+    )
+    fun searchRooms(
+        @Param("userId") userId: Long,
+        @Param("blockedUserIds") blockedUserIds: Collection<Long>,
+        @Param("keyword") keyword: String?,
+        @Param("today") today: LocalDate,
+        pageable: Pageable,
+    ): List<ChatRoom>
+
     @Query(
         """
         SELECT room FROM ChatRoom room
@@ -63,16 +92,14 @@ interface ChatRoomRepository : JpaRepository<ChatRoom, Long> {
         status: ChatRoomStatus,
     ): Long
 
-    @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query(
         """
         SELECT room FROM ChatRoom room
         WHERE room.status = :status
-          AND room.course.type = CUSTOM
           AND ((room.endDate IS NULL AND room.startDate < :date) OR room.endDate < :date)
         """,
     )
-    fun findAllCompletedConfirmedRoomsForUpdate(
+    fun findAllCompletedConfirmedRooms(
         @Param("status") status: ChatRoomStatus,
         @Param("date") date: LocalDate,
     ): List<ChatRoom>

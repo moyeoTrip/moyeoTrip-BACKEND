@@ -277,11 +277,28 @@ data class MyChatRoomSummaryResponse(
     val thumbnail: String?,
     val status: ChatRoomStatus,
     val ended: Boolean,
+    val coursePublicationAvailable: Boolean,
     val recruitmentDDay: Long,
     val participantCount: Int,
     val maxParticipants: Int,
     val unreadMessageCount: Long,
     val latestMessage: LatestChatMessageResponse,
+)
+
+data class SearchChatRoomResponse(
+    val roomId: Long,
+    val title: String,
+    val description: String?,
+    val thumbnail: String?,
+    val tripType: TripType,
+    val startDate: LocalDate,
+    val endDate: LocalDate?,
+    val recruitmentDeadlineDate: LocalDate,
+    val hostId: Long,
+    val participantCount: Int,
+    val maxParticipants: Int,
+    val courseTitle: String,
+    val tags: List<TravelCourseTagResponse>,
 )
 
 data class MyWaitingChatRoomResponse(

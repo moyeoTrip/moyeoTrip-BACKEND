@@ -38,6 +38,7 @@ import kr.hanchae.moyeotrip.controller.chat.response.MyChatRoomSummaryResponse
 import kr.hanchae.moyeotrip.controller.chat.response.MyWaitingChatRoomResponse
 import kr.hanchae.moyeotrip.controller.chat.response.PublicTravelCourseDetailResponse
 import kr.hanchae.moyeotrip.controller.chat.response.RepliedChatMessageResponse
+import kr.hanchae.moyeotrip.controller.chat.response.SearchChatRoomResponse
 import kr.hanchae.moyeotrip.controller.chat.response.SharedLocationResponse
 import kr.hanchae.moyeotrip.controller.chat.response.SharedTourismContentResponse
 import kr.hanchae.moyeotrip.controller.chat.response.TravelCourseDetailResponse
@@ -90,6 +91,7 @@ import kr.hanchae.moyeotrip.repository.TravelCoursePlaceRepository
 import kr.hanchae.moyeotrip.repository.TravelCourseRatingRepository
 import kr.hanchae.moyeotrip.repository.TravelCourseRepository
 import kr.hanchae.moyeotrip.repository.TravelCourseTagRepository
+import kr.hanchae.moyeotrip.repository.UserBlockRepository
 import kr.hanchae.moyeotrip.repository.UserRepository
 import kr.hanchae.moyeotrip.service.notification.NotificationService
 import kr.hanchae.moyeotrip.service.realtime.RealtimeMessagingService
@@ -125,6 +127,7 @@ class ChatRoomService(
     private val kickHistoryRepository: ChatRoomKickHistoryRepository,
     private val tourismContentRepository: TourismContentRepository,
     private val userRepository: UserRepository,
+    private val userBlockRepository: UserBlockRepository,
     private val objectStorageRepository: ObjectStorageRepository,
     private val noticeRepository: ChatRoomNoticeRepository,
     private val notificationService: NotificationService,
@@ -210,6 +213,42 @@ class ChatRoomService(
             .filter { it.chatRoom.matches(filter) }
             .map { it.toMySummary() }
             .sortedByDescending { it.latestMessage.sentAt }
+
+    @Transactional(readOnly = true)
+    fun searchRooms(
+        userId: Long,
+        keyword: String?,
+        limit: Int,
+    ): List<SearchChatRoomResponse> {
+        val blockedUserIds = userBlockRepository.findRelatedUserIds(userId).ifEmpty { listOf(NO_USER_ID) }
+        return roomRepository
+            .searchRooms(
+                userId = userId,
+                blockedUserIds = blockedUserIds,
+                keyword = keyword?.trim()?.takeIf(String::isNotEmpty),
+                today = LocalDate.now(),
+                pageable = PageRequest.of(0, limit.coerceIn(1, MAX_DISCOVER_ROOM_LIMIT)),
+            ).map { room ->
+                SearchChatRoomResponse(
+                    roomId = room.id,
+                    title = room.roomTitle,
+                    description = room.description,
+                    thumbnail = room.thumbnail,
+                    tripType = room.tripType,
+                    startDate = room.startDate,
+                    endDate = room.endDate,
+                    recruitmentDeadlineDate = room.recruitmentDeadlineDate,
+                    hostId = room.host.id,
+                    participantCount = participantRepository.countByChatRoomId(room.id).toInt(),
+                    maxParticipants = room.maxParticipants,
+                    courseTitle = room.course.title,
+                    tags =
+                        room.course.tags
+                            .sortedBy { it.id }
+                            .map { TravelCourseTagResponse(it.id, it.name) },
+                )
+            }
+    }
 
     @Transactional(readOnly = true)
     fun getMyWaitingRooms(userId: Long): List<MyWaitingChatRoomResponse> =
@@ -345,7 +384,7 @@ class ChatRoomService(
     @Transactional(readOnly = true)
     fun getCourse(courseId: Long): PublicTravelCourseDetailResponse {
         val course = findPublicCourse(courseId)
-        val creator = course.owner
+        val creator = course.owner?.takeIf { course.showCreatorNickname }
         val creatorTravelRoom =
             creator?.let {
                 roomRepository.findFirstByCourseIdAndHostIdAndStatusOrderByStartDateAsc(
@@ -1200,6 +1239,10 @@ class ChatRoomService(
             thumbnail = room.thumbnail,
             status = room.status,
             ended = room.hasEnded(),
+            coursePublicationAvailable =
+                room.host.id == user.id &&
+                    room.hasCompletedTrip() &&
+                    room.course.type == TravelCourseType.CUSTOM,
             recruitmentDDay = room.recruitmentDDay(),
             participantCount = participantRepository.countByChatRoomId(room.id).toInt(),
             maxParticipants = room.maxParticipants,
@@ -1536,6 +1579,8 @@ class ChatRoomService(
         private const val CHAT_ROOM_THUMBNAIL_PATH = "chat-room/thumbnail/"
         private const val CHAT_IMAGE_PATH = "chat/message/image/"
         private const val MAX_CHAT_IMAGE_BYTES = 20L * 1024 * 1024
+        private const val MAX_DISCOVER_ROOM_LIMIT = 20
+        private const val NO_USER_ID = -1L
         private const val DEFAULT_IMAGE_EXTENSION = "jpg"
         private val FILE_EXTENSION_PATTERN = Regex("[a-z0-9]{1,10}")
         private val ACTIVE_APPLICATION_STATUSES = listOf(JoinApplicationStatus.PENDING, JoinApplicationStatus.WAITLISTED)

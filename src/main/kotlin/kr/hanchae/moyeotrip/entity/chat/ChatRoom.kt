@@ -162,6 +162,9 @@ class ChatRoom(
     fun canAcceptJoinApplication(today: LocalDate = LocalDate.now()): Boolean =
         status != ChatRoomStatus.CANCELLED && today < startDate.minusDays(1)
 
+    fun hasCompletedTrip(today: LocalDate = LocalDate.now()): Boolean =
+        status == ChatRoomStatus.CONFIRMED && (endDate ?: startDate).isBefore(today)
+
     fun recruitmentDDay(today: LocalDate = LocalDate.now()): Long = ChronoUnit.DAYS.between(today, recruitmentDeadlineDate)
 }
 
