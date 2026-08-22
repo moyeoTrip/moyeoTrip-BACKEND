@@ -3,6 +3,7 @@ package kr.hanchae.moyeotrip.controller.terms
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.Parameter
 import io.swagger.v3.oas.annotations.media.Content
+import io.swagger.v3.oas.annotations.media.ExampleObject
 import io.swagger.v3.oas.annotations.media.Schema
 import io.swagger.v3.oas.annotations.responses.ApiResponse
 import io.swagger.v3.oas.annotations.responses.ApiResponses
@@ -19,10 +20,24 @@ interface TermsAPISpec {
         description = "현재 활성화된 약관의 ID, 제목, 필수 동의 여부를 반환합니다. 회원가입 전 이 목록을 조회하고, 필수 약관 ID를 모두 agreedTermIds에 포함해야 합니다.",
     )
     @SecurityRequirements
-    @ApiResponse(
-        responseCode = "200",
-        description = "현재 활성 회원가입 약관 목록",
-        content = [Content(schema = Schema(implementation = AgreementTermSummaryResponse::class))],
+    @ApiResponses(
+        value = [
+            ApiResponse(
+                responseCode = "200",
+                description = "현재 활성 회원가입 약관 목록",
+                content = [Content(schema = Schema(implementation = AgreementTermSummaryResponse::class))],
+            ),
+            ApiResponse(
+                responseCode = "500",
+                description = "약관 조회 실패",
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [ExampleObject(value = TermsSwaggerExamples.INTERNAL_SERVER_ERROR)],
+                    ),
+                ],
+            ),
+        ],
     )
     fun getTerms(): List<AgreementTermSummaryResponse>
 
@@ -41,11 +56,21 @@ interface TermsAPISpec {
             ApiResponse(
                 responseCode = "404",
                 description = "현재 활성 상태인 약관을 찾을 수 없음",
-                content = [Content(schema = Schema(implementation = ErrorResponse::class))],
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [ExampleObject(value = TermsSwaggerExamples.AGREEMENT_TERM_NOT_FOUND)],
+                    ),
+                ],
             ),
         ],
     )
     fun getTerm(
         @Parameter(description = "조회할 현재 활성 약관 ID", example = "1") termId: Long,
     ): AgreementTermDetailResponse
+}
+
+private object TermsSwaggerExamples {
+    const val AGREEMENT_TERM_NOT_FOUND = """{"code":40413,"errorMessage":"현재 활성 상태인 약관을 찾을 수 없습니다."}"""
+    const val INTERNAL_SERVER_ERROR = """{"code":50000,"errorMessage":"서버에러입니다."}"""
 }

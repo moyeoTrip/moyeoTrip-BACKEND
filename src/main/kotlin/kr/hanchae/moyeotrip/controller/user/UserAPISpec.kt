@@ -8,7 +8,6 @@ import io.swagger.v3.oas.annotations.media.Schema
 import io.swagger.v3.oas.annotations.parameters.RequestBody
 import io.swagger.v3.oas.annotations.responses.ApiResponse
 import io.swagger.v3.oas.annotations.responses.ApiResponses
-import io.swagger.v3.oas.annotations.security.SecurityRequirement
 import io.swagger.v3.oas.annotations.tags.Tag
 import kr.hanchae.moyeotrip.config.swagger.SwaggerTag
 import kr.hanchae.moyeotrip.controller.user.request.ProfileImageSelectionRequest
@@ -29,7 +28,35 @@ interface UserAPISpec {
         summary = "내 프로필 조회",
         description = "자기소개, 여행 스타일, 관심 경북 지역, 생년월일, 성별과 기본 알림 수신 설정을 포함한 내 프로필을 반환합니다.",
     )
-    @SecurityRequirement(name = "Authorization")
+    @ApiResponses(
+        value = [
+            ApiResponse(
+                responseCode = "200",
+                description = "내 프로필 조회 성공",
+                content = [Content(schema = Schema(implementation = MyProfileResponse::class))],
+            ),
+            ApiResponse(
+                responseCode = "401",
+                description = "서비스 Access Token이 없거나 유효하지 않음",
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [ExampleObject(value = UserSwaggerExamples.UNAUTHORIZED)],
+                    ),
+                ],
+            ),
+            ApiResponse(
+                responseCode = "404",
+                description = "로그인 사용자를 찾을 수 없음",
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [ExampleObject(value = UserSwaggerExamples.USER_NOT_FOUND)],
+                    ),
+                ],
+            ),
+        ],
+    )
     fun getProfile(
         @Parameter(hidden = true) userId: Long,
     ): MyProfileResponse
@@ -38,7 +65,45 @@ interface UserAPISpec {
         summary = "내 프로필 수정",
         description = "자기소개, 여행 스타일 ID 목록, 관심 지역 ID 목록, 생년월일과 성별을 변경합니다.",
     )
-    @SecurityRequirement(name = "Authorization")
+    @ApiResponses(
+        value = [
+            ApiResponse(
+                responseCode = "200",
+                description = "내 프로필 수정 성공",
+                content = [Content(schema = Schema(implementation = MyProfileResponse::class))],
+            ),
+            ApiResponse(
+                responseCode = "400",
+                description = "입력값 또는 여행 스타일·관심 지역 ID가 유효하지 않음",
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [ExampleObject(value = UserSwaggerExamples.BAD_REQUEST)],
+                    ),
+                ],
+            ),
+            ApiResponse(
+                responseCode = "401",
+                description = "서비스 Access Token이 없거나 유효하지 않음",
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [ExampleObject(value = UserSwaggerExamples.UNAUTHORIZED)],
+                    ),
+                ],
+            ),
+            ApiResponse(
+                responseCode = "404",
+                description = "로그인 사용자를 찾을 수 없음",
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [ExampleObject(value = UserSwaggerExamples.USER_NOT_FOUND)],
+                    ),
+                ],
+            ),
+        ],
+    )
     fun updateProfile(
         @Parameter(hidden = true) userId: Long,
         @RequestBody(description = "변경할 프로필 정보", required = true) request: UpdateProfileRequest,
@@ -48,7 +113,25 @@ interface UserAPISpec {
         summary = "프로필 선택 항목 조회",
         description = "프로필 수정 화면에 필요한 여행 스타일과 관심 지역 선택지를 반환합니다.",
     )
-    @SecurityRequirement(name = "Authorization")
+    @ApiResponses(
+        value = [
+            ApiResponse(
+                responseCode = "200",
+                description = "프로필 선택 항목 조회 성공",
+                content = [Content(schema = Schema(implementation = ProfileOptionsResponse::class))],
+            ),
+            ApiResponse(
+                responseCode = "500",
+                description = "프로필 선택 항목 조회 실패",
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [ExampleObject(value = UserSwaggerExamples.INTERNAL_SERVER_ERROR)],
+                    ),
+                ],
+            ),
+        ],
+    )
     fun getProfileOptions(): ProfileOptionsResponse
 
     @Operation(
@@ -62,7 +145,6 @@ interface UserAPISpec {
             기존 Refresh Token도 더 이상 갱신에 사용할 수 없습니다. 삭제한 데이터는 복구할 수 없습니다.
         """,
     )
-    @SecurityRequirement(name = "Authorization")
     @ApiResponses(
         value = [
             ApiResponse(
@@ -72,12 +154,22 @@ interface UserAPISpec {
             ApiResponse(
                 responseCode = "401",
                 description = "서비스 Access Token이 없거나 유효하지 않음",
-                content = [Content(schema = Schema(implementation = ErrorResponse::class))],
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [ExampleObject(value = UserSwaggerExamples.UNAUTHORIZED)],
+                    ),
+                ],
             ),
             ApiResponse(
                 responseCode = "404",
                 description = "이미 탈퇴했거나 로그인 사용자가 존재하지 않음",
-                content = [Content(schema = Schema(implementation = ErrorResponse::class))],
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [ExampleObject(value = UserSwaggerExamples.USER_NOT_FOUND)],
+                    ),
+                ],
             ),
         ],
     )
@@ -96,7 +188,6 @@ interface UserAPISpec {
             PROFILE_IMAGE_REQUIRED 상태의 사용자도 회원가입을 이어서 진행하기 위해 호출할 수 있습니다.
         """,
     )
-    @SecurityRequirement(name = "Authorization")
     @ApiResponses(
         value = [
             ApiResponse(
@@ -112,17 +203,32 @@ interface UserAPISpec {
             ApiResponse(
                 responseCode = "401",
                 description = "서비스 Access Token이 없거나 유효하지 않음",
-                content = [Content(schema = Schema(implementation = ErrorResponse::class))],
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [ExampleObject(value = UserSwaggerExamples.UNAUTHORIZED)],
+                    ),
+                ],
             ),
             ApiResponse(
                 responseCode = "404",
                 description = "로그인 사용자 없음",
-                content = [Content(schema = Schema(implementation = ErrorResponse::class))],
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [ExampleObject(value = UserSwaggerExamples.USER_NOT_FOUND)],
+                    ),
+                ],
             ),
             ApiResponse(
                 responseCode = "409",
                 description = "닉네임 설정 전 단계라 이미지를 생성할 수 없음",
-                content = [Content(schema = Schema(implementation = ErrorResponse::class))],
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [ExampleObject(value = UserSwaggerExamples.USER_INFO_REQUIRED)],
+                    ),
+                ],
             ),
             ApiResponse(
                 responseCode = "429",
@@ -137,7 +243,12 @@ interface UserAPISpec {
             ApiResponse(
                 responseCode = "502",
                 description = "OpenAI GPT Image 이미지 생성 실패 또는 빈 이미지 응답",
-                content = [Content(schema = Schema(implementation = ErrorResponse::class))],
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [ExampleObject(value = UserSwaggerExamples.PROFILE_IMAGE_GENERATION_FAILED)],
+                    ),
+                ],
             ),
         ],
     )
@@ -153,7 +264,6 @@ interface UserAPISpec {
             앱을 종료하거나 회원가입을 중단했다가 다시 로그인한 경우에도 기존 후보를 조회할 수 있습니다.
         """,
     )
-    @SecurityRequirement(name = "Authorization")
     @ApiResponses(
         value = [
             ApiResponse(
@@ -166,9 +276,36 @@ interface UserAPISpec {
                     ),
                 ],
             ),
-            ApiResponse(responseCode = "401", description = "인증 실패"),
-            ApiResponse(responseCode = "404", description = "로그인 사용자 없음"),
-            ApiResponse(responseCode = "409", description = "닉네임 설정 전 단계"),
+            ApiResponse(
+                responseCode = "401",
+                description = "인증 실패",
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [ExampleObject(value = UserSwaggerExamples.UNAUTHORIZED)],
+                    ),
+                ],
+            ),
+            ApiResponse(
+                responseCode = "404",
+                description = "로그인 사용자 없음",
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [ExampleObject(value = UserSwaggerExamples.USER_NOT_FOUND)],
+                    ),
+                ],
+            ),
+            ApiResponse(
+                responseCode = "409",
+                description = "닉네임 설정 전 단계",
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [ExampleObject(value = UserSwaggerExamples.USER_INFO_REQUIRED)],
+                    ),
+                ],
+            ),
         ],
     )
     fun getProfileImages(
@@ -184,7 +321,6 @@ interface UserAPISpec {
             이후 다른 후보를 다시 선택해도 생성 횟수는 차감되지 않으며 기존 후보 이미지도 삭제되지 않습니다.
         """,
     )
-    @SecurityRequirement(name = "Authorization")
     @ApiResponses(
         value = [
             ApiResponse(
@@ -197,8 +333,26 @@ interface UserAPISpec {
                     ),
                 ],
             ),
-            ApiResponse(responseCode = "400", description = "이미지 ID 형식 오류"),
-            ApiResponse(responseCode = "401", description = "인증 실패"),
+            ApiResponse(
+                responseCode = "400",
+                description = "이미지 ID 형식 오류",
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [ExampleObject(value = UserSwaggerExamples.BAD_REQUEST)],
+                    ),
+                ],
+            ),
+            ApiResponse(
+                responseCode = "401",
+                description = "인증 실패",
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [ExampleObject(value = UserSwaggerExamples.UNAUTHORIZED)],
+                    ),
+                ],
+            ),
             ApiResponse(
                 responseCode = "404",
                 description = "사용자 또는 본인이 생성한 후보 이미지가 존재하지 않음",
@@ -209,7 +363,16 @@ interface UserAPISpec {
                     ),
                 ],
             ),
-            ApiResponse(responseCode = "409", description = "닉네임 설정 전 단계"),
+            ApiResponse(
+                responseCode = "409",
+                description = "닉네임 설정 전 단계",
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [ExampleObject(value = UserSwaggerExamples.USER_INFO_REQUIRED)],
+                    ),
+                ],
+            ),
         ],
     )
     fun selectProfileImage(
@@ -222,6 +385,11 @@ interface UserAPISpec {
 }
 
 private object UserSwaggerExamples {
+    const val BAD_REQUEST = """{"code":40000,"errorMessage":"잘못된 요청입니다."}"""
+    const val UNAUTHORIZED = """{"code":40100,"errorMessage":"인증되지 않은 사용자입니다."}"""
+    const val USER_NOT_FOUND = """{"code":40400,"errorMessage":"해당 유저를 찾을 수 없습니다."}"""
+    const val USER_INFO_REQUIRED = """{"code":40902,"errorMessage":"추가 정보 입력이 필요합니다.(닉네임, 성별, 생년월일)"}"""
+    const val INTERNAL_SERVER_ERROR = """{"code":50000,"errorMessage":"서버에러입니다."}"""
     const val PROFILE_IMAGE_GENERATED =
         """{"candidate":{"profileImageId":12,"profileImageUrl":"https://cdn.example.com/user/profile/image/generated.png","selected":false},"generationCount":1,"remainingGenerationCount":2,"signupState":"PROFILE_IMAGE_REQUIRED"}"""
     const val PROFILE_IMAGE_CANDIDATES =
@@ -232,4 +400,6 @@ private object UserSwaggerExamples {
         """{"code":40401,"errorMessage":"선택할 수 있는 프로필 이미지를 찾을 수 없습니다."}"""
     const val GENERATION_LIMIT =
         """{"code":42900,"errorMessage":"프로필 이미지는 사용자당 최대 3번까지 생성할 수 있습니다."}"""
+    const val PROFILE_IMAGE_GENERATION_FAILED =
+        """{"code":50201,"errorMessage":"프로필 이미지 생성에 실패했습니다."}"""
 }

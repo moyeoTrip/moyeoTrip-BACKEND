@@ -8,7 +8,6 @@ import io.swagger.v3.oas.annotations.media.Schema
 import io.swagger.v3.oas.annotations.parameters.RequestBody
 import io.swagger.v3.oas.annotations.responses.ApiResponse
 import io.swagger.v3.oas.annotations.responses.ApiResponses
-import io.swagger.v3.oas.annotations.security.SecurityRequirement
 import io.swagger.v3.oas.annotations.security.SecurityRequirements
 import io.swagger.v3.oas.annotations.tags.Tag
 import kr.hanchae.moyeotrip.config.security.CustomUserDto
@@ -56,7 +55,12 @@ interface AuthAPISpec {
             ApiResponse(
                 responseCode = "500",
                 description = "고유한 닉네임 후보를 생성하지 못함",
-                content = [Content(schema = Schema(implementation = ErrorResponse::class))],
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [ExampleObject(value = AuthSwaggerExamples.INTERNAL_SERVER_ERROR)],
+                    ),
+                ],
             ),
         ],
     )
@@ -289,6 +293,7 @@ interface AuthAPISpec {
                         examples = [
                             ExampleObject(name = "요청 검증 실패", value = AuthSwaggerExamples.BAD_REQUEST),
                             ExampleObject(name = "닉네임 선택 오류", value = AuthSwaggerExamples.INVALID_NICKNAME_SELECTION),
+                            ExampleObject(name = "필수 약관 미동의", value = AuthSwaggerExamples.REQUIRED_TERMS_NOT_AGREED),
                         ],
                     ),
                 ],
@@ -346,7 +351,6 @@ interface AuthAPISpec {
             이미 다른 사용자에게 연결된 제공자 계정을 가져오는 요청은 거부합니다.
         """,
     )
-    @SecurityRequirement(name = "Authorization")
     @ApiResponses(
         value = [
             ApiResponse(
@@ -411,7 +415,6 @@ interface AuthAPISpec {
     ): LinkedProvidersResponse
 
     @Operation(summary = "연결된 로그인 제공자 조회", description = "현재 로그인 사용자에게 연결된 EMAIL, APPLE, KAKAO, GOOGLE 제공자 목록을 반환합니다.")
-    @SecurityRequirement(name = "Authorization")
     @ApiResponses(
         value = [
             ApiResponse(
@@ -511,6 +514,7 @@ private object AuthSwaggerExamples {
     const val INVALID_REFRESH_TOKEN = """{"code":40001,"errorMessage":"유효하지 않은 RefreshToken 입니다."}"""
     const val INVALID_PROVIDER = """{"code":40002,"errorMessage":"지원하지 않거나 유효하지 않은 Firebase 로그인 제공자입니다."}"""
     const val INVALID_NICKNAME_SELECTION = """{"code":40003,"errorMessage":"닉네임 선택이 만료되었거나 발급된 후보와 일치하지 않습니다."}"""
+    const val REQUIRED_TERMS_NOT_AGREED = """{"code":40012,"errorMessage":"필수 약관에 모두 동의해야 회원가입할 수 있습니다."}"""
     const val UNAUTHORIZED = """{"code":40100,"errorMessage":"인증되지 않은 사용자입니다."}"""
     const val INVALID_FIREBASE_TOKEN = """{"code":40101,"errorMessage":"유효하지 않은 Firebase ID 토큰입니다."}"""
     const val INVALID_KAKAO_APP = """{"code":40103,"errorMessage":"다른 카카오 애플리케이션에서 발급된 액세스 토큰입니다."}"""
@@ -522,4 +526,5 @@ private object AuthSwaggerExamples {
     const val IDENTITY_LINKED = """{"code":40903,"errorMessage":"이미 다른 사용자에게 연결된 로그인 수단입니다."}"""
     const val PROVIDER_LINKED = """{"code":40904,"errorMessage":"해당 로그인 제공자가 이미 연결되어 있습니다."}"""
     const val FIREBASE_ERROR = """{"code":50200,"errorMessage":"Firebase 인증 처리에 실패했습니다."}"""
+    const val INTERNAL_SERVER_ERROR = """{"code":50000,"errorMessage":"서버에러입니다."}"""
 }
