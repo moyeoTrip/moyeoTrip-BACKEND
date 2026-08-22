@@ -1,13 +1,14 @@
 package kr.hanchae.moyeotrip.repository
 
+import com.linecorp.kotlinjdsl.support.spring.data.jpa.repository.KotlinJdslJpqlExecutor
 import kr.hanchae.moyeotrip.entity.chat.ChatMessage
+import kr.hanchae.moyeotrip.entity.chat.ChatRoom
 import org.springframework.data.domain.Pageable
 import org.springframework.data.jpa.repository.JpaRepository
-import org.springframework.data.jpa.repository.Modifying
-import org.springframework.data.jpa.repository.Query
-import org.springframework.data.repository.query.Param
 
-interface ChatMessageRepository : JpaRepository<ChatMessage, Long> {
+interface ChatMessageRepository :
+    JpaRepository<ChatMessage, Long>,
+    ChatMessageCustomRepository {
     fun findByIdAndChatRoomId(
         id: Long,
         chatRoomId: Long,
@@ -30,10 +31,20 @@ interface ChatMessageRepository : JpaRepository<ChatMessage, Long> {
         chatRoomId: Long,
         lastReadMessageId: Long,
     ): Long
+}
 
-    @Modifying(flushAutomatically = true)
-    @Query("DELETE FROM ChatMessage message WHERE message.chatRoom.id = :roomId")
-    fun deleteAllByChatRoomId(
-        @Param("roomId") roomId: Long,
-    ): Int
+interface ChatMessageCustomRepository {
+    fun deleteAllByChatRoomId(roomId: Long): Int
+}
+
+class ChatMessageCustomRepositoryImpl(
+    private val kotlinJdslJpqlExecutor: KotlinJdslJpqlExecutor,
+) : ChatMessageCustomRepository {
+    override fun deleteAllByChatRoomId(roomId: Long): Int =
+        kotlinJdslJpqlExecutor.delete {
+            val message = entity(ChatMessage::class)
+
+            deleteFrom(message)
+                .where(message.path(ChatMessage::chatRoom).path(ChatRoom::id).eq(roomId))
+        }
 }

@@ -1,22 +1,36 @@
 package kr.hanchae.moyeotrip.repository
 
+import com.linecorp.kotlinjdsl.support.spring.data.jpa.repository.KotlinJdslJpqlExecutor
 import jakarta.persistence.LockModeType
 import kr.hanchae.moyeotrip.entity.user.User
 import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.data.jpa.repository.Lock
-import org.springframework.data.jpa.repository.Query
-import org.springframework.data.repository.query.Param
 import org.springframework.stereotype.Repository
 
 @Repository
-interface UserRepository : JpaRepository<User, Long> {
+interface UserRepository :
+    JpaRepository<User, Long>,
+    UserCustomRepository {
     fun existsByInformationNickname(nickName: String): Boolean
 
     fun findByEmail(email: String): User?
+}
 
+interface UserCustomRepository {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("SELECT user FROM User user WHERE user.id = :id")
-    fun findByIdForUpdate(
-        @Param("id") id: Long,
-    ): User?
+    fun findByIdForUpdate(id: Long): User?
+}
+
+class UserCustomRepositoryImpl(
+    private val kotlinJdslJpqlExecutor: KotlinJdslJpqlExecutor,
+) : UserCustomRepository {
+    override fun findByIdForUpdate(id: Long): User? =
+        kotlinJdslJpqlExecutor
+            .findAll {
+                val user = entity(User::class)
+
+                select(user)
+                    .from(user)
+                    .where(user.path(User::id).eq(id))
+            }.firstOrNull()
 }

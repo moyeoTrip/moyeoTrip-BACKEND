@@ -1,95 +1,23 @@
 package kr.hanchae.moyeotrip.repository
 
+import com.linecorp.kotlinjdsl.dsl.jpql.Jpql
+import com.linecorp.kotlinjdsl.querymodel.jpql.entity.Entity
+import com.linecorp.kotlinjdsl.support.spring.data.jpa.repository.KotlinJdslJpqlExecutor
 import jakarta.persistence.LockModeType
+import kr.hanchae.moyeotrip.entity.chat.ChatMessage
 import kr.hanchae.moyeotrip.entity.chat.ChatRoom
+import kr.hanchae.moyeotrip.entity.chat.ChatRoomParticipant
 import kr.hanchae.moyeotrip.entity.chat.ChatRoomStatus
+import kr.hanchae.moyeotrip.entity.tour.TravelCourse
+import kr.hanchae.moyeotrip.entity.user.User
 import org.springframework.data.domain.Pageable
 import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.data.jpa.repository.Lock
-import org.springframework.data.jpa.repository.Query
-import org.springframework.data.repository.query.Param
 import java.time.LocalDate
 
-interface ChatRoomRepository : JpaRepository<ChatRoom, Long> {
-    @Query(
-        """
-        SELECT room FROM ChatRoom room
-        WHERE room.status = RECRUITING
-          AND room.recruitmentDeadlineDate >= :today
-          AND (:keyword IS NULL OR LOWER(room.roomTitle) LIKE LOWER(CONCAT(CONCAT('%', :keyword), '%')))
-          AND room.host.id NOT IN :blockedUserIds
-          AND NOT EXISTS (
-              SELECT blockedParticipant.id FROM ChatRoomParticipant blockedParticipant
-              WHERE blockedParticipant.chatRoom = room
-                AND blockedParticipant.user.id IN :blockedUserIds
-          )
-          AND NOT EXISTS (
-              SELECT myParticipant.id FROM ChatRoomParticipant myParticipant
-              WHERE myParticipant.chatRoom = room
-                AND myParticipant.user.id = :userId
-          )
-        ORDER BY room.createdDateTime DESC, room.id DESC
-        """,
-    )
-    fun searchRooms(
-        @Param("userId") userId: Long,
-        @Param("blockedUserIds") blockedUserIds: Collection<Long>,
-        @Param("keyword") keyword: String?,
-        @Param("today") today: LocalDate,
-        pageable: Pageable,
-    ): List<ChatRoom>
-
-    @Query(
-        """
-        SELECT room FROM ChatRoom room
-        WHERE room.status = :status
-          AND room.startDate = :date
-          AND NOT EXISTS (
-              SELECT message.id FROM ChatMessage message
-              WHERE message.chatRoom = room AND message.systemEventKey = :eventKey
-          )
-        """,
-    )
-    fun findAllStartingRoomsWithoutSystemEvent(
-        @Param("status") status: ChatRoomStatus,
-        @Param("date") date: LocalDate,
-        @Param("eventKey") eventKey: String,
-    ): List<ChatRoom>
-
-    @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("SELECT room FROM ChatRoom room WHERE room.id = :id")
-    fun findByIdForUpdate(
-        @Param("id") id: Long,
-    ): ChatRoom?
-
-    @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("SELECT room FROM ChatRoom room WHERE room.status = :status AND room.recruitmentDeadlineDate < :date")
-    fun findAllExpiredRecruitingRoomsForUpdate(
-        @Param("status") status: ChatRoomStatus,
-        @Param("date") date: LocalDate,
-    ): List<ChatRoom>
-
-    @Lock(LockModeType.PESSIMISTIC_WRITE) // 해당 락은 트랜잭션 내에서만 유효하며, 다른 트랜잭션이 해당 레코드를 수정하려고 하면 대기하게 됩니다.
-    @Query("SELECT room FROM ChatRoom room WHERE room.deletionScheduledDate <= :date")
-    fun findAllDeletionDueRoomsForUpdate(
-        @Param("date") date: LocalDate,
-    ): List<ChatRoom>
-
-    @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query(
-        """
-        SELECT room FROM ChatRoom room
-        WHERE room.status = :status
-          AND room.deletionScheduledDate IS NULL
-          AND room.chatClosedDateTime IS NULL
-          AND ((room.endDate IS NULL AND room.startDate < :date) OR room.endDate < :date)
-        """,
-    )
-    fun findAllCompletedRoomsWithoutDeletionScheduleForUpdate(
-        @Param("status") status: ChatRoomStatus,
-        @Param("date") date: LocalDate,
-    ): List<ChatRoom>
-
+interface ChatRoomRepository :
+    JpaRepository<ChatRoom, Long>,
+    ChatRoomCustomRepository {
     fun findAllByStatusAndRecruitmentDeadlineDateBetween(
         status: ChatRoomStatus,
         startDate: LocalDate,
@@ -106,32 +34,230 @@ interface ChatRoomRepository : JpaRepository<ChatRoom, Long> {
         courseId: Long,
         status: ChatRoomStatus,
     ): Long
+}
 
-    @Query(
-        """
-        SELECT room FROM ChatRoom room
-        WHERE room.status = :status
-          AND ((room.endDate IS NULL AND room.startDate < :date) OR room.endDate < :date)
-        """,
-    )
-    fun findAllCompletedConfirmedRooms(
-        @Param("status") status: ChatRoomStatus,
-        @Param("date") date: LocalDate,
+interface ChatRoomCustomRepository {
+    fun searchRooms(
+        userId: Long,
+        blockedUserIds: Collection<Long>,
+        keyword: String?,
+        today: LocalDate,
+        pageable: Pageable,
     ): List<ChatRoom>
 
-    @Query(
-        """
-        SELECT COUNT(room) > 0 FROM ChatRoom room
-        WHERE room.host.id = :hostId
-          AND room.course.id = :courseId
-          AND room.status = :status
-          AND ((room.endDate IS NULL AND room.startDate < :date) OR room.endDate < :date)
-        """,
-    )
+    fun findAllStartingRoomsWithoutSystemEvent(
+        status: ChatRoomStatus,
+        date: LocalDate,
+        eventKey: String,
+    ): List<ChatRoom>
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    fun findByIdForUpdate(id: Long): ChatRoom?
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    fun findAllExpiredRecruitingRoomsForUpdate(
+        status: ChatRoomStatus,
+        date: LocalDate,
+    ): List<ChatRoom>
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    fun findAllDeletionDueRoomsForUpdate(date: LocalDate): List<ChatRoom>
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    fun findAllCompletedRoomsWithoutDeletionScheduleForUpdate(
+        status: ChatRoomStatus,
+        date: LocalDate,
+    ): List<ChatRoom>
+
+    fun findAllCompletedConfirmedRooms(
+        status: ChatRoomStatus,
+        date: LocalDate,
+    ): List<ChatRoom>
+
     fun existsCompletedHostRoom(
-        @Param("hostId") hostId: Long,
-        @Param("courseId") courseId: Long,
-        @Param("status") status: ChatRoomStatus,
-        @Param("date") date: LocalDate,
+        hostId: Long,
+        courseId: Long,
+        status: ChatRoomStatus,
+        date: LocalDate,
     ): Boolean
+}
+
+class ChatRoomCustomRepositoryImpl(
+    private val kotlinJdslJpqlExecutor: KotlinJdslJpqlExecutor,
+) : ChatRoomCustomRepository {
+    override fun searchRooms(
+        userId: Long,
+        blockedUserIds: Collection<Long>,
+        keyword: String?,
+        today: LocalDate,
+        pageable: Pageable,
+    ): List<ChatRoom> =
+        kotlinJdslJpqlExecutor
+            .findAll(pageable) {
+                val room = entity(ChatRoom::class)
+                val blockedParticipant = entity(ChatRoomParticipant::class)
+                val myParticipant = entity(ChatRoomParticipant::class)
+
+                select(room)
+                    .from(room)
+                    .whereAnd(
+                        room.path(ChatRoom::status).eq(ChatRoomStatus.RECRUITING),
+                        room.path(ChatRoom::recruitmentDeadlineDate).ge(today),
+                        keyword?.let { lower(room.path(ChatRoom::roomTitle)).like("%${it.lowercase()}%") },
+                        room.path(ChatRoom::host).path(User::id).notIn(blockedUserIds),
+                        notExists(
+                            select(blockedParticipant.path(ChatRoomParticipant::id))
+                                .from(blockedParticipant)
+                                .whereAnd(
+                                    blockedParticipant.path(ChatRoomParticipant::chatRoom).path(ChatRoom::id).eq(room.path(ChatRoom::id)),
+                                    blockedParticipant.path(ChatRoomParticipant::user).path(User::id).`in`(blockedUserIds),
+                                ).asSubquery(),
+                        ),
+                        notExists(
+                            select(myParticipant.path(ChatRoomParticipant::id))
+                                .from(myParticipant)
+                                .whereAnd(
+                                    myParticipant.path(ChatRoomParticipant::chatRoom).path(ChatRoom::id).eq(room.path(ChatRoom::id)),
+                                    myParticipant.path(ChatRoomParticipant::user).path(User::id).eq(userId),
+                                ).asSubquery(),
+                        ),
+                    ).orderBy(
+                        room.path(ChatRoom::createdDateTime).desc(),
+                        room.path(ChatRoom::id).desc(),
+                    )
+            }.filterNotNull()
+
+    override fun findAllStartingRoomsWithoutSystemEvent(
+        status: ChatRoomStatus,
+        date: LocalDate,
+        eventKey: String,
+    ): List<ChatRoom> =
+        kotlinJdslJpqlExecutor
+            .findAll {
+                val room = entity(ChatRoom::class)
+                val message = entity(ChatMessage::class)
+
+                select(room)
+                    .from(room)
+                    .whereAnd(
+                        room.path(ChatRoom::status).eq(status),
+                        room.path(ChatRoom::startDate).eq(date),
+                        notExists(
+                            select(message.path(ChatMessage::id))
+                                .from(message)
+                                .whereAnd(
+                                    message.path(ChatMessage::chatRoom).path(ChatRoom::id).eq(room.path(ChatRoom::id)),
+                                    message.path(ChatMessage::systemEventKey).eq(eventKey),
+                                ).asSubquery(),
+                        ),
+                    )
+            }.filterNotNull()
+
+    override fun findByIdForUpdate(id: Long): ChatRoom? =
+        kotlinJdslJpqlExecutor
+            .findAll {
+                val room = entity(ChatRoom::class)
+
+                select(room)
+                    .from(room)
+                    .where(room.path(ChatRoom::id).eq(id))
+            }.firstOrNull()
+
+    override fun findAllExpiredRecruitingRoomsForUpdate(
+        status: ChatRoomStatus,
+        date: LocalDate,
+    ): List<ChatRoom> =
+        kotlinJdslJpqlExecutor
+            .findAll {
+                val room = entity(ChatRoom::class)
+
+                select(room)
+                    .from(room)
+                    .whereAnd(
+                        room.path(ChatRoom::status).eq(status),
+                        room.path(ChatRoom::recruitmentDeadlineDate).lt(date),
+                    )
+            }.filterNotNull()
+
+    override fun findAllDeletionDueRoomsForUpdate(date: LocalDate): List<ChatRoom> =
+        kotlinJdslJpqlExecutor
+            .findAll {
+                val room = entity(ChatRoom::class)
+
+                select(room)
+                    .from(room)
+                    .where(room.path(ChatRoom::deletionScheduledDate).le(date))
+            }.filterNotNull()
+
+    override fun findAllCompletedRoomsWithoutDeletionScheduleForUpdate(
+        status: ChatRoomStatus,
+        date: LocalDate,
+    ): List<ChatRoom> =
+        kotlinJdslJpqlExecutor
+            .findAll {
+                val room = entity(ChatRoom::class)
+
+                select(room)
+                    .from(room)
+                    .whereAnd(
+                        room.path(ChatRoom::status).eq(status),
+                        room.path(ChatRoom::deletionScheduledDate).isNull(),
+                        room.path(ChatRoom::chatClosedDateTime).isNull(),
+                        completedTripPredicate(room, date),
+                    )
+            }.filterNotNull()
+
+    override fun findAllCompletedConfirmedRooms(
+        status: ChatRoomStatus,
+        date: LocalDate,
+    ): List<ChatRoom> =
+        kotlinJdslJpqlExecutor
+            .findAll {
+                val room = entity(ChatRoom::class)
+
+                select(room)
+                    .from(room)
+                    .whereAnd(
+                        room.path(ChatRoom::status).eq(status),
+                        completedTripPredicate(room, date),
+                    )
+            }.filterNotNull()
+
+    override fun existsCompletedHostRoom(
+        hostId: Long,
+        courseId: Long,
+        status: ChatRoomStatus,
+        date: LocalDate,
+    ): Boolean =
+        kotlinJdslJpqlExecutor
+            .findAll(limit = 1) {
+                val existsRoot = entity(User::class, "existsRoot")
+                val room = entity(ChatRoom::class, "room")
+
+                select(
+                    caseWhen(
+                        exists(
+                            select(room.path(ChatRoom::id))
+                                .from(room)
+                                .whereAnd(
+                                    room.path(ChatRoom::host).path(User::id).eq(hostId),
+                                    room.path(ChatRoom::course).path(TravelCourse::id).eq(courseId),
+                                    room.path(ChatRoom::status).eq(status),
+                                    completedTripPredicate(room, date),
+                                ).asSubquery(),
+                        ),
+                    ).then(true).`else`(false),
+                ).from(existsRoot)
+            }.firstOrNull() ?: false
+
+    private fun Jpql.completedTripPredicate(
+        room: Entity<ChatRoom>,
+        date: LocalDate,
+    ) = or(
+        and(
+            room.path(ChatRoom::endDate).isNull(),
+            room.path(ChatRoom::startDate).lt(date),
+        ),
+        room.path(ChatRoom::endDate).lt(date),
+    )
 }

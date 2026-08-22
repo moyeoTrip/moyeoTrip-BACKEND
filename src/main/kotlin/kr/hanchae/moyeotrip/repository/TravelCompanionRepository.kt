@@ -1,11 +1,13 @@
 package kr.hanchae.moyeotrip.repository
 
+import com.linecorp.kotlinjdsl.support.spring.data.jpa.repository.KotlinJdslJpqlExecutor
 import kr.hanchae.moyeotrip.entity.user.TravelCompanion
+import kr.hanchae.moyeotrip.entity.user.User
 import org.springframework.data.jpa.repository.JpaRepository
-import org.springframework.data.jpa.repository.Query
-import org.springframework.data.repository.query.Param
 
-interface TravelCompanionRepository : JpaRepository<TravelCompanion, Long> {
+interface TravelCompanionRepository :
+    JpaRepository<TravelCompanion, Long>,
+    TravelCompanionCustomRepository {
     fun existsByOwnerIdAndCompanionIdAndChatRoomId(
         ownerId: Long,
         companionId: Long,
@@ -24,15 +26,25 @@ interface TravelCompanionRepository : JpaRepository<TravelCompanion, Long> {
     ): TravelCompanion?
 
     fun findAllByOwnerId(ownerId: Long): List<TravelCompanion>
+}
 
-    @Query(
-        """
-        SELECT AVG(companion.mannerScore) FROM TravelCompanion companion
-        WHERE companion.companion.id = :userId
-          AND companion.mannerScore IS NOT NULL
-        """,
-    )
-    fun averageMannerScoreByCompanionId(
-        @Param("userId") userId: Long,
-    ): Double?
+interface TravelCompanionCustomRepository {
+    fun averageMannerScoreByCompanionId(userId: Long): Double?
+}
+
+class TravelCompanionCustomRepositoryImpl(
+    private val kotlinJdslJpqlExecutor: KotlinJdslJpqlExecutor,
+) : TravelCompanionCustomRepository {
+    override fun averageMannerScoreByCompanionId(userId: Long): Double? =
+        kotlinJdslJpqlExecutor
+            .findAll {
+                val companion = entity(TravelCompanion::class)
+
+                select(avg(companion.path(TravelCompanion::mannerScore)))
+                    .from(companion)
+                    .whereAnd(
+                        companion.path(TravelCompanion::companion).path(User::id).eq(userId),
+                        companion.path(TravelCompanion::mannerScore).isNotNull(),
+                    )
+            }.singleOrNull()
 }

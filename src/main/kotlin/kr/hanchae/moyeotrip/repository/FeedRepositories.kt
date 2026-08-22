@@ -1,70 +1,122 @@
 package kr.hanchae.moyeotrip.repository
 
+import com.linecorp.kotlinjdsl.support.spring.data.jpa.repository.KotlinJdslJpqlExecutor
 import kr.hanchae.moyeotrip.entity.feed.Feed
 import kr.hanchae.moyeotrip.entity.feed.FeedComment
 import kr.hanchae.moyeotrip.entity.feed.FeedLike
 import kr.hanchae.moyeotrip.entity.feed.FeedVisibility
+import kr.hanchae.moyeotrip.entity.user.Friendship
+import kr.hanchae.moyeotrip.entity.user.User
+import kr.hanchae.moyeotrip.entity.user.UserBlock
 import org.springframework.data.domain.Pageable
 import org.springframework.data.jpa.repository.JpaRepository
-import org.springframework.data.jpa.repository.Query
-import org.springframework.data.repository.query.Param
 
-interface FeedRepository : JpaRepository<Feed, Long> {
+interface FeedRepository :
+    JpaRepository<Feed, Long>,
+    FeedCustomRepository {
     fun existsByChatRoomIdAndAuthorId(
         chatRoomId: Long,
         authorId: Long,
     ): Boolean
+}
 
-    @Query(
-        value =
-            """
-        SELECT random_feeds.*
-        FROM (
-            SELECT feeds.*
-            FROM feeds
-            WHERE feeds.visibility = 'PUBLIC'
-              AND NOT EXISTS (
-                  SELECT 1
-                  FROM user_blocks blocks
-                  WHERE (blocks.blocker_id = :userId AND blocks.blocked_id = feeds.author_id)
-                     OR (blocks.blocker_id = feeds.author_id AND blocks.blocked_id = :userId)
-              )
-            ORDER BY DBMS_RANDOM.VALUE
-        ) random_feeds
-        WHERE ROWNUM <= :limit
-        """,
-        nativeQuery = true,
-    )
+interface FeedCustomRepository {
     fun findRandomDiscoverFeeds(
-        @Param("userId") userId: Long,
-        @Param("limit") limit: Int,
+        userId: Long,
+        limit: Int,
     ): List<Feed>
 
-    @Query(
-        """
-        SELECT feed FROM Feed feed
-        WHERE feed.id < :beforeId
-          AND EXISTS (
-              SELECT friendship.id FROM Friendship friendship
-              WHERE (friendship.firstUser.id = :userId AND friendship.secondUser.id = feed.author.id)
-                 OR (friendship.secondUser.id = :userId AND friendship.firstUser.id = feed.author.id)
-          )
-          AND feed.visibility IN (:publicVisibility, :friendsVisibility)
-          AND NOT EXISTS (
-              SELECT block.id FROM UserBlock block
-              WHERE (block.blocker.id = :userId AND block.blocked.id = feed.author.id)
-                 OR (block.blocker.id = feed.author.id AND block.blocked.id = :userId)
-          )
-        ORDER BY feed.id DESC
-        """,
-    )
     fun findFriendFeeds(
-        @Param("userId") userId: Long,
-        @Param("beforeId") beforeId: Long,
-        @Param("publicVisibility") publicVisibility: FeedVisibility,
-        @Param("friendsVisibility") friendsVisibility: FeedVisibility,
+        userId: Long,
+        beforeId: Long,
+        publicVisibility: FeedVisibility,
+        friendsVisibility: FeedVisibility,
         pageable: Pageable,
     ): List<Feed>
+}
+
+class FeedCustomRepositoryImpl(
+    private val kotlinJdslJpqlExecutor: KotlinJdslJpqlExecutor,
+) : FeedCustomRepository {
+    override fun findRandomDiscoverFeeds(
+        userId: Long,
+        limit: Int,
+    ): List<Feed> =
+        kotlinJdslJpqlExecutor
+            .findAll(limit = limit) {
+                val feed = entity(Feed::class)
+                val block = entity(UserBlock::class)
+
+                select(feed)
+                    .from(feed)
+                    .whereAnd(
+                        feed.path(Feed::visibility).eq(FeedVisibility.PUBLIC),
+                        notExists(
+                            select(block.path(UserBlock::id))
+                                .from(block)
+                                .whereOr(
+                                    and(
+                                        block.path(UserBlock::blocker).path(User::id).eq(userId),
+                                        block.path(UserBlock::blocked).path(User::id).eq(feed.path(Feed::author).path(User::id)),
+                                    ),
+                                    and(
+                                        block.path(UserBlock::blocker).path(User::id).eq(feed.path(Feed::author).path(User::id)),
+                                        block.path(UserBlock::blocked).path(User::id).eq(userId),
+                                    ),
+                                ).asSubquery(),
+                        ),
+                    ).orderBy(function(Double::class, "DBMS_RANDOM.VALUE").asc())
+            }.filterNotNull()
+
+    override fun findFriendFeeds(
+        userId: Long,
+        beforeId: Long,
+        publicVisibility: FeedVisibility,
+        friendsVisibility: FeedVisibility,
+        pageable: Pageable,
+    ): List<Feed> =
+        kotlinJdslJpqlExecutor
+            .findAll(pageable) {
+                val feed = entity(Feed::class)
+                val friendship = entity(Friendship::class)
+                val block = entity(UserBlock::class)
+                val authorId = feed.path(Feed::author).path(User::id)
+
+                select(feed)
+                    .from(feed)
+                    .whereAnd(
+                        feed.path(Feed::id).lt(beforeId),
+                        exists(
+                            select(friendship.path(Friendship::id))
+                                .from(friendship)
+                                .whereOr(
+                                    and(
+                                        friendship.path(Friendship::firstUser).path(User::id).eq(userId),
+                                        friendship.path(Friendship::secondUser).path(User::id).eq(authorId),
+                                    ),
+                                    and(
+                                        friendship.path(Friendship::secondUser).path(User::id).eq(userId),
+                                        friendship.path(Friendship::firstUser).path(User::id).eq(authorId),
+                                    ),
+                                ).asSubquery(),
+                        ),
+                        feed.path(Feed::visibility).`in`(publicVisibility, friendsVisibility),
+                        notExists(
+                            select(block.path(UserBlock::id))
+                                .from(block)
+                                .whereOr(
+                                    and(
+                                        block.path(UserBlock::blocker).path(User::id).eq(userId),
+                                        block.path(UserBlock::blocked).path(User::id).eq(authorId),
+                                    ),
+                                    and(
+                                        block.path(UserBlock::blocker).path(User::id).eq(authorId),
+                                        block.path(UserBlock::blocked).path(User::id).eq(userId),
+                                    ),
+                                ).asSubquery(),
+                        ),
+                    ).orderBy(feed.path(Feed::id).desc())
+            }.filterNotNull()
 }
 
 interface FeedLikeRepository : JpaRepository<FeedLike, Long> {

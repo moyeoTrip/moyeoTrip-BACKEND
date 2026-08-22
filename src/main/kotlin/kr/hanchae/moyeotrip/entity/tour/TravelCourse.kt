@@ -72,7 +72,7 @@ class TravelCourse(
         joinColumns = [JoinColumn(name = "travel_course_id")],
         inverseJoinColumns = [JoinColumn(name = "tag_id")],
     )
-    private val courseTags: MutableSet<TravelCourseTag> = linkedSetOf()
+    internal val courseTags: MutableSet<TravelCourseTag> = linkedSetOf()
 
     val places: List<TravelCoursePlace>
         get() = coursePlaces.toList()
