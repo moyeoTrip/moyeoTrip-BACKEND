@@ -28,20 +28,38 @@ class TravelCourse(
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "owner_id", updatable = false)
     val owner: User? = null,
-    @Column(nullable = false, length = 100)
-    val title: String,
-    @Column(length = 500)
-    val description: String? = null,
+    title: String,
+    description: String? = null,
     @Column(name = "duration_minutes")
     val durationMinutes: Long? = null,
     @Column(name = "trip_nights")
     val tripNights: Int? = null,
     @Column(name = "trip_days")
     val tripDays: Int? = null,
+    publicationStatus: CoursePublicationStatus =
+        if (type == TravelCourseType.PUBLIC) CoursePublicationStatus.PUBLISHED else CoursePublicationStatus.NOT_REQUESTED,
+    showCreatorNickname: Boolean = true,
 ) : BaseModifiableEntity() {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     var type: TravelCourseType = type
+        protected set
+
+    @Column(nullable = false, length = 100)
+    var title: String = title
+        protected set
+
+    @Column(length = 500)
+    var description: String? = description
+        protected set
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "publication_status", nullable = false, length = 20)
+    var publicationStatus: CoursePublicationStatus = publicationStatus
+        protected set
+
+    @Column(name = "show_creator_nickname", nullable = false, columnDefinition = "NUMBER(1)")
+    var showCreatorNickname: Boolean = showCreatorNickname
         protected set
 
     @OneToMany(mappedBy = "course", fetch = FetchType.LAZY)
@@ -83,9 +101,17 @@ class TravelCourse(
         coursePlaces.clear()
     }
 
-    fun publish() {
+    fun publish(
+        title: String = this.title,
+        description: String? = this.description,
+        showCreatorNickname: Boolean = true,
+    ) {
         check(type == TravelCourseType.CUSTOM) { "커스텀 코스만 공개할 수 있습니다." }
+        this.title = title
+        this.description = description
+        this.showCreatorNickname = showCreatorNickname
         type = TravelCourseType.PUBLIC
+        publicationStatus = CoursePublicationStatus.PUBLISHED
     }
 
     fun addTags(tags: Collection<TravelCourseTag>) {
@@ -97,4 +123,11 @@ class TravelCourse(
 enum class TravelCourseType {
     CUSTOM,
     PUBLIC,
+}
+
+enum class CoursePublicationStatus {
+    NOT_REQUESTED,
+    PENDING,
+    DECLINED,
+    PUBLISHED,
 }

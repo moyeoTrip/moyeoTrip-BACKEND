@@ -49,6 +49,7 @@ enum class NotificationType {
     MEETING_INFO_UPDATED,
     RECRUITMENT_DEADLINE,
     FRIEND_REQUEST,
+    FRIEND_ACCEPTED,
     FEED_LIKE,
     MARKETING,
 }

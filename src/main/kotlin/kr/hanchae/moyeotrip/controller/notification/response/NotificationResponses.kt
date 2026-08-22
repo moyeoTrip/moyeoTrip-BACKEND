@@ -18,6 +18,7 @@ data class NotificationResponse(
     val type: NotificationType,
     val content: String,
     val chatRoomId: Long?,
+    val referenceId: Long,
     val read: Boolean,
     val createdAt: LocalDateTime,
 )

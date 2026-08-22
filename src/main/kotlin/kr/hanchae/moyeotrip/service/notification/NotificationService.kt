@@ -6,11 +6,14 @@ import kr.hanchae.moyeotrip.controller.notification.response.NotificationRespons
 import kr.hanchae.moyeotrip.controller.notification.response.NotificationSettingResponse
 import kr.hanchae.moyeotrip.entity.chat.ChatMessage
 import kr.hanchae.moyeotrip.entity.chat.ChatRoom
+import kr.hanchae.moyeotrip.entity.feed.Feed
 import kr.hanchae.moyeotrip.entity.notification.ChatNotificationMode
 import kr.hanchae.moyeotrip.entity.notification.ChatRoomNotificationSetting
 import kr.hanchae.moyeotrip.entity.notification.Notification
 import kr.hanchae.moyeotrip.entity.notification.NotificationSetting
 import kr.hanchae.moyeotrip.entity.notification.NotificationType
+import kr.hanchae.moyeotrip.entity.user.FriendRequest
+import kr.hanchae.moyeotrip.entity.user.Friendship
 import kr.hanchae.moyeotrip.entity.user.User
 import kr.hanchae.moyeotrip.exception.BaseException
 import kr.hanchae.moyeotrip.exception.ErrorCode
@@ -227,11 +230,52 @@ class NotificationService(
         }
     }
 
+    fun notifyFeedLiked(
+        feed: Feed,
+        likedBy: User,
+    ) {
+        if (feed.author.id == likedBy.id) return
+        val nickname = likedBy.information?.nickname ?: "사용자 ${likedBy.id}"
+        save(
+            recipient = feed.author,
+            type = NotificationType.FEED_LIKE,
+            content = "$nickname 님이 내 피드를 좋아해요.",
+            chatRoomId = feed.chatRoom.id,
+            referenceId = feed.id,
+        )
+    }
+
+    fun notifyFriendRequested(request: FriendRequest) {
+        val nickname = request.requester.information?.nickname ?: "사용자 ${request.requester.id}"
+        save(
+            recipient = request.receiver,
+            type = NotificationType.FRIEND_REQUEST,
+            content = "$nickname 님이 친구 신청을 보냈어요.",
+            chatRoomId = null,
+            referenceId = request.id,
+        )
+    }
+
+    fun notifyFriendAccepted(
+        friendship: Friendship,
+        acceptedBy: User,
+    ) {
+        val requester = friendship.friendOf(acceptedBy.id)
+        val nickname = acceptedBy.information?.nickname ?: "사용자 ${acceptedBy.id}"
+        save(
+            recipient = requester,
+            type = NotificationType.FRIEND_ACCEPTED,
+            content = "$nickname 님과 친구가 되었어요.",
+            chatRoomId = null,
+            referenceId = friendship.id,
+        )
+    }
+
     private fun save(
         recipient: User,
         type: NotificationType,
         content: String,
-        chatRoomId: Long,
+        chatRoomId: Long?,
         referenceId: Long,
     ) {
         if (!allows(recipient, type)) return
@@ -309,7 +353,7 @@ private fun Notification.toResponse() =
         type = type,
         content = content,
         chatRoomId = chatRoomId,
+        referenceId = referenceId,
         read = readDateTime != null,
         createdAt = createdDateTime,
-        //TODO:친구 신청 및 피드 알림 추가
     )

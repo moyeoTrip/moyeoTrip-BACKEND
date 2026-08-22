@@ -7,8 +7,10 @@ import jakarta.validation.Valid
 import kr.hanchae.moyeotrip.controller.chat.response.PublicTravelCourseDetailResponse
 import kr.hanchae.moyeotrip.controller.chat.response.TravelCourseDetailResponse
 import kr.hanchae.moyeotrip.controller.chat.response.TravelCourseInformationResponse
+import kr.hanchae.moyeotrip.controller.tour.request.PublishTravelCourseRequest
 import kr.hanchae.moyeotrip.controller.tour.request.RateTravelCourseRequest
 import kr.hanchae.moyeotrip.controller.tour.request.UpdateTravelCourseRequest
+import kr.hanchae.moyeotrip.controller.tour.response.CoursePublicationResponse
 import kr.hanchae.moyeotrip.controller.tour.response.TravelCourseTagResponse
 import kr.hanchae.moyeotrip.service.chat.ChatRoomService
 import kr.hanchae.moyeotrip.service.tour.TravelCourseService
@@ -58,6 +60,14 @@ class TravelCourseController(
     @Operation(summary = "여행 코스 태그 전체 조회")
     @GetMapping("/tags")
     fun getCourseTags(): List<TravelCourseTagResponse> = travelCourseService.getCourseTags()
+
+    @Operation(summary = "완료한 커스텀 여행 코스 공개", description = "마이페이지의 지난 여행에서 받은 courseId로 호출합니다.")
+    @PostMapping("/{courseId}/publication")
+    fun publishCourse(
+        @LoginUserId userId: Long,
+        @PathVariable courseId: Long,
+        @Valid @RequestBody request: PublishTravelCourseRequest,
+    ): CoursePublicationResponse = travelCourseService.publishCourse(userId, courseId, request)
 
     @Operation(summary = "여행 코스 상세 조회")
     @GetMapping("/{courseId}")

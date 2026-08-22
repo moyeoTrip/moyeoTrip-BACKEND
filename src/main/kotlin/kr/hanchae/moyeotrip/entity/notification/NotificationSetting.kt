@@ -86,7 +86,7 @@ class NotificationSetting(
         when (type) {
             NotificationType.CHAT_MESSAGE_RECEIVED -> chatNotificationMode != ChatNotificationMode.NONE
             NotificationType.RECRUITMENT_DEADLINE -> recruitmentDeadlineEnabled
-            NotificationType.FRIEND_REQUEST, NotificationType.FEED_LIKE -> socialActivityEnabled
+            NotificationType.FRIEND_REQUEST, NotificationType.FRIEND_ACCEPTED, NotificationType.FEED_LIKE -> socialActivityEnabled
             NotificationType.MARKETING -> marketingEnabled
             NotificationType.CHAT_ROOM_CREATED,
             NotificationType.TRAVEL_COURSE_UPDATED,
