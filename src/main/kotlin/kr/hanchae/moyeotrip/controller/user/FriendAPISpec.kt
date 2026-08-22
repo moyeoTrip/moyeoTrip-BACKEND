@@ -26,11 +26,15 @@ interface FriendAPISpec {
             ),
             ApiResponse(
                 responseCode = "400",
-                description = "자기 자신에게 요청하거나 이미 친구인 사용자에게 요청함",
+                description = "자기 자신에게 요청하거나 친구 관계·반대 방향 요청이 이미 존재함",
                 content = [
                     Content(
                         schema = Schema(implementation = ErrorResponse::class),
-                        examples = [ExampleObject(value = FriendSwaggerExamples.BAD_REQUEST)],
+                        examples = [
+                            ExampleObject(name = "자기 자신에게 친구 요청", value = FriendSwaggerExamples.BAD_REQUEST),
+                            ExampleObject(name = "이미 친구인 사용자", value = FriendSwaggerExamples.ALREADY_FRIEND),
+                            ExampleObject(name = "상대방이 보낸 요청이 이미 있음", value = FriendSwaggerExamples.REVERSE_REQUEST_EXISTS),
+                        ],
                     ),
                 ],
             ),
@@ -46,11 +50,14 @@ interface FriendAPISpec {
             ),
             ApiResponse(
                 responseCode = "404",
-                description = "대상 사용자를 찾을 수 없음",
+                description = "로그인 사용자 또는 친구 요청 대상을 찾을 수 없음",
                 content = [
                     Content(
                         schema = Schema(implementation = ErrorResponse::class),
-                        examples = [ExampleObject(value = FriendSwaggerExamples.USER_NOT_FOUND)],
+                        examples = [
+                            ExampleObject(name = "로그인 사용자 없음", value = FriendSwaggerExamples.USER_NOT_FOUND),
+                            ExampleObject(name = "친구 요청 대상 없음", value = FriendSwaggerExamples.USER_NOT_FOUND),
+                        ],
                     ),
                 ],
             ),
@@ -58,6 +65,7 @@ interface FriendAPISpec {
     )
     fun sendRequest(
         @Parameter(hidden = true) loginUserId: Long,
+        @Parameter(description = "친구 요청을 받을 사용자 ID", example = "202")
         userId: Long,
     ): FriendRequestResponse
 
@@ -93,6 +101,7 @@ interface FriendAPISpec {
     )
     fun acceptRequest(
         @Parameter(hidden = true) userId: Long,
+        @Parameter(description = "수락할 받은 친구 요청 ID", example = "45")
         requestId: Long,
     ): FriendResponse
 
@@ -114,6 +123,7 @@ interface FriendAPISpec {
     )
     fun rejectRequest(
         @Parameter(hidden = true) userId: Long,
+        @Parameter(description = "거절할 받은 친구 요청 ID", example = "45")
         requestId: Long,
     )
 
@@ -135,6 +145,7 @@ interface FriendAPISpec {
     )
     fun cancelRequest(
         @Parameter(hidden = true) userId: Long,
+        @Parameter(description = "취소할 내가 보낸 친구 요청 ID", example = "45")
         requestId: Long,
     )
 
@@ -228,12 +239,15 @@ interface FriendAPISpec {
     )
     fun deleteFriend(
         @Parameter(hidden = true) userId: Long,
+        @Parameter(description = "친구 관계를 삭제할 상대 사용자 ID", example = "202")
         friendId: Long,
     )
 }
 
 private object FriendSwaggerExamples {
     const val BAD_REQUEST = """{"code":40000,"errorMessage":"잘못된 요청입니다."}"""
+    const val ALREADY_FRIEND = """{"code":40000,"errorMessage":"이미 친구인 사용자입니다."}"""
+    const val REVERSE_REQUEST_EXISTS = """{"code":40000,"errorMessage":"상대방이 보낸 친구 요청을 먼저 처리해 주세요."}"""
     const val UNAUTHORIZED = """{"code":40100,"errorMessage":"인증되지 않은 사용자입니다."}"""
     const val FORBIDDEN = """{"code":40300,"errorMessage":"접근 권한이 없습니다."}"""
     const val USER_NOT_FOUND = """{"code":40400,"errorMessage":"해당 유저를 찾을 수 없습니다."}"""

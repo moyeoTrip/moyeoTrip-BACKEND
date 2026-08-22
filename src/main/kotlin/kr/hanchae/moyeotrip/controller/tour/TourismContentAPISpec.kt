@@ -1,6 +1,7 @@
 package kr.hanchae.moyeotrip.controller.tour
 
 import io.swagger.v3.oas.annotations.Operation
+import io.swagger.v3.oas.annotations.Parameter
 import io.swagger.v3.oas.annotations.media.Content
 import io.swagger.v3.oas.annotations.media.ExampleObject
 import io.swagger.v3.oas.annotations.media.Schema
@@ -45,20 +46,23 @@ interface TourismContentAPISpec {
                 content = [Content(schema = Schema(implementation = TourismContentPageResponse::class))],
             ),
             ApiResponse(
-                responseCode = "404",
-                description = "유효하지 않은 콘텐츠 타입 또는 조회 조건",
+                responseCode = "400",
+                description = "코스 관광 콘텐츠는 여행지 목록에서 조회할 수 없음",
                 content = [
                     Content(
                         schema = Schema(implementation = ErrorResponse::class),
-                        examples = [ExampleObject(value = TourismContentSwaggerExamples.TOURISM_CONTENT_TYPE_NOT_FOUND)],
+                        examples = [ExampleObject(value = TourismContentSwaggerExamples.TOURISM_COURSE_CONTENT_NOT_LISTED)],
                     ),
                 ],
             ),
         ],
     )
     fun getContents(
+        @Parameter(description = "관광 콘텐츠 유형 ID. 생략하면 모든 일반 여행지를 조회합니다. 코스 유형은 허용하지 않습니다.", example = "12")
         contentTypeId: Int?,
+        @Parameter(description = "1부터 시작하는 페이지 번호. 기본값은 1입니다.", example = "1")
         page: Int,
+        @Parameter(description = "페이지당 항목 수. 1~100으로 보정되며 기본값은 20입니다.", example = "20")
         size: Int,
     ): TourismContentPageResponse
 
@@ -92,11 +96,14 @@ interface TourismContentAPISpec {
             ),
         ],
     )
-    fun getContent(contentId: Long): TourismContentDetailResponse
+    fun getContent(
+        @Parameter(description = "조회할 TourismContent ID", example = "126508")
+        contentId: Long,
+    ): TourismContentDetailResponse
 }
 
 private object TourismContentSwaggerExamples {
-    const val TOURISM_CONTENT_TYPE_NOT_FOUND = """{"code":40409,"errorMessage":"관광 콘텐츠 타입을 찾을 수 없습니다."}"""
+    const val TOURISM_COURSE_CONTENT_NOT_LISTED = """{"code":40005,"errorMessage":"코스 관광 콘텐츠는 여행지 목록에서 조회할 수 없습니다."}"""
     const val TOURISM_CONTENT_NOT_FOUND = """{"code":40408,"errorMessage":"관광 콘텐츠를 찾을 수 없습니다."}"""
     const val INTERNAL_SERVER_ERROR = """{"code":50000,"errorMessage":"서버에러입니다."}"""
 }

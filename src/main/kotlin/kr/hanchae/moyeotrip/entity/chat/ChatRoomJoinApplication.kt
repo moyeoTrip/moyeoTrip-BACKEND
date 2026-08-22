@@ -1,5 +1,6 @@
 package kr.hanchae.moyeotrip.entity.chat
 
+import io.swagger.v3.oas.annotations.media.Schema
 import jakarta.persistence.Column
 import jakarta.persistence.Entity
 import jakarta.persistence.EnumType
@@ -42,6 +43,10 @@ class ChatRoomJoinApplication(
     }
 }
 
+@Schema(
+    description = "참가 신청 상태. PENDING=호스트 승인 대기, WAITLISTED=승인됐지만 정원 초과로 대기열, REJECTED=호스트가 거절",
+    allowableValues = ["PENDING", "WAITLISTED", "REJECTED"],
+)
 enum class JoinApplicationStatus {
     PENDING,
     WAITLISTED,

@@ -74,11 +74,14 @@ interface UserAPISpec {
             ),
             ApiResponse(
                 responseCode = "400",
-                description = "입력값 또는 여행 스타일·관심 지역 ID가 유효하지 않음",
+                description = "입력값, 최소 가입 연령, 여행 스타일 또는 관심 지역 ID가 유효하지 않음",
                 content = [
                     Content(
                         schema = Schema(implementation = ErrorResponse::class),
-                        examples = [ExampleObject(value = UserSwaggerExamples.BAD_REQUEST)],
+                        examples = [
+                            ExampleObject(name = "요청 본문 또는 선택 ID 오류", value = UserSwaggerExamples.BAD_REQUEST),
+                            ExampleObject(name = "최소 가입 연령 미달", value = UserSwaggerExamples.MINIMUM_SIGNUP_AGE_NOT_MET),
+                        ],
                     ),
                 ],
             ),
@@ -359,7 +362,10 @@ interface UserAPISpec {
                 content = [
                     Content(
                         schema = Schema(implementation = ErrorResponse::class),
-                        examples = [ExampleObject(value = UserSwaggerExamples.PROFILE_IMAGE_NOT_FOUND)],
+                        examples = [
+                            ExampleObject(name = "로그인 사용자 없음", value = UserSwaggerExamples.USER_NOT_FOUND),
+                            ExampleObject(name = "선택할 프로필 이미지 후보 없음", value = UserSwaggerExamples.PROFILE_IMAGE_NOT_FOUND),
+                        ],
                     ),
                 ],
             ),
@@ -398,6 +404,7 @@ private object UserSwaggerExamples {
         """{"selectedImage":{"profileImageId":15,"profileImageUrl":"https://cdn.example.com/user/profile/image/second.png","selected":true},"signupState":"SIGNUP_COMPLETE"}"""
     const val PROFILE_IMAGE_NOT_FOUND =
         """{"code":40401,"errorMessage":"선택할 수 있는 프로필 이미지를 찾을 수 없습니다."}"""
+    const val MINIMUM_SIGNUP_AGE_NOT_MET = """{"code":40011,"errorMessage":"만 20세 이상만 가입할 수 있습니다."}"""
     const val GENERATION_LIMIT =
         """{"code":42900,"errorMessage":"프로필 이미지는 사용자당 최대 3번까지 생성할 수 있습니다."}"""
     const val PROFILE_IMAGE_GENERATION_FAILED =

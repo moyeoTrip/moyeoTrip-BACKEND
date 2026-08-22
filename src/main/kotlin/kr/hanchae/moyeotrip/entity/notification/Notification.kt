@@ -1,5 +1,6 @@
 package kr.hanchae.moyeotrip.entity.notification
 
+import io.swagger.v3.oas.annotations.media.Schema
 import jakarta.persistence.Column
 import jakarta.persistence.Entity
 import jakarta.persistence.EnumType
@@ -42,6 +43,16 @@ class Notification(
     }
 }
 
+@Schema(
+    description =
+        "알림 유형. CHAT_ROOM_CREATED=채팅방 생성, CHAT_ROOM_KICKED=강퇴, CHAT_MESSAGE_RECEIVED=채팅 메시지, " +
+            "TRAVEL_COURSE_UPDATED=여행 코스 변경, MEETING_INFO_UPDATED=집합 정보 변경, RECRUITMENT_DEADLINE=모집 마감 임박, " +
+            "FRIEND_REQUEST=친구 요청, FRIEND_ACCEPTED=친구 수락, FEED_LIKE=피드 좋아요, MARKETING=마케팅 알림",
+    allowableValues = [
+        "CHAT_ROOM_CREATED", "CHAT_ROOM_KICKED", "CHAT_MESSAGE_RECEIVED", "TRAVEL_COURSE_UPDATED", "MEETING_INFO_UPDATED",
+        "RECRUITMENT_DEADLINE", "FRIEND_REQUEST", "FRIEND_ACCEPTED", "FEED_LIKE", "MARKETING",
+    ],
+)
 enum class NotificationType {
     CHAT_ROOM_CREATED,
     CHAT_ROOM_KICKED,

@@ -146,10 +146,21 @@ interface ChatRoomAPISpec {
                     ),
                 ],
             ),
+            ApiResponse(
+                responseCode = "404",
+                description = "최근 메시지가 없는 활성 채팅방이 포함됨",
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [ExampleObject(value = ChatRoomSwaggerExamples.CHAT_ROOM_NO_MESSAGES)],
+                    ),
+                ],
+            ),
         ],
     )
     fun getMyRooms(
         @Parameter(hidden = true) userId: Long,
+        @Parameter(description = "목록 상태 필터. ALL=모든 방, RECRUITING=모집 중, CONFIRMED=여행 확정, ENDED=종료된 여행", example = "ALL")
         filter: MyChatRoomFilter,
     ): List<MyChatRoomSummaryResponse>
 
@@ -199,7 +210,9 @@ interface ChatRoomAPISpec {
     )
     fun searchRooms(
         @Parameter(hidden = true) userId: Long,
+        @Parameter(description = "채팅방 제목에 포함되어야 하는 검색어. 생략하면 전체를 조회합니다.", example = "주왕산")
         keyword: String?,
+        @Parameter(description = "반환할 최대 개수. 기본값은 20입니다.", example = "20")
         limit: Int,
     ): List<SearchChatRoomResponse>
 
@@ -225,6 +238,7 @@ interface ChatRoomAPISpec {
     )
     fun getRoom(
         @Parameter(hidden = true) userId: Long,
+        @Parameter(description = "조회할 채팅방 ID", example = "101")
         roomId: Long,
     ): ChatRoomDetailResponse
 
@@ -238,11 +252,14 @@ interface ChatRoomAPISpec {
             ),
             ApiResponse(
                 responseCode = "404",
-                description = "인증 또는 채팅방 확인 실패",
+                description = "로그인 사용자 또는 채팅방을 찾을 수 없음",
                 content = [
                     Content(
                         schema = Schema(implementation = ErrorResponse::class),
-                        examples = [ExampleObject(value = ChatRoomSwaggerExamples.CHAT_ROOM_NOT_FOUND)],
+                        examples = [
+                            ExampleObject(name = "로그인 사용자 없음", value = ChatRoomSwaggerExamples.USER_NOT_FOUND),
+                            ExampleObject(name = "채팅방 없음", value = ChatRoomSwaggerExamples.CHAT_ROOM_NOT_FOUND),
+                        ],
                     ),
                 ],
             ),
@@ -250,6 +267,7 @@ interface ChatRoomAPISpec {
     )
     fun toggleRoomFavorite(
         @Parameter(hidden = true) userId: Long,
+        @Parameter(description = "찜 상태를 바꿀 채팅방 ID", example = "101")
         roomId: Long,
     ): ChatRoomFavoriteResponse
 
@@ -271,7 +289,9 @@ interface ChatRoomAPISpec {
     )
     fun updateMeetingInfo(
         @Parameter(hidden = true) userId: Long,
+        @Parameter(description = "집합 정보를 수정할 채팅방 ID", example = "101")
         roomId: Long,
+        @RequestBody(description = "수정할 집합 좌표, 안내 문구 및 집합 일시", required = true)
         request: UpdateMeetingInfoRequest,
     ): ResponseEntity<Void>
 
@@ -284,12 +304,54 @@ interface ChatRoomAPISpec {
                 content = [Content(schema = Schema(implementation = JoinChatRoomResponse::class))],
             ),
             ApiResponse(
-                responseCode = "409",
-                description = "인증·입력 검증·참가 조건 또는 모집 상태 확인 실패",
+                responseCode = "400",
+                description = "요청 본문이 유효하지 않거나 수동 승인 모임에 전할 말을 입력하지 않음",
                 content = [
                     Content(
                         schema = Schema(implementation = ErrorResponse::class),
-                        examples = [ExampleObject(value = ChatRoomSwaggerExamples.CHAT_ROOM_ALREADY_JOINED)],
+                        examples = [
+                            ExampleObject(name = "요청 본문 검증 실패", value = ChatRoomSwaggerExamples.BAD_REQUEST),
+                            ExampleObject(
+                                name = "수동 승인 모임의 신청 메시지 누락",
+                                value = ChatRoomSwaggerExamples.CHAT_JOIN_APPLICATION_MESSAGE_REQUIRED,
+                            ),
+                        ],
+                    ),
+                ],
+            ),
+            ApiResponse(
+                responseCode = "404",
+                description = "로그인 사용자 또는 채팅방을 찾을 수 없음",
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [
+                            ExampleObject(name = "로그인 사용자 없음", value = ChatRoomSwaggerExamples.USER_NOT_FOUND),
+                            ExampleObject(name = "채팅방 없음", value = ChatRoomSwaggerExamples.CHAT_ROOM_NOT_FOUND),
+                        ],
+                    ),
+                ],
+            ),
+            ApiResponse(
+                responseCode = "403",
+                description = "성별 또는 만 나이 참가 조건을 충족하지 않음",
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [ExampleObject(value = ChatRoomSwaggerExamples.CHAT_ROOM_JOIN_CONDITION_NOT_MET)],
+                    ),
+                ],
+            ),
+            ApiResponse(
+                responseCode = "409",
+                description = "이미 참가·신청했거나 모집이 종료됨",
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [
+                            ExampleObject(name = "이미 참가 또는 신청함", value = ChatRoomSwaggerExamples.CHAT_ROOM_ALREADY_JOINED),
+                            ExampleObject(name = "모집 종료", value = ChatRoomSwaggerExamples.CHAT_ROOM_CLOSED),
+                        ],
                     ),
                 ],
             ),
@@ -297,7 +359,9 @@ interface ChatRoomAPISpec {
     )
     fun applyToJoin(
         @Parameter(hidden = true) userId: Long,
+        @Parameter(description = "참가 신청할 채팅방 ID", example = "101")
         roomId: Long,
+        @RequestBody(description = "수동 승인 모임에 전달할 선택적 소개 메시지", required = true)
         request: JoinChatRoomRequest,
     ): JoinChatRoomResponse
 
@@ -305,6 +369,19 @@ interface ChatRoomAPISpec {
     @ApiResponses(
         value = [
             ApiResponse(responseCode = "204", description = "채팅방 참가 신청 취소 성공. 응답 본문 없음"),
+            ApiResponse(
+                responseCode = "404",
+                description = "채팅방 또는 취소할 참가 신청을 찾을 수 없음",
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [
+                            ExampleObject(name = "채팅방 없음", value = ChatRoomSwaggerExamples.CHAT_ROOM_NOT_FOUND),
+                            ExampleObject(name = "참가 신청 없음", value = ChatRoomSwaggerExamples.CHAT_JOIN_APPLICATION_NOT_FOUND),
+                        ],
+                    ),
+                ],
+            ),
             ApiResponse(
                 responseCode = "409",
                 description = "인증·채팅방 또는 본인 참가 신청 확인 실패",
@@ -319,6 +396,7 @@ interface ChatRoomAPISpec {
     )
     fun cancelJoinApplication(
         @Parameter(hidden = true) userId: Long,
+        @Parameter(description = "참가 신청을 취소할 채팅방 ID", example = "101")
         roomId: Long,
     ): ResponseEntity<Void>
 
@@ -332,11 +410,14 @@ interface ChatRoomAPISpec {
             ),
             ApiResponse(
                 responseCode = "404",
-                description = "인증 또는 채팅방 확인 실패",
+                description = "로그인 사용자 또는 채팅방을 찾을 수 없음",
                 content = [
                     Content(
                         schema = Schema(implementation = ErrorResponse::class),
-                        examples = [ExampleObject(value = ChatRoomSwaggerExamples.CHAT_ROOM_NOT_FOUND)],
+                        examples = [
+                            ExampleObject(name = "로그인 사용자 없음", value = ChatRoomSwaggerExamples.USER_NOT_FOUND),
+                            ExampleObject(name = "채팅방 없음", value = ChatRoomSwaggerExamples.CHAT_ROOM_NOT_FOUND),
+                        ],
                     ),
                 ],
             ),
@@ -344,6 +425,7 @@ interface ChatRoomAPISpec {
     )
     fun getJoinEligibility(
         @Parameter(hidden = true) userId: Long,
+        @Parameter(description = "참가 가능 여부를 확인할 채팅방 ID", example = "101")
         roomId: Long,
     ): JoinEligibilityResponse
 
@@ -369,6 +451,7 @@ interface ChatRoomAPISpec {
     )
     fun getApplications(
         @Parameter(hidden = true) userId: Long,
+        @Parameter(description = "승인 대기 신청을 조회할 채팅방 ID", example = "101")
         roomId: Long,
     ): List<JoinApplicationResponse>
 
@@ -382,11 +465,14 @@ interface ChatRoomAPISpec {
             ),
             ApiResponse(
                 responseCode = "404",
-                description = "인증·권한·채팅방 또는 승인 대기 신청 확인 실패",
+                description = "채팅방 또는 승인 대기 참가 신청을 찾을 수 없음",
                 content = [
                     Content(
                         schema = Schema(implementation = ErrorResponse::class),
-                        examples = [ExampleObject(value = ChatRoomSwaggerExamples.CHAT_JOIN_APPLICATION_NOT_FOUND)],
+                        examples = [
+                            ExampleObject(name = "채팅방 없음", value = ChatRoomSwaggerExamples.CHAT_ROOM_NOT_FOUND),
+                            ExampleObject(name = "승인 대기 참가 신청 없음", value = ChatRoomSwaggerExamples.CHAT_JOIN_APPLICATION_NOT_FOUND),
+                        ],
                     ),
                 ],
             ),
@@ -394,7 +480,9 @@ interface ChatRoomAPISpec {
     )
     fun approveApplication(
         @Parameter(hidden = true) userId: Long,
+        @Parameter(description = "참가 신청이 등록된 채팅방 ID", example = "101")
         roomId: Long,
+        @Parameter(description = "승인할 참가 신청 ID", example = "45")
         applicationId: Long,
     ): ApproveJoinApplicationResponse
 
@@ -404,11 +492,14 @@ interface ChatRoomAPISpec {
             ApiResponse(responseCode = "204", description = "참가 신청 거절 성공. 응답 본문 없음"),
             ApiResponse(
                 responseCode = "404",
-                description = "인증·권한·채팅방 또는 승인 대기 신청 확인 실패",
+                description = "채팅방 또는 승인 대기 참가 신청을 찾을 수 없음",
                 content = [
                     Content(
                         schema = Schema(implementation = ErrorResponse::class),
-                        examples = [ExampleObject(value = ChatRoomSwaggerExamples.CHAT_JOIN_APPLICATION_NOT_FOUND)],
+                        examples = [
+                            ExampleObject(name = "채팅방 없음", value = ChatRoomSwaggerExamples.CHAT_ROOM_NOT_FOUND),
+                            ExampleObject(name = "승인 대기 참가 신청 없음", value = ChatRoomSwaggerExamples.CHAT_JOIN_APPLICATION_NOT_FOUND),
+                        ],
                     ),
                 ],
             ),
@@ -416,7 +507,9 @@ interface ChatRoomAPISpec {
     )
     fun rejectApplication(
         @Parameter(hidden = true) userId: Long,
+        @Parameter(description = "참가 신청이 등록된 채팅방 ID", example = "101")
         roomId: Long,
+        @Parameter(description = "거절할 참가 신청 ID", example = "45")
         applicationId: Long,
     ): ResponseEntity<Void>
 
@@ -442,6 +535,7 @@ interface ChatRoomAPISpec {
     )
     fun leaveRoom(
         @Parameter(hidden = true) userId: Long,
+        @Parameter(description = "나가거나 대기열을 취소할 채팅방 ID", example = "101")
         roomId: Long,
     ): LeaveChatRoomResponse
 
@@ -467,6 +561,7 @@ interface ChatRoomAPISpec {
     )
     fun getMembers(
         @Parameter(hidden = true) userId: Long,
+        @Parameter(description = "동행자 목록을 조회할 채팅방 ID", example = "101")
         roomId: Long,
     ): ChatRoomMemberListResponse
 
@@ -499,6 +594,29 @@ interface ChatRoomAPISpec {
         value = [
             ApiResponse(responseCode = "204", description = "멤버 강퇴 성공. 응답 본문 없음"),
             ApiResponse(
+                responseCode = "400",
+                description = "강퇴 사유가 비어 있음",
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [ExampleObject(value = ChatRoomSwaggerExamples.BAD_REQUEST)],
+                    ),
+                ],
+            ),
+            ApiResponse(
+                responseCode = "404",
+                description = "채팅방 또는 강퇴할 일반 멤버를 찾을 수 없음",
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [
+                            ExampleObject(name = "채팅방 없음", value = ChatRoomSwaggerExamples.CHAT_ROOM_NOT_FOUND),
+                            ExampleObject(name = "강퇴할 일반 멤버 없음", value = ChatRoomSwaggerExamples.CHAT_ROOM_MEMBER_NOT_FOUND),
+                        ],
+                    ),
+                ],
+            ),
+            ApiResponse(
                 responseCode = "403",
                 description = "인증·권한·입력 검증·채팅방 또는 멤버 확인 실패",
                 content = [
@@ -508,12 +626,25 @@ interface ChatRoomAPISpec {
                     ),
                 ],
             ),
+            ApiResponse(
+                responseCode = "409",
+                description = "종료된 방에서는 강퇴할 수 없음",
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [ExampleObject(value = ChatRoomSwaggerExamples.CHAT_DISABLED)],
+                    ),
+                ],
+            ),
         ],
     )
     fun kickMember(
         @Parameter(hidden = true) userId: Long,
+        @Parameter(description = "강퇴를 처리할 채팅방 ID", example = "101")
         roomId: Long,
+        @Parameter(description = "강퇴할 일반 참가자 사용자 ID. 호스트는 강퇴할 수 없습니다.", example = "202")
         memberId: Long,
+        @RequestBody(description = "필수 강퇴 사유", required = true)
         request: KickChatRoomMemberRequest,
     ): ResponseEntity<Void>
 
@@ -535,7 +666,9 @@ interface ChatRoomAPISpec {
     )
     fun changeStatus(
         @Parameter(hidden = true) userId: Long,
+        @Parameter(description = "여행 상태를 변경할 채팅방 ID", example = "101")
         roomId: Long,
+        @RequestBody(description = "변경할 채팅방 여행 상태", required = true)
         request: UpdateChatRoomStatusRequest,
     ): ResponseEntity<Void>
 
@@ -543,6 +676,16 @@ interface ChatRoomAPISpec {
     @ApiResponses(
         value = [
             ApiResponse(responseCode = "201", description = "채팅방 공지 등록 성공"),
+            ApiResponse(
+                responseCode = "400",
+                description = "공지 내용이 비어 있음",
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [ExampleObject(value = ChatRoomSwaggerExamples.BAD_REQUEST)],
+                    ),
+                ],
+            ),
             ApiResponse(
                 responseCode = "403",
                 description = "인증·권한·입력 검증 또는 채팅방 확인 실패",
@@ -553,11 +696,33 @@ interface ChatRoomAPISpec {
                     ),
                 ],
             ),
+            ApiResponse(
+                responseCode = "404",
+                description = "채팅방을 찾을 수 없음",
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [ExampleObject(value = ChatRoomSwaggerExamples.CHAT_ROOM_NOT_FOUND)],
+                    ),
+                ],
+            ),
+            ApiResponse(
+                responseCode = "409",
+                description = "종료된 방에는 공지를 등록할 수 없음",
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [ExampleObject(value = ChatRoomSwaggerExamples.CHAT_DISABLED)],
+                    ),
+                ],
+            ),
         ],
     )
     fun createNotice(
         @Parameter(hidden = true) userId: Long,
+        @Parameter(description = "공지를 등록할 채팅방 ID", example = "101")
         roomId: Long,
+        @RequestBody(description = "공지 내용과 상단 고정 여부", required = true)
         request: CreateChatRoomNoticeRequest,
     ): ResponseEntity<Void>
 
@@ -566,12 +731,45 @@ interface ChatRoomAPISpec {
         value = [
             ApiResponse(responseCode = "204", description = "채팅방 공지 변경 또는 삭제 성공. 응답 본문 없음"),
             ApiResponse(
-                responseCode = "404",
-                description = "인증·권한·입력 검증·채팅방 또는 공지 확인 실패",
+                responseCode = "400",
+                description = "공지 내용을 빈 문자열로 변경하려 함",
                 content = [
                     Content(
                         schema = Schema(implementation = ErrorResponse::class),
-                        examples = [ExampleObject(value = ChatRoomSwaggerExamples.CHAT_ROOM_NOTICE_NOT_FOUND)],
+                        examples = [ExampleObject(value = ChatRoomSwaggerExamples.BAD_REQUEST)],
+                    ),
+                ],
+            ),
+            ApiResponse(
+                responseCode = "404",
+                description = "채팅방 또는 공지를 찾을 수 없음",
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [
+                            ExampleObject(name = "채팅방 없음", value = ChatRoomSwaggerExamples.CHAT_ROOM_NOT_FOUND),
+                            ExampleObject(name = "공지 없음", value = ChatRoomSwaggerExamples.CHAT_ROOM_NOTICE_NOT_FOUND),
+                        ],
+                    ),
+                ],
+            ),
+            ApiResponse(
+                responseCode = "403",
+                description = "채팅방 호스트가 아님",
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [ExampleObject(value = ChatRoomSwaggerExamples.FORBIDDEN)],
+                    ),
+                ],
+            ),
+            ApiResponse(
+                responseCode = "409",
+                description = "종료된 방에는 공지를 변경하거나 삭제할 수 없음",
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [ExampleObject(value = ChatRoomSwaggerExamples.CHAT_DISABLED)],
                     ),
                 ],
             ),
@@ -579,8 +777,11 @@ interface ChatRoomAPISpec {
     )
     fun updateNotice(
         @Parameter(hidden = true) userId: Long,
+        @Parameter(description = "공지의 채팅방 ID", example = "101")
         roomId: Long,
+        @Parameter(description = "수정하거나 삭제할 공지 ID", example = "301")
         noticeId: Long,
+        @RequestBody(description = "변경할 공지 내용과 고정 여부. 둘 다 생략하면 삭제합니다.", required = true)
         request: UpdateChatRoomNoticeRequest,
     ): ResponseEntity<Void>
 
@@ -606,6 +807,7 @@ interface ChatRoomAPISpec {
     )
     fun getNoticeHistory(
         @Parameter(hidden = true) userId: Long,
+        @Parameter(description = "공지 이력을 조회할 채팅방 ID", example = "101")
         roomId: Long,
     ): ChatRoomNoticeHistoryResponse
 
@@ -619,7 +821,7 @@ interface ChatRoomAPISpec {
             ),
             ApiResponse(
                 responseCode = "400",
-                description = "인증·입력 검증·채팅방 또는 참가 상태 확인 실패",
+                description = "메시지 입력값이 유효하지 않음",
                 content = [
                     Content(
                         schema = Schema(implementation = ErrorResponse::class),
@@ -627,11 +829,43 @@ interface ChatRoomAPISpec {
                     ),
                 ],
             ),
+            ApiResponse(
+                responseCode = "403",
+                description = "채팅방 참가자가 아님",
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [ExampleObject(value = ChatRoomSwaggerExamples.CHAT_ROOM_NOT_PARTICIPANT)],
+                    ),
+                ],
+            ),
+            ApiResponse(
+                responseCode = "404",
+                description = "답글 대상 메시지를 찾을 수 없음",
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [ExampleObject(value = ChatRoomSwaggerExamples.RESOURCE_NOT_FOUND)],
+                    ),
+                ],
+            ),
+            ApiResponse(
+                responseCode = "409",
+                description = "종료된 방에서는 메시지를 보낼 수 없음",
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [ExampleObject(value = ChatRoomSwaggerExamples.CHAT_DISABLED)],
+                    ),
+                ],
+            ),
         ],
     )
     fun sendMessage(
         @Parameter(hidden = true) userId: Long,
+        @Parameter(description = "메시지를 보낼 채팅방 ID", example = "101")
         roomId: Long,
+        @RequestBody(description = "메시지 본문, 멘션 대상과 선택적 답글 대상", required = true)
         request: SendChatMessageRequest,
     ): ResponseEntity<ChatMessageResponse>
 
@@ -645,7 +879,7 @@ interface ChatRoomAPISpec {
             ),
             ApiResponse(
                 responseCode = "400",
-                description = "인증·파일 검증·채팅방 또는 참가 상태 확인 실패",
+                description = "빈 파일, 20MB 초과 파일 또는 이미지가 아닌 파일",
                 content = [
                     Content(
                         schema = Schema(implementation = ErrorResponse::class),
@@ -653,12 +887,35 @@ interface ChatRoomAPISpec {
                     ),
                 ],
             ),
+            ApiResponse(
+                responseCode = "403",
+                description = "채팅방 참가자가 아님",
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [ExampleObject(value = ChatRoomSwaggerExamples.CHAT_ROOM_NOT_PARTICIPANT)],
+                    ),
+                ],
+            ),
+            ApiResponse(
+                responseCode = "409",
+                description = "종료된 방에서는 사진을 공유할 수 없음",
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [ExampleObject(value = ChatRoomSwaggerExamples.CHAT_DISABLED)],
+                    ),
+                ],
+            ),
         ],
     )
     fun shareImage(
         @Parameter(hidden = true) userId: Long,
+        @Parameter(description = "사진을 공유할 채팅방 ID", example = "101")
         roomId: Long,
+        @Parameter(description = "20MB 이하 이미지 파일 한 장", required = true)
         image: MultipartFile,
+        @Parameter(description = "선택 사진 설명. 생략하면 사진으로 표시됩니다.", example = "주왕산 정상 풍경")
         caption: String?,
     ): ResponseEntity<ChatMessageResponse>
 
@@ -672,7 +929,7 @@ interface ChatRoomAPISpec {
             ),
             ApiResponse(
                 responseCode = "404",
-                description = "인증·입력 검증·여행지·채팅방 또는 참가 상태 확인 실패",
+                description = "공유할 관광 콘텐츠를 찾을 수 없음",
                 content = [
                     Content(
                         schema = Schema(implementation = ErrorResponse::class),
@@ -680,11 +937,33 @@ interface ChatRoomAPISpec {
                     ),
                 ],
             ),
+            ApiResponse(
+                responseCode = "403",
+                description = "채팅방 참가자가 아님",
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [ExampleObject(value = ChatRoomSwaggerExamples.CHAT_ROOM_NOT_PARTICIPANT)],
+                    ),
+                ],
+            ),
+            ApiResponse(
+                responseCode = "409",
+                description = "종료된 방에서는 장소를 공유할 수 없음",
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [ExampleObject(value = ChatRoomSwaggerExamples.CHAT_DISABLED)],
+                    ),
+                ],
+            ),
         ],
     )
     fun shareTourismContent(
         @Parameter(hidden = true) userId: Long,
+        @Parameter(description = "장소를 공유할 채팅방 ID", example = "101")
         roomId: Long,
+        @RequestBody(description = "공유할 TourismContent ID", required = true)
         request: ShareTourismContentRequest,
     ): ResponseEntity<ChatMessageResponse>
 
@@ -698,7 +977,7 @@ interface ChatRoomAPISpec {
             ),
             ApiResponse(
                 responseCode = "400",
-                description = "인증·채팅방·집합 위치 또는 참가 상태 확인 실패",
+                description = "채팅방에 공유할 집합 좌표가 등록되지 않음",
                 content = [
                     Content(
                         schema = Schema(implementation = ErrorResponse::class),
@@ -706,10 +985,31 @@ interface ChatRoomAPISpec {
                     ),
                 ],
             ),
+            ApiResponse(
+                responseCode = "403",
+                description = "채팅방 참가자가 아님",
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [ExampleObject(value = ChatRoomSwaggerExamples.CHAT_ROOM_NOT_PARTICIPANT)],
+                    ),
+                ],
+            ),
+            ApiResponse(
+                responseCode = "409",
+                description = "종료된 방에서는 위치를 공유할 수 없음",
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [ExampleObject(value = ChatRoomSwaggerExamples.CHAT_DISABLED)],
+                    ),
+                ],
+            ),
         ],
     )
     fun shareLocation(
         @Parameter(hidden = true) userId: Long,
+        @Parameter(description = "호스트 등록 집합 위치를 공유할 채팅방 ID", example = "101")
         roomId: Long,
     ): ResponseEntity<ChatMessageResponse>
 
@@ -723,7 +1023,7 @@ interface ChatRoomAPISpec {
             ),
             ApiResponse(
                 responseCode = "400",
-                description = "인증·입력 검증·채팅방 또는 참가 상태 확인 실패",
+                description = "투표 입력값이 유효하지 않거나 중복 선택지가 있음",
                 content = [
                     Content(
                         schema = Schema(implementation = ErrorResponse::class),
@@ -731,11 +1031,33 @@ interface ChatRoomAPISpec {
                     ),
                 ],
             ),
+            ApiResponse(
+                responseCode = "403",
+                description = "채팅방 참가자가 아님",
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [ExampleObject(value = ChatRoomSwaggerExamples.CHAT_ROOM_NOT_PARTICIPANT)],
+                    ),
+                ],
+            ),
+            ApiResponse(
+                responseCode = "409",
+                description = "종료된 방에서는 투표를 열 수 없음",
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [ExampleObject(value = ChatRoomSwaggerExamples.CHAT_DISABLED)],
+                    ),
+                ],
+            ),
         ],
     )
     fun createPoll(
         @Parameter(hidden = true) userId: Long,
+        @Parameter(description = "투표를 열 채팅방 ID", example = "101")
         roomId: Long,
+        @RequestBody(description = "투표 질문, 2~5개 선택지, 익명 여부", required = true)
         request: CreateChatPollRequest,
     ): ResponseEntity<ChatMessageResponse>
 
@@ -749,11 +1071,34 @@ interface ChatRoomAPISpec {
             ),
             ApiResponse(
                 responseCode = "404",
-                description = "인증·채팅방·투표·선택지 또는 참가 상태 확인 실패",
+                description = "투표 메시지 또는 해당 투표의 선택지를 찾을 수 없음",
                 content = [
                     Content(
                         schema = Schema(implementation = ErrorResponse::class),
-                        examples = [ExampleObject(value = ChatRoomSwaggerExamples.RESOURCE_NOT_FOUND)],
+                        examples = [
+                            ExampleObject(name = "투표 메시지 없음", value = ChatRoomSwaggerExamples.POLL_NOT_FOUND),
+                            ExampleObject(name = "투표 선택지 없음", value = ChatRoomSwaggerExamples.POLL_OPTION_NOT_FOUND),
+                        ],
+                    ),
+                ],
+            ),
+            ApiResponse(
+                responseCode = "403",
+                description = "채팅방 참가자가 아님",
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [ExampleObject(value = ChatRoomSwaggerExamples.CHAT_ROOM_NOT_PARTICIPANT)],
+                    ),
+                ],
+            ),
+            ApiResponse(
+                responseCode = "409",
+                description = "종료된 방에서는 투표할 수 없음",
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [ExampleObject(value = ChatRoomSwaggerExamples.CHAT_DISABLED)],
                     ),
                 ],
             ),
@@ -761,8 +1106,11 @@ interface ChatRoomAPISpec {
     )
     fun votePoll(
         @Parameter(hidden = true) userId: Long,
+        @Parameter(description = "투표가 있는 채팅방 ID", example = "101")
         roomId: Long,
+        @Parameter(description = "POLL 타입 투표 메시지 ID", example = "501")
         messageId: Long,
+        @Parameter(description = "선택할 해당 투표의 선택지 ID", example = "1001")
         optionId: Long,
     ): ChatMessageResponse
 
@@ -776,7 +1124,7 @@ interface ChatRoomAPISpec {
             ),
             ApiResponse(
                 responseCode = "404",
-                description = "인증·채팅방·투표 또는 참가 상태 확인 실패",
+                description = "투표 메시지를 찾을 수 없음",
                 content = [
                     Content(
                         schema = Schema(implementation = ErrorResponse::class),
@@ -784,11 +1132,33 @@ interface ChatRoomAPISpec {
                     ),
                 ],
             ),
+            ApiResponse(
+                responseCode = "403",
+                description = "채팅방 참가자가 아님",
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [ExampleObject(value = ChatRoomSwaggerExamples.CHAT_ROOM_NOT_PARTICIPANT)],
+                    ),
+                ],
+            ),
+            ApiResponse(
+                responseCode = "409",
+                description = "종료된 방에서는 투표를 취소할 수 없음",
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [ExampleObject(value = ChatRoomSwaggerExamples.CHAT_DISABLED)],
+                    ),
+                ],
+            ),
         ],
     )
     fun cancelPollVote(
         @Parameter(hidden = true) userId: Long,
+        @Parameter(description = "투표가 있는 채팅방 ID", example = "101")
         roomId: Long,
+        @Parameter(description = "POLL 타입 투표 메시지 ID", example = "501")
         messageId: Long,
     ): ChatMessageResponse
 
@@ -802,7 +1172,7 @@ interface ChatRoomAPISpec {
             ),
             ApiResponse(
                 responseCode = "403",
-                description = "인증·입력 검증·채팅방 또는 참가 상태 확인 실패",
+                description = "채팅방 참가자가 아님",
                 content = [
                     Content(
                         schema = Schema(implementation = ErrorResponse::class),
@@ -810,11 +1180,23 @@ interface ChatRoomAPISpec {
                     ),
                 ],
             ),
+            ApiResponse(
+                responseCode = "409",
+                description = "종료된 방에서는 정산 메모를 공유할 수 없음",
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [ExampleObject(value = ChatRoomSwaggerExamples.CHAT_DISABLED)],
+                    ),
+                ],
+            ),
         ],
     )
     fun shareSettlementMemo(
         @Parameter(hidden = true) userId: Long,
+        @Parameter(description = "정산 메모를 공유할 채팅방 ID", example = "101")
         roomId: Long,
+        @RequestBody(description = "송금 기능 없는 정산 메모 본문", required = true)
         request: CreateSettlementMemoRequest,
     ): ResponseEntity<ChatMessageResponse>
 
@@ -840,8 +1222,11 @@ interface ChatRoomAPISpec {
     )
     fun getMessages(
         @Parameter(hidden = true) userId: Long,
+        @Parameter(description = "메시지를 조회할 채팅방 ID", example = "101")
         roomId: Long,
+        @Parameter(description = "이 ID보다 오래된 메시지부터 조회하는 커서. 첫 페이지는 생략합니다.", example = "501")
         beforeMessageId: Long?,
+        @Parameter(description = "반환할 메시지 수. 1~100으로 보정되며 기본값은 50입니다.", example = "50")
         limit: Int,
     ): ChatMessagePageResponse
 
@@ -867,6 +1252,7 @@ interface ChatRoomAPISpec {
     )
     fun getCurrentRoadmap(
         @Parameter(hidden = true) userId: Long,
+        @Parameter(description = "현재 여행 로드맵을 조회할 채팅방 ID", example = "101")
         roomId: Long,
     ): CurrentTravelRoadmapResponse
 }
@@ -876,17 +1262,25 @@ private object ChatRoomSwaggerExamples {
     const val INVALID_TRAVEL_COURSE_SCHEDULE = """{"code":40007,"errorMessage":"여행 일차마다 방문지를 최소 2개 편성해야 합니다."}"""
     const val INVALID_TRIP_SCHEDULE = """{"code":40008,"errorMessage":"당일치기는 종료 날짜 없이 시간을, 1박 이상은 종료 날짜만 입력해야 합니다."}"""
     const val INVALID_CHAT_ROOM_AGE_RESTRICTION = """{"code":40009,"errorMessage":"최소 나이는 최대 나이보다 작거나 같아야 합니다."}"""
+    const val CHAT_JOIN_APPLICATION_MESSAGE_REQUIRED = """{"code":40010,"errorMessage":"수동 승인 모임은 호스트에게 전할 말을 입력해야 합니다."}"""
     const val UNAUTHORIZED = """{"code":40100,"errorMessage":"인증되지 않은 사용자입니다."}"""
     const val FORBIDDEN = """{"code":40300,"errorMessage":"접근 권한이 없습니다."}"""
+    const val CHAT_ROOM_JOIN_CONDITION_NOT_MET = """{"code":40302,"errorMessage":"모임의 성별 또는 나이 조건을 충족하지 않습니다."}"""
     const val USER_NOT_FOUND = """{"code":40400,"errorMessage":"해당 유저를 찾을 수 없습니다."}"""
     const val TRAVEL_COURSE_NOT_FOUND = """{"code":40403,"errorMessage":"공개된 여행 코스를 찾을 수 없습니다."}"""
     const val CHAT_ROOM_NOT_FOUND = """{"code":40405,"errorMessage":"채팅방을 찾을 수 없습니다."}"""
+    const val CHAT_ROOM_MEMBER_NOT_FOUND = """{"code":40406,"errorMessage":"채팅방 멤버를 찾을 수 없습니다."}"""
+    const val CHAT_ROOM_NO_MESSAGES = """{"code":40407,"errorMessage":"채팅방에 메시지가 없습니다."}"""
     const val CHAT_JOIN_APPLICATION_NOT_FOUND = """{"code":40404,"errorMessage":"참가 신청을 찾을 수 없습니다."}"""
     const val CHAT_ROOM_ALREADY_JOINED = """{"code":40906,"errorMessage":"이미 참가했거나 대기 중인 채팅방입니다."}"""
+    const val CHAT_ROOM_CLOSED = """{"code":40905,"errorMessage":"모집이 종료된 채팅방입니다."}"""
     const val CHAT_ROOM_NOT_JOINED = """{"code":40907,"errorMessage":"참가하거나 대기 중인 채팅방이 아닙니다."}"""
     const val INVALID_CHAT_ROOM_STATUS = """{"code":40910,"errorMessage":"변경할 수 없는 여행 상태입니다."}"""
+    const val CHAT_DISABLED = """{"code":40911,"errorMessage":"종료된 방에서는 채팅할 수 없습니다."}"""
     const val CHAT_ROOM_NOT_PARTICIPANT = """{"code":40301,"errorMessage":"사용자가 채팅방에 참여하고 있지 않습니다."}"""
     const val RESOURCE_NOT_FOUND = """{"code":40402,"errorMessage":"요청한 리소스를 찾을 수 없습니다."}"""
+    const val POLL_NOT_FOUND = """{"code":40402,"errorMessage":"요청한 리소스를 찾을 수 없습니다."}"""
+    const val POLL_OPTION_NOT_FOUND = """{"code":40402,"errorMessage":"요청한 리소스를 찾을 수 없습니다."}"""
     const val TOURISM_CONTENT_NOT_FOUND = """{"code":40408,"errorMessage":"관광 콘텐츠를 찾을 수 없습니다."}"""
     const val CHAT_ROOM_NOTICE_NOT_FOUND = """{"code":40411,"errorMessage":"채팅방 공지를 찾을 수 없습니다."}"""
     const val TRAVEL_COURSE_TAG_NOT_FOUND = """{"code":40412,"errorMessage":"여행 코스 태그를 찾을 수 없습니다."}"""

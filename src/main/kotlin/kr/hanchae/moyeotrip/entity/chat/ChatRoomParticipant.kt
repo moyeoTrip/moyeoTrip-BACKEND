@@ -1,5 +1,6 @@
 package kr.hanchae.moyeotrip.entity.chat
 
+import io.swagger.v3.oas.annotations.media.Schema
 import jakarta.persistence.Column
 import jakarta.persistence.Entity
 import jakarta.persistence.EnumType
@@ -41,6 +42,10 @@ class ChatRoomParticipant(
     }
 }
 
+@Schema(
+    description = "채팅방 참가자 역할. HOST=채팅방 생성자·관리자, MEMBER=일반 참가자",
+    allowableValues = ["HOST", "MEMBER"],
+)
 enum class ChatParticipantRole {
     HOST,
     MEMBER,

@@ -1,5 +1,6 @@
 package kr.hanchae.moyeotrip.entity.terms
 
+import io.swagger.v3.oas.annotations.media.Schema
 import jakarta.persistence.Column
 import jakarta.persistence.Entity
 import jakarta.persistence.EnumType
@@ -39,6 +40,10 @@ class AgreementTerm(
     val active: Boolean = true,
 ) : BaseTimeEntity()
 
+@Schema(
+    description = "회원가입 약관 유형. SERVICE=서비스 이용약관, PRIVACY_COLLECTION=개인정보 수집·이용 동의, MARKETING=마케팅 정보 수신 동의",
+    allowableValues = ["SERVICE", "PRIVACY_COLLECTION", "MARKETING"],
+)
 enum class AgreementTermCode {
     SERVICE,
     PRIVACY_COLLECTION,

@@ -41,8 +41,11 @@ interface NotificationAPISpec {
     )
     fun getNotifications(
         @Parameter(hidden = true) userId: Long,
+        @Parameter(description = "이 ID보다 오래된 알림부터 조회하는 커서. 첫 페이지는 생략합니다.", example = "100")
         lastId: Long?,
+        @Parameter(description = "반환할 알림 수. 기본값은 20입니다.", example = "20")
         size: Int,
+        @Parameter(description = "true면 읽지 않은 알림만 반환합니다.", example = "false")
         unreadOnly: Boolean,
     ): NotificationPageResponse
 
@@ -70,7 +73,10 @@ interface NotificationAPISpec {
                 content = [
                     Content(
                         schema = Schema(implementation = ErrorResponse::class),
-                        examples = [ExampleObject(value = NotificationSwaggerExamples.NOTIFICATION_NOT_FOUND)],
+                        examples = [
+                            ExampleObject(name = "강퇴 알림 없음", value = NotificationSwaggerExamples.NOTIFICATION_NOT_FOUND),
+                            ExampleObject(name = "강퇴 이력 없음", value = NotificationSwaggerExamples.NOTIFICATION_NOT_FOUND),
+                        ],
                     ),
                 ],
             ),
@@ -78,6 +84,7 @@ interface NotificationAPISpec {
     )
     fun getKickHistory(
         @Parameter(hidden = true) userId: Long,
+        @Parameter(description = "강퇴 알림 상세를 조회할 알림 ID", example = "100")
         notificationId: Long,
     ): ChatRoomKickHistoryResponse
 
@@ -99,6 +106,7 @@ interface NotificationAPISpec {
     )
     fun markRead(
         @Parameter(hidden = true) userId: Long,
+        @Parameter(description = "읽음 처리할 내 알림 ID", example = "100")
         notificationId: Long,
     ): ResponseEntity<Void>
 
@@ -168,6 +176,7 @@ interface NotificationAPISpec {
     )
     fun updateSetting(
         @Parameter(hidden = true) userId: Long,
+        @Parameter(description = "채팅·소셜·마케팅 알림과 방해 금지 시간·요일 설정", required = true)
         request: UpdateNotificationSettingRequest,
     ): NotificationSettingResponse
 
@@ -193,6 +202,7 @@ interface NotificationAPISpec {
     )
     fun getChatRoomSetting(
         @Parameter(hidden = true) userId: Long,
+        @Parameter(description = "알림 설정을 조회할 참여 중 채팅방 ID", example = "101")
         roomId: Long,
     ): ChatRoomNotificationSettingResponse
 
@@ -218,7 +228,9 @@ interface NotificationAPISpec {
     )
     fun updateChatRoomSetting(
         @Parameter(hidden = true) userId: Long,
+        @Parameter(description = "알림을 켜거나 끌 참여 중 채팅방 ID", example = "101")
         roomId: Long,
+        @Parameter(description = "해당 채팅방 알림 수신 여부", required = true)
         request: UpdateChatRoomNotificationSettingRequest,
     ): ChatRoomNotificationSettingResponse
 }

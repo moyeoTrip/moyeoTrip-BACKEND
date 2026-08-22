@@ -100,11 +100,14 @@ interface AuthAPISpec {
             ),
             ApiResponse(
                 responseCode = "401",
-                description = "유효하지 않은 카카오 토큰 또는 다른 카카오 앱에서 발급된 토큰",
+                description = "카카오 토큰 조회에 실패했거나 다른 카카오 앱에서 발급된 토큰",
                 content = [
                     Content(
                         schema = Schema(implementation = ErrorResponse::class),
-                        examples = [ExampleObject(value = AuthSwaggerExamples.INVALID_KAKAO_APP)],
+                        examples = [
+                            ExampleObject(name = "유효하지 않은 카카오 access token", value = AuthSwaggerExamples.KAKAO_CLIENT_EXCEPTION),
+                            ExampleObject(name = "다른 카카오 앱 토큰", value = AuthSwaggerExamples.INVALID_KAKAO_APP),
+                        ],
                     ),
                 ],
             ),
@@ -155,17 +158,24 @@ interface AuthAPISpec {
                 content = [
                     Content(
                         schema = Schema(implementation = ErrorResponse::class),
-                        examples = [ExampleObject(value = AuthSwaggerExamples.INVALID_KAKAO_REDIRECT_URI)],
+                        examples = [
+                            ExampleObject(name = "요청 본문 검증 실패", value = AuthSwaggerExamples.BAD_REQUEST),
+                            ExampleObject(name = "허용되지 않은 redirect URI", value = AuthSwaggerExamples.INVALID_KAKAO_REDIRECT_URI),
+                        ],
                     ),
                 ],
             ),
             ApiResponse(
                 responseCode = "401",
-                description = "유효하지 않거나 만료된 인가 코드, 또는 다른 Kakao 앱에서 발급된 토큰",
+                description = "유효하지 않은 카카오 access token, 만료된 인가 코드 또는 다른 Kakao 앱 토큰",
                 content = [
                     Content(
                         schema = Schema(implementation = ErrorResponse::class),
-                        examples = [ExampleObject(value = AuthSwaggerExamples.INVALID_KAKAO_AUTHORIZATION_CODE)],
+                        examples = [
+                            ExampleObject(name = "유효하지 않은 카카오 access token", value = AuthSwaggerExamples.KAKAO_CLIENT_EXCEPTION),
+                            ExampleObject(name = "유효하지 않거나 만료된 인가 코드", value = AuthSwaggerExamples.INVALID_KAKAO_AUTHORIZATION_CODE),
+                            ExampleObject(name = "다른 카카오 앱 토큰", value = AuthSwaggerExamples.INVALID_KAKAO_APP),
+                        ],
                     ),
                 ],
             ),
@@ -230,11 +240,14 @@ interface AuthAPISpec {
             ),
             ApiResponse(
                 responseCode = "400",
-                description = "지원하지 않는 Firebase 인증 제공자",
+                description = "요청 본문 검증 또는 지원하지 않는 Firebase 인증 제공자",
                 content = [
                     Content(
                         schema = Schema(implementation = ErrorResponse::class),
-                        examples = [ExampleObject(value = AuthSwaggerExamples.INVALID_PROVIDER)],
+                        examples = [
+                            ExampleObject(name = "요청 본문 검증 실패", value = AuthSwaggerExamples.BAD_REQUEST),
+                            ExampleObject(name = "지원하지 않는 Firebase 제공자", value = AuthSwaggerExamples.INVALID_PROVIDER),
+                        ],
                     ),
                 ],
             ),
@@ -286,13 +299,16 @@ interface AuthAPISpec {
                 ],
             ), ApiResponse(
                 responseCode = "400",
-                description = "요청 검증 실패 또는 지원하지 않는 제공자",
+                description = "요청 검증, 연령·닉네임·약관 동의 또는 지원하지 않는 제공자",
                 content = [
                     Content(
                         schema = Schema(implementation = ErrorResponse::class),
                         examples = [
                             ExampleObject(name = "요청 검증 실패", value = AuthSwaggerExamples.BAD_REQUEST),
+                            ExampleObject(name = "지원하지 않는 Firebase 제공자", value = AuthSwaggerExamples.INVALID_PROVIDER),
+                            ExampleObject(name = "최소 가입 연령 미달", value = AuthSwaggerExamples.MINIMUM_SIGNUP_AGE_NOT_MET),
                             ExampleObject(name = "닉네임 선택 오류", value = AuthSwaggerExamples.INVALID_NICKNAME_SELECTION),
+                            ExampleObject(name = "사용할 수 없는 약관 포함", value = AuthSwaggerExamples.INVALID_TERMS_AGREEMENT),
                             ExampleObject(name = "필수 약관 미동의", value = AuthSwaggerExamples.REQUIRED_TERMS_NOT_AGREED),
                         ],
                     ),
@@ -316,7 +332,9 @@ interface AuthAPISpec {
                             ExampleObject(
                                 name = "닉네임 중복",
                                 value = AuthSwaggerExamples.DUPLICATE_NICKNAME,
-                            ), ExampleObject(name = "인증 수단 중복", value = AuthSwaggerExamples.IDENTITY_LINKED),
+                            ),
+                            ExampleObject(name = "이미 가입 완료된 인증 수단", value = AuthSwaggerExamples.ALREADY_EXIST_PROVIDER_USER_ID),
+                            ExampleObject(name = "인증 수단이 다른 사용자에게 연결됨", value = AuthSwaggerExamples.IDENTITY_LINKED),
                         ],
                     ),
                 ],
@@ -364,11 +382,14 @@ interface AuthAPISpec {
                 ],
             ), ApiResponse(
                 responseCode = "400",
-                description = "지원하지 않는 Firebase 제공자",
+                description = "요청 본문 검증 또는 지원하지 않는 Firebase 제공자",
                 content = [
                     Content(
                         schema = Schema(implementation = ErrorResponse::class),
-                        examples = [ExampleObject(value = AuthSwaggerExamples.INVALID_PROVIDER)],
+                        examples = [
+                            ExampleObject(name = "요청 본문 검증 실패", value = AuthSwaggerExamples.BAD_REQUEST),
+                            ExampleObject(name = "지원하지 않는 Firebase 제공자", value = AuthSwaggerExamples.INVALID_PROVIDER),
+                        ],
                     ),
                 ],
             ), ApiResponse(
@@ -469,11 +490,14 @@ interface AuthAPISpec {
                 ],
             ), ApiResponse(
                 responseCode = "400",
-                description = "refresh token 누락, 만료, 위조 또는 이미 회전됨",
+                description = "요청 본문 검증에 실패했거나 refresh token이 누락·만료·위조·이미 회전됨",
                 content = [
                     Content(
                         schema = Schema(implementation = ErrorResponse::class),
-                        examples = [ExampleObject(value = AuthSwaggerExamples.INVALID_REFRESH_TOKEN)],
+                        examples = [
+                            ExampleObject(name = "요청 본문 검증 실패", value = AuthSwaggerExamples.BAD_REQUEST),
+                            ExampleObject(name = "유효하지 않은 refresh token", value = AuthSwaggerExamples.INVALID_REFRESH_TOKEN),
+                        ],
                     ),
                 ],
             ), ApiResponse(
@@ -517,12 +541,16 @@ private object AuthSwaggerExamples {
     const val REQUIRED_TERMS_NOT_AGREED = """{"code":40012,"errorMessage":"필수 약관에 모두 동의해야 회원가입할 수 있습니다."}"""
     const val UNAUTHORIZED = """{"code":40100,"errorMessage":"인증되지 않은 사용자입니다."}"""
     const val INVALID_FIREBASE_TOKEN = """{"code":40101,"errorMessage":"유효하지 않은 Firebase ID 토큰입니다."}"""
+    const val KAKAO_CLIENT_EXCEPTION = """{"code":40102,"errorMessage":"유효하지 않은 카카오 액세스 토큰입니다."}"""
     const val INVALID_KAKAO_APP = """{"code":40103,"errorMessage":"다른 카카오 애플리케이션에서 발급된 액세스 토큰입니다."}"""
     const val INVALID_KAKAO_REDIRECT_URI = """{"code":40004,"errorMessage":"허용되지 않은 카카오 redirect URI입니다."}"""
+    const val MINIMUM_SIGNUP_AGE_NOT_MET = """{"code":40011,"errorMessage":"만 20세 이상만 가입할 수 있습니다."}"""
+    const val INVALID_TERMS_AGREEMENT = """{"code":40013,"errorMessage":"현재 가입에 사용할 수 없는 약관이 포함되어 있습니다."}"""
     const val INVALID_KAKAO_AUTHORIZATION_CODE = """{"code":40104,"errorMessage":"유효하지 않거나 만료된 카카오 인가 코드입니다."}"""
     const val KAKAO_AUTH_UNAVAILABLE = """{"code":50202,"errorMessage":"카카오 인증 서버와 통신하지 못했습니다."}"""
     const val USER_NOT_FOUND = """{"code":40400,"errorMessage":"해당 유저를 찾을 수 없습니다."}"""
     const val DUPLICATE_NICKNAME = """{"code":40900,"errorMessage":"이미 사용중인 닉네임입니다."}"""
+    const val ALREADY_EXIST_PROVIDER_USER_ID = """{"code":40901,"errorMessage":"이미 존재하는 유저입니다."}"""
     const val IDENTITY_LINKED = """{"code":40903,"errorMessage":"이미 다른 사용자에게 연결된 로그인 수단입니다."}"""
     const val PROVIDER_LINKED = """{"code":40904,"errorMessage":"해당 로그인 제공자가 이미 연결되어 있습니다."}"""
     const val FIREBASE_ERROR = """{"code":50200,"errorMessage":"Firebase 인증 처리에 실패했습니다."}"""

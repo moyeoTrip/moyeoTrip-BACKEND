@@ -35,7 +35,10 @@ interface FeedAPISpec {
                 content = [
                     Content(
                         schema = Schema(implementation = ErrorResponse::class),
-                        examples = [ExampleObject(value = FeedSwaggerExamples.BAD_REQUEST)],
+                        examples = [
+                            ExampleObject(name = "사진 또는 요청 본문 검증 실패", value = FeedSwaggerExamples.BAD_REQUEST),
+                            ExampleObject(name = "동일 여행 피드 중복", value = FeedSwaggerExamples.DUPLICATE_TRIP_FEED),
+                        ],
                     ),
                 ],
             ),
@@ -51,11 +54,14 @@ interface FeedAPISpec {
             ),
             ApiResponse(
                 responseCode = "404",
-                description = "채팅방을 찾을 수 없음",
+                description = "로그인 사용자 또는 완료한 여행 채팅방을 찾을 수 없음",
                 content = [
                     Content(
                         schema = Schema(implementation = ErrorResponse::class),
-                        examples = [ExampleObject(value = FeedSwaggerExamples.CHAT_ROOM_NOT_FOUND)],
+                        examples = [
+                            ExampleObject(name = "로그인 사용자 없음", value = FeedSwaggerExamples.USER_NOT_FOUND),
+                            ExampleObject(name = "채팅방 없음", value = FeedSwaggerExamples.CHAT_ROOM_NOT_FOUND),
+                        ],
                     ),
                 ],
             ),
@@ -63,7 +69,9 @@ interface FeedAPISpec {
     )
     fun createFeed(
         @Parameter(hidden = true) userId: Long,
+        @Parameter(description = "피드 본문, 여행 채팅방 ID 및 공개 범위를 담은 request JSON 파트", required = true)
         request: CreateFeedRequest,
+        @Parameter(description = "사진 파일 목록. 1~10장의 이미지 파일을 images 파트로 전송합니다.", required = true)
         images: List<MultipartFile>,
     ): ResponseEntity<FeedResponse>
 
@@ -89,8 +97,11 @@ interface FeedAPISpec {
     )
     fun getFeeds(
         @Parameter(hidden = true) userId: Long,
+        @Parameter(description = "피드 탭. DISCOVER=차단 관계가 아닌 전체 공개 피드, FRIENDS=친구 피드", example = "DISCOVER")
         tab: FeedTab,
+        @Parameter(description = "이 ID보다 오래된 피드부터 조회하는 커서. 첫 페이지는 생략합니다.", example = "100")
         beforeFeedId: Long?,
+        @Parameter(description = "반환할 최대 피드 수. 기본값은 20입니다.", example = "20")
         limit: Int,
     ): FeedPageResponse
 
@@ -114,11 +125,14 @@ interface FeedAPISpec {
             ),
             ApiResponse(
                 responseCode = "404",
-                description = "피드를 찾을 수 없음",
+                description = "피드 또는 로그인 사용자를 찾을 수 없음",
                 content = [
                     Content(
                         schema = Schema(implementation = ErrorResponse::class),
-                        examples = [ExampleObject(value = FeedSwaggerExamples.FEED_NOT_FOUND)],
+                        examples = [
+                            ExampleObject(name = "피드 없음", value = FeedSwaggerExamples.FEED_NOT_FOUND),
+                            ExampleObject(name = "로그인 사용자 없음", value = FeedSwaggerExamples.USER_NOT_FOUND),
+                        ],
                     ),
                 ],
             ),
@@ -126,6 +140,7 @@ interface FeedAPISpec {
     )
     fun getFeed(
         @Parameter(hidden = true) userId: Long,
+        @Parameter(description = "상세 조회할 피드 ID", example = "100")
         feedId: Long,
     ): FeedResponse
 
@@ -161,6 +176,7 @@ interface FeedAPISpec {
     )
     fun toggleLike(
         @Parameter(hidden = true) userId: Long,
+        @Parameter(description = "좋아요 상태를 변경할 피드 ID", example = "100")
         feedId: Long,
     ): FeedLikeResponse
 
@@ -196,6 +212,7 @@ interface FeedAPISpec {
     )
     fun getComments(
         @Parameter(hidden = true) userId: Long,
+        @Parameter(description = "댓글을 조회할 피드 ID", example = "100")
         feedId: Long,
     ): List<FeedCommentResponse>
 
@@ -229,11 +246,15 @@ interface FeedAPISpec {
             ),
             ApiResponse(
                 responseCode = "404",
-                description = "피드 또는 부모 댓글을 찾을 수 없음",
+                description = "피드, 부모 댓글 또는 로그인 사용자를 찾을 수 없음",
                 content = [
                     Content(
                         schema = Schema(implementation = ErrorResponse::class),
-                        examples = [ExampleObject(value = FeedSwaggerExamples.FEED_NOT_FOUND)],
+                        examples = [
+                            ExampleObject(name = "피드 없음", value = FeedSwaggerExamples.FEED_NOT_FOUND),
+                            ExampleObject(name = "부모 댓글 없음", value = FeedSwaggerExamples.PARENT_COMMENT_NOT_FOUND),
+                            ExampleObject(name = "로그인 사용자 없음", value = FeedSwaggerExamples.USER_NOT_FOUND),
+                        ],
                     ),
                 ],
             ),
@@ -241,15 +262,20 @@ interface FeedAPISpec {
     )
     fun createComment(
         @Parameter(hidden = true) userId: Long,
+        @Parameter(description = "댓글 또는 대댓글을 작성할 피드 ID", example = "100")
         feedId: Long,
+        @Parameter(description = "댓글 본문과 선택적 부모 댓글 ID", required = true)
         request: CreateFeedCommentRequest,
     ): ResponseEntity<FeedCommentResponse>
 }
 
 private object FeedSwaggerExamples {
     const val BAD_REQUEST = """{"code":40000,"errorMessage":"잘못된 요청입니다."}"""
+    const val DUPLICATE_TRIP_FEED = """{"code":40000,"errorMessage":"같은 여행에는 피드를 한 번만 작성할 수 있습니다."}"""
     const val UNAUTHORIZED = """{"code":40100,"errorMessage":"인증되지 않은 사용자입니다."}"""
     const val FORBIDDEN = """{"code":40300,"errorMessage":"접근 권한이 없습니다."}"""
     const val FEED_NOT_FOUND = """{"code":40402,"errorMessage":"요청한 리소스를 찾을 수 없습니다."}"""
+    const val PARENT_COMMENT_NOT_FOUND = """{"code":40402,"errorMessage":"요청한 리소스를 찾을 수 없습니다."}"""
+    const val USER_NOT_FOUND = """{"code":40400,"errorMessage":"해당 유저를 찾을 수 없습니다."}"""
     const val CHAT_ROOM_NOT_FOUND = """{"code":40405,"errorMessage":"채팅방을 찾을 수 없습니다."}"""
 }

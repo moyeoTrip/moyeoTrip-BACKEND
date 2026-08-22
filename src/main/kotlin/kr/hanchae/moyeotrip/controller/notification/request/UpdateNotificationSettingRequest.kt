@@ -21,6 +21,9 @@ data class UpdateNotificationSettingRequest(
     val doNotDisturbStartTime: LocalTime? = null,
     @field:Schema(description = "방해 금지 종료 시각. 자정을 넘는 시간대도 설정할 수 있습니다.", example = "07:00", nullable = true)
     val doNotDisturbEndTime: LocalTime? = null,
-    @field:Schema(description = "방해 금지를 적용할 요일 목록", example = "[\"MONDAY\", \"TUESDAY\", \"WEDNESDAY\"]")
+    @field:Schema(
+        description = "방해 금지를 적용할 요일 목록. MONDAY=월, TUESDAY=화, WEDNESDAY=수, THURSDAY=목, FRIDAY=금, SATURDAY=토, SUNDAY=일",
+        example = "[\"MONDAY\", \"TUESDAY\", \"WEDNESDAY\"]",
+    )
     val doNotDisturbDays: Set<DayOfWeek> = emptySet(),
 )

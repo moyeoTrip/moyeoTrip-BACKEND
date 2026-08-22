@@ -1,5 +1,6 @@
 package kr.hanchae.moyeotrip.entity.feed
 
+import io.swagger.v3.oas.annotations.media.Schema
 import jakarta.persistence.CascadeType
 import jakarta.persistence.Column
 import jakarta.persistence.Entity
@@ -54,6 +55,10 @@ class Feed(
     }
 }
 
+@Schema(
+    description = "피드 공개 범위. PUBLIC=모든 사용자, FRIENDS=친구만, PRIVATE=작성자 본인만",
+    allowableValues = ["PUBLIC", "FRIENDS", "PRIVATE"],
+)
 enum class FeedVisibility {
     PUBLIC,
     FRIENDS,

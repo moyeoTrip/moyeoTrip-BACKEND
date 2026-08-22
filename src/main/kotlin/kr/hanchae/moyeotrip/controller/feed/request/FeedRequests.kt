@@ -27,7 +27,10 @@ data class CreateFeedCommentRequest(
     val parentCommentId: Long? = null,
 )
 
-@Schema(description = "피드 조회 탭", allowableValues = ["FRIENDS", "DISCOVER"])
+@Schema(
+    description = "피드 조회 탭. FRIENDS=내 친구의 전체·친구 공개 피드, DISCOVER=차단 관계가 아닌 전체 공개 피드",
+    allowableValues = ["FRIENDS", "DISCOVER"],
+)
 enum class FeedTab {
     FRIENDS,
     DISCOVER,

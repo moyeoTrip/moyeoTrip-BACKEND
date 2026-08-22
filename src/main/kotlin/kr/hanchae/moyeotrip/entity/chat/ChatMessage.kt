@@ -1,5 +1,6 @@
 package kr.hanchae.moyeotrip.entity.chat
 
+import io.swagger.v3.oas.annotations.media.Schema
 import jakarta.persistence.Column
 import jakarta.persistence.Entity
 import jakarta.persistence.EnumType
@@ -69,6 +70,12 @@ class ChatMessage(
     }
 }
 
+@Schema(
+    description =
+        "채팅 메시지 유형. USER=일반 메시지, SYSTEM=시스템 안내, IMAGE=사진, TOURISM_CONTENT=관광 장소 카드, " +
+            "LOCATION=호스트 집합 위치, POLL=투표, SETTLEMENT_MEMO=정산 메모",
+    allowableValues = ["USER", "SYSTEM", "IMAGE", "TOURISM_CONTENT", "LOCATION", "POLL", "SETTLEMENT_MEMO"],
+)
 enum class ChatMessageType {
     USER,
     SYSTEM,

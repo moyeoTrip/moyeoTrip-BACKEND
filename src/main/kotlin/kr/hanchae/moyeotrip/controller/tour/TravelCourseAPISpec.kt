@@ -41,7 +41,10 @@ interface TravelCourseAPISpec {
             ),
         ],
     )
-    fun getPublicCourses(tagId: Long?): List<TravelCourseInformationResponse>
+    fun getPublicCourses(
+        @Parameter(description = "필터링할 여행 코스 태그 ID. 생략하면 전체 공개 코스를 반환합니다.", example = "1")
+        tagId: Long?,
+    ): List<TravelCourseInformationResponse>
 
     @Operation(summary = "인기 여행 코스 TOP 3", description = "해당 코스로 만들어진 채팅방 수를 기준으로 집계합니다.")
     @ApiResponses(
@@ -75,7 +78,7 @@ interface TravelCourseAPISpec {
             ),
             ApiResponse(
                 responseCode = "404",
-                description = "채팅방 또는 여행 코스를 찾을 수 없음",
+                description = "채팅방을 찾을 수 없음",
                 content = [
                     Content(
                         schema = Schema(implementation = ErrorResponse::class),
@@ -85,7 +88,10 @@ interface TravelCourseAPISpec {
             ),
         ],
     )
-    fun getRoomCourse(roomId: Long): TravelCourseDetailResponse
+    fun getRoomCourse(
+        @Parameter(description = "여행 코스를 조회할 채팅방 ID", example = "101")
+        roomId: Long,
+    ): TravelCourseDetailResponse
 
     @Operation(summary = "채팅방 커스텀 여행 코스 수정", description = "여행 확정 전까지 채팅방 호스트만 수정할 수 있습니다.")
     @ApiResponses(
@@ -94,6 +100,32 @@ interface TravelCourseAPISpec {
                 responseCode = "200",
                 description = "커스텀 여행 코스 수정 성공",
                 content = [Content(schema = Schema(implementation = TravelCourseInformationResponse::class))],
+            ),
+            ApiResponse(
+                responseCode = "400",
+                description = "요청 본문이 유효하지 않거나 여행 일차별 코스 구성이 올바르지 않음",
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [
+                            ExampleObject(name = "요청 본문 검증 실패", value = TravelCourseSwaggerExamples.BAD_REQUEST),
+                            ExampleObject(name = "일차별 장소·순서 구성 오류", value = TravelCourseSwaggerExamples.INVALID_TRAVEL_COURSE_SCHEDULE),
+                        ],
+                    ),
+                ],
+            ),
+            ApiResponse(
+                responseCode = "404",
+                description = "채팅방 또는 수정할 관광 장소를 찾을 수 없음",
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [
+                            ExampleObject(name = "채팅방 없음", value = TravelCourseSwaggerExamples.CHAT_ROOM_NOT_FOUND),
+                            ExampleObject(name = "관광 장소 없음", value = TravelCourseSwaggerExamples.TOURISM_CONTENT_NOT_FOUND),
+                        ],
+                    ),
+                ],
             ),
             ApiResponse(
                 responseCode = "409",
@@ -109,7 +141,9 @@ interface TravelCourseAPISpec {
     )
     fun updateRoomCourse(
         @Parameter(hidden = true) userId: Long,
+        @Parameter(description = "커스텀 여행 코스를 수정할 채팅방 ID", example = "101")
         roomId: Long,
+        @Parameter(description = "커스텀 코스 제목, 소개, 방문 장소와 태그", required = true)
         request: UpdateTravelCourseRequest,
     ): TravelCourseInformationResponse
 
@@ -157,7 +191,9 @@ interface TravelCourseAPISpec {
     )
     fun publishCourse(
         @Parameter(hidden = true) userId: Long,
+        @Parameter(description = "공개 여부를 결정할 완료 커스텀 여행 코스 ID", example = "77")
         courseId: Long,
+        @Parameter(description = "공개 제목, 소개 및 작성자 닉네임 표시 여부", required = true)
         request: PublishTravelCourseRequest,
     ): CoursePublicationResponse
 
@@ -181,14 +217,30 @@ interface TravelCourseAPISpec {
             ),
         ],
     )
-    fun getCourse(courseId: Long): PublicTravelCourseDetailResponse
+    fun getCourse(
+        @Parameter(description = "상세 조회할 공개 여행 코스 ID", example = "77")
+        courseId: Long,
+    ): PublicTravelCourseDetailResponse
 
     @Operation(summary = "완료한 여행 코스 평가", description = "확정된 여행이 끝난 채팅방 참가자만 1~5점으로 평가할 수 있습니다.")
     @ApiResponses(
         value = [
             ApiResponse(responseCode = "204", description = "여행 코스 평가 성공. 응답 본문 없음"),
             ApiResponse(
-                responseCode = "403",
+                responseCode = "404",
+                description = "채팅방 또는 로그인 사용자를 찾을 수 없음",
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [
+                            ExampleObject(name = "채팅방 없음", value = TravelCourseSwaggerExamples.CHAT_ROOM_NOT_FOUND),
+                            ExampleObject(name = "로그인 사용자 없음", value = TravelCourseSwaggerExamples.USER_NOT_FOUND),
+                        ],
+                    ),
+                ],
+            ),
+            ApiResponse(
+                responseCode = "400",
                 description = "완료한 여행 채팅방의 참가자가 아니어서 평가할 수 없음",
                 content = [
                     Content(
@@ -201,15 +253,21 @@ interface TravelCourseAPISpec {
     )
     fun rateCourse(
         @Parameter(hidden = true) userId: Long,
+        @Parameter(description = "평가할 완료 여행의 채팅방 ID", example = "101")
         roomId: Long,
+        @Parameter(description = "1~5점 코스 평점", required = true)
         request: RateTravelCourseRequest,
     ): ResponseEntity<Void>
 }
 
 private object TravelCourseSwaggerExamples {
+    const val BAD_REQUEST = """{"code":40000,"errorMessage":"잘못된 요청입니다."}"""
+    const val INVALID_TRAVEL_COURSE_SCHEDULE = """{"code":40007,"errorMessage":"여행 일차마다 방문지를 최소 2개 편성해야 합니다."}"""
+    const val USER_NOT_FOUND = """{"code":40400,"errorMessage":"해당 유저를 찾을 수 없습니다."}"""
     const val TRAVEL_COURSE_TAG_NOT_FOUND = """{"code":40412,"errorMessage":"여행 코스 태그를 찾을 수 없습니다."}"""
     const val TRAVEL_COURSE_NOT_FOUND = """{"code":40403,"errorMessage":"공개된 여행 코스를 찾을 수 없습니다."}"""
     const val CHAT_ROOM_NOT_FOUND = """{"code":40405,"errorMessage":"채팅방을 찾을 수 없습니다."}"""
+    const val TOURISM_CONTENT_NOT_FOUND = """{"code":40408,"errorMessage":"관광 콘텐츠를 찾을 수 없습니다."}"""
     const val INTERNAL_SERVER_ERROR = """{"code":50000,"errorMessage":"서버에러입니다."}"""
     const val TRAVEL_COURSE_NOT_EDITABLE = """{"code":40912,"errorMessage":"여행 확정 전의 커스텀 코스만 호스트가 수정할 수 있습니다."}"""
     const val TRAVEL_COURSE_PUBLICATION_NOT_ALLOWED = """{"code":40914,"errorMessage":"공개 여부를 선택할 수 있는 완료 코스가 아닙니다."}"""

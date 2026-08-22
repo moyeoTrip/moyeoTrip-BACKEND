@@ -1,5 +1,6 @@
 package kr.hanchae.moyeotrip.entity.notification
 
+import io.swagger.v3.oas.annotations.media.Schema
 import jakarta.persistence.CollectionTable
 import jakarta.persistence.Column
 import jakarta.persistence.ElementCollection
@@ -116,6 +117,10 @@ class NotificationSetting(
     }
 }
 
+@Schema(
+    description = "채팅 메시지 알림 수신 방식. ALL=모든 메시지, MENTIONS_AND_REPLIES=내 멘션 또는 내 메시지 답글만, NONE=받지 않음",
+    allowableValues = ["ALL", "MENTIONS_AND_REPLIES", "NONE"],
+)
 enum class ChatNotificationMode {
     ALL,
     MENTIONS_AND_REPLIES,

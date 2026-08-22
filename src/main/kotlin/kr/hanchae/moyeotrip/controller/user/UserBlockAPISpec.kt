@@ -34,11 +34,14 @@ interface UserBlockAPISpec {
             ),
             ApiResponse(
                 responseCode = "404",
-                description = "대상 사용자를 찾을 수 없음",
+                description = "로그인 사용자 또는 차단 대상을 찾을 수 없음",
                 content = [
                     Content(
                         schema = Schema(implementation = ErrorResponse::class),
-                        examples = [ExampleObject(value = UserBlockSwaggerExamples.USER_NOT_FOUND)],
+                        examples = [
+                            ExampleObject(name = "로그인 사용자 없음", value = UserBlockSwaggerExamples.USER_NOT_FOUND),
+                            ExampleObject(name = "차단 대상 사용자 없음", value = UserBlockSwaggerExamples.USER_NOT_FOUND),
+                        ],
                     ),
                 ],
             ),
@@ -46,6 +49,7 @@ interface UserBlockAPISpec {
     )
     fun block(
         @Parameter(hidden = true) loginUserId: Long,
+        @Parameter(description = "차단할 상대 사용자 ID", example = "202")
         userId: Long,
     ): UserBlockResponse
 
@@ -71,6 +75,7 @@ interface UserBlockAPISpec {
     )
     fun unblock(
         @Parameter(hidden = true) loginUserId: Long,
+        @Parameter(description = "차단 해제할 상대 사용자 ID", example = "202")
         userId: Long,
     ): UserBlockResponse
 

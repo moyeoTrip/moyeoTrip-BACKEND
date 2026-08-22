@@ -1,5 +1,6 @@
 package kr.hanchae.moyeotrip.entity.tour
 
+import io.swagger.v3.oas.annotations.media.Schema
 import jakarta.persistence.Column
 import jakarta.persistence.Entity
 import jakarta.persistence.EnumType
@@ -120,11 +121,19 @@ class TravelCourse(
     }
 }
 
+@Schema(
+    description = "여행 코스 종류. CUSTOM=호스트가 채팅방용으로 직접 구성한 코스, PUBLIC=공개 코스",
+    allowableValues = ["CUSTOM", "PUBLIC"],
+)
 enum class TravelCourseType {
     CUSTOM,
     PUBLIC,
 }
 
+@Schema(
+    description = "커스텀 코스 공개 상태. NOT_REQUESTED=아직 공개를 결정하지 않음, PENDING=공개 정보 입력 중, DECLINED=공개하지 않음, PUBLISHED=공개 코스로 발행됨",
+    allowableValues = ["NOT_REQUESTED", "PENDING", "DECLINED", "PUBLISHED"],
+)
 enum class CoursePublicationStatus {
     NOT_REQUESTED,
     PENDING,

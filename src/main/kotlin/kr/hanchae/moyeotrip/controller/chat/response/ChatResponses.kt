@@ -253,7 +253,10 @@ data class JoinChatRoomResponse(
     val result: JoinResult,
 )
 
-@Schema(description = "참가 신청 처리 결과 상태", allowableValues = ["JOINED", "WAITLISTED", "PENDING_APPROVAL"])
+@Schema(
+    description = "참가 신청 처리 결과. JOINED=즉시 참가, WAITLISTED=승인됐지만 정원 초과로 대기열, PENDING_APPROVAL=호스트 승인 대기",
+    allowableValues = ["JOINED", "WAITLISTED", "PENDING_APPROVAL"],
+)
 enum class JoinResult { JOINED, WAITLISTED, PENDING_APPROVAL }
 
 @Schema(description = "채팅방 참가 신청 가능 여부")
@@ -302,7 +305,10 @@ data class ApproveJoinApplicationResponse(
     val waitlistPosition: Int?,
 )
 
-@Schema(description = "참가 신청 승인 결과 상태", allowableValues = ["JOINED", "WAITLISTED"])
+@Schema(
+    description = "호스트의 참가 신청 승인 결과. JOINED=정원 내 참가 완료, WAITLISTED=정원 초과로 승인 대기열 이동",
+    allowableValues = ["JOINED", "WAITLISTED"],
+)
 enum class ApprovalResult { JOINED, WAITLISTED }
 
 @Schema(description = "채팅방 나가기 또는 대기 취소 결과")
@@ -316,7 +322,9 @@ data class LeaveChatRoomResponse(
 )
 
 @Schema(
-    description = "채팅방 나가기 처리 결과 상태",
+    description =
+        "채팅방 나가기 처리 결과. LEFT=참가자 퇴장, HOST_LEFT_AND_ROOM_CANCELLED=호스트 퇴장으로 모임 취소, " +
+            "APPLICATION_CANCELLED=승인 대기 신청 취소, WAITLIST_CANCELLED=대기열 취소",
     allowableValues = ["LEFT", "HOST_LEFT_AND_ROOM_CANCELLED", "APPLICATION_CANCELLED", "WAITLIST_CANCELLED"],
 )
 enum class LeaveResult { LEFT, HOST_LEFT_AND_ROOM_CANCELLED, APPLICATION_CANCELLED, WAITLIST_CANCELLED }
@@ -465,7 +473,10 @@ data class TravelRoadmapPlaceResponse(
     val progress: TravelRoadmapProgress,
 )
 
-@Schema(description = "로드맵 장소 진행 상태", allowableValues = ["COMPLETED", "CURRENT", "UPCOMING"])
+@Schema(
+    description = "로드맵 장소 진행 상태. COMPLETED=방문 시각이 지난 장소, CURRENT=현재 여행 중인 장소, UPCOMING=다음 방문 예정 장소",
+    allowableValues = ["COMPLETED", "CURRENT", "UPCOMING"],
+)
 enum class TravelRoadmapProgress {
     COMPLETED,
     CURRENT,

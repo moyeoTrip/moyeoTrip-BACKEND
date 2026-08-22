@@ -47,6 +47,7 @@ interface TravelCompanionAPISpec {
     )
     fun getTripCompanions(
         @Parameter(hidden = true) userId: Long,
+        @Parameter(description = "완료한 여행 동행자를 조회할 채팅방 ID", example = "101")
         roomId: Long,
     ): List<TripCompanionResponse>
 
@@ -84,7 +85,11 @@ interface TravelCompanionAPISpec {
                 content = [
                     Content(
                         schema = Schema(implementation = ErrorResponse::class),
-                        examples = [ExampleObject(value = TravelCompanionSwaggerExamples.CHAT_ROOM_NOT_FOUND)],
+                        examples = [
+                            ExampleObject(name = "채팅방 없음", value = TravelCompanionSwaggerExamples.CHAT_ROOM_NOT_FOUND),
+                            ExampleObject(name = "함께 여행한 동행 기록 없음", value = TravelCompanionSwaggerExamples.TRAVEL_COMPANION_NOT_FOUND),
+                            ExampleObject(name = "평가할 동행자 없음", value = TravelCompanionSwaggerExamples.USER_NOT_FOUND),
+                        ],
                     ),
                 ],
             ),
@@ -92,8 +97,11 @@ interface TravelCompanionAPISpec {
     )
     fun reviewCompanion(
         @Parameter(hidden = true) userId: Long,
+        @Parameter(description = "함께 여행한 채팅방 ID", example = "101")
         roomId: Long,
+        @Parameter(description = "평가할 함께 여행한 상대 사용자 ID", example = "202")
         companionId: Long,
+        @Parameter(description = "매너 점수와 한줄평", required = true)
         request: ReviewTravelCompanionRequest,
     ): TripCompanionResponse
 
@@ -126,5 +134,6 @@ private object TravelCompanionSwaggerExamples {
     const val BAD_REQUEST = """{"code":40000,"errorMessage":"잘못된 요청입니다."}"""
     const val FORBIDDEN = """{"code":40300,"errorMessage":"접근 권한이 없습니다."}"""
     const val CHAT_ROOM_NOT_FOUND = """{"code":40405,"errorMessage":"채팅방을 찾을 수 없습니다."}"""
+    const val TRAVEL_COMPANION_NOT_FOUND = """{"code":40402,"errorMessage":"요청한 리소스를 찾을 수 없습니다."}"""
     const val USER_NOT_FOUND = """{"code":40400,"errorMessage":"해당 유저를 찾을 수 없습니다."}"""
 }
