@@ -268,6 +268,7 @@ class ChatRoomServiceTest {
         val pinnedLatest = notice(3L, true, now, room.host)
         val unpinnedLatest = notice(2L, false, now.minusMinutes(1), room.host)
         val pinnedOld = notice(1L, true, now.minusMinutes(2), room.host)
+        `when`(roomRepository.findById(10L)).thenReturn(Optional.of(room))
         `when`(participantRepository.existsByChatRoomIdAndUserId(10L, 2L)).thenReturn(true)
         `when`(noticeRepository.findAllByChatRoomIdAndContentIsNotNullOrderByCreatedDateTimeDescIdDesc(10L))
             .thenReturn(listOf(pinnedLatest, unpinnedLatest, pinnedOld))
@@ -290,7 +291,7 @@ class ChatRoomServiceTest {
     }
 
     @Test
-    fun `확정 채팅방 목록은 종료되지 않은 확정 방만 인원과 마감 정보를 포함해 반환한다`() {
+    fun `확정 채팅방 목록은 종료되지 않은 확정 방의 채팅 요약을 반환한다`() {
         val user = user(2L)
         val confirmedRoom = room(user(1L), status = ChatRoomStatus.CONFIRMED)
         val endedRoom =
@@ -319,8 +320,9 @@ class ChatRoomServiceTest {
         assertEquals(3, response.single().participantCount)
         assertEquals(3, response.single().maxParticipants)
         assertEquals(false, response.single().ended)
+        assertEquals(true, response.single().chatAvailable)
         assertEquals(5L, response.single().recruitmentDDay)
-        assertEquals(now, response.single().latestMessage.sentAt)
+        assertEquals(now, response.single().latestMessage!!.sentAt)
     }
 
     @Test
@@ -347,6 +349,56 @@ class ChatRoomServiceTest {
         val response = service.getMyRooms(host.id, MyChatRoomFilter.ENDED)
 
         assertEquals(true, response.single().coursePublicationAvailable)
+    }
+
+    @Test
+    fun `삭제된 지난 여행은 채팅 정보 없이 기본 정보만 반환한다`() {
+        val host = user(1L)
+        val course = TravelCourse(id = 5L, type = TravelCourseType.CUSTOM, owner = host, title = "직접 만든 코스")
+        val room =
+            room(
+                host = host,
+                course = course,
+                startDate = LocalDate.now().minusDays(20),
+                endDate = LocalDate.now().minusDays(19),
+                recruitmentDeadlineDate = LocalDate.now().minusDays(21),
+                status = ChatRoomStatus.CONFIRMED,
+            ).also { it.archiveChat(LocalDateTime.now()) }
+        val participant = ChatRoomParticipant(chatRoom = room, user = host, role = ChatParticipantRole.HOST)
+        `when`(participantRepository.findAllByUserId(host.id)).thenReturn(listOf(participant))
+
+        val response = service.getMyRooms(host.id, MyChatRoomFilter.ENDED).single()
+
+        assertEquals("울릉도 여행", response.title)
+        assertEquals(null, response.description)
+        assertEquals(room.startDate, response.startDate)
+        assertEquals(room.endDate, response.endDate)
+        assertEquals(false, response.chatAvailable)
+        assertEquals(null, response.thumbnail)
+        assertEquals(null, response.status)
+        assertEquals(null, response.recruitmentDDay)
+        assertEquals(null, response.participantCount)
+        assertEquals(null, response.unreadMessageCount)
+        assertEquals(null, response.latestMessage)
+        assertEquals(true, response.coursePublicationAvailable)
+    }
+
+    @Test
+    fun `메시지가 삭제된 지난 여행의 채팅방 상세는 조회할 수 없다`() {
+        val room =
+            room(
+                host = user(1L),
+                startDate = LocalDate.now().minusDays(20),
+                endDate = LocalDate.now().minusDays(19),
+                recruitmentDeadlineDate = LocalDate.now().minusDays(21),
+                status = ChatRoomStatus.CONFIRMED,
+            ).also { it.archiveChat(LocalDateTime.now()) }
+        `when`(roomRepository.findById(room.id)).thenReturn(Optional.of(room))
+
+        val exception = assertThrows(BaseException::class.java) { service.getRoom(1L, room.id) }
+
+        assertEquals(ErrorCode.CHAT_ROOM_NOT_FOUND, exception.errorCode)
+        verifyNoInteractions(favoriteRepository)
     }
 
     @Test

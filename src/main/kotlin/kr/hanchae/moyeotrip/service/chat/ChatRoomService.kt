@@ -212,7 +212,10 @@ class ChatRoomService(
             .findAllByUserId(userId)
             .filter { it.chatRoom.matches(filter) }
             .map { it.toMySummary() }
-            .sortedByDescending { it.latestMessage.sentAt }
+            .sortedWith(
+                compareByDescending<MyChatRoomSummaryResponse> { it.endDate ?: it.startDate }
+                    .thenByDescending { it.latestMessage?.sentAt ?: LocalDateTime.MIN },
+            )
 
     @Transactional(readOnly = true)
     fun searchRooms(
@@ -772,6 +775,7 @@ class ChatRoomService(
         userId: Long,
         roomId: Long,
     ): ChatRoomNoticeHistoryResponse {
+        findRoom(roomId)
         requireParticipant(roomId, userId)
         val notices =
             noticeRepository
@@ -951,6 +955,7 @@ class ChatRoomService(
         beforeMessageId: Long?,
         limit: Int,
     ): ChatMessagePageResponse {
+        findRoom(roomId)
         val participant = findParticipant(roomId, userId)
         val pageSize = limit.coerceIn(1, 100)
         val pageable = PageRequest.of(0, pageSize + 1)
@@ -963,7 +968,7 @@ class ChatRoomService(
         messagesDescending.firstOrNull()?.let { participant.readThrough(it.id) }
         return ChatMessagePageResponse(
             messages = messagesDescending.asReversed().map { it.toResponse(userId) },
-            nextCursor = messagesDescending.lastOrNull()?.id?.takeIf { hasNext },
+            nextId = messagesDescending.lastOrNull()?.id?.takeIf { hasNext },
             hasNext = hasNext,
         )
     }
@@ -1230,20 +1235,40 @@ class ChatRoomService(
 
     private fun ChatRoomParticipant.toMySummary(): MyChatRoomSummaryResponse {
         val room = chatRoom
+        if (room.isChatArchived()) {
+            return MyChatRoomSummaryResponse(
+                roomId = room.id,
+                courseId = room.course.id,
+                title = room.roomTitle,
+                description = room.description,
+                startDate = room.startDate,
+                endDate = room.endDate,
+                chatAvailable = false,
+                ended = true,
+                coursePublicationAvailable =
+                    room.host.id == user.id &&
+                        room.course.type == TravelCourseType.CUSTOM,
+            )
+        }
         val latest =
             messageRepository.findFirstByChatRoomIdOrderByIdDesc(room.id)
                 ?: throw BaseException(ErrorCode.CHAT_ROOM_NO_MESSAGES)
         return MyChatRoomSummaryResponse(
             roomId = room.id,
+            courseId = room.course.id,
             title = room.roomTitle,
+            description = room.description,
+            startDate = room.startDate,
+            endDate = room.endDate,
+            chatAvailable = true,
             thumbnail = room.thumbnail,
             status = room.status,
+            recruitmentDDay = room.recruitmentDDay(),
             ended = room.hasEnded(),
             coursePublicationAvailable =
                 room.host.id == user.id &&
                     room.hasCompletedTrip() &&
                     room.course.type == TravelCourseType.CUSTOM,
-            recruitmentDDay = room.recruitmentDDay(),
             participantCount = participantRepository.countByChatRoomId(room.id).toInt(),
             maxParticipants = room.maxParticipants,
             unreadMessageCount = messageRepository.countByChatRoomIdAndIdGreaterThan(room.id, lastReadMessageId),
@@ -1528,14 +1553,20 @@ class ChatRoomService(
         if (room.host.id != userId) throw BaseException(ErrorCode.FORBIDDEN)
     }
 
-    private fun findRoom(id: Long) =
-        roomRepository.findById(id).orElseThrow {
-            BaseException(ErrorCode.CHAT_ROOM_NOT_FOUND, ErrorCode.CHAT_ROOM_NOT_FOUND.errorMessage)
-        }
+    private fun findRoom(id: Long): ChatRoom {
+        val room =
+            roomRepository.findById(id).orElseThrow {
+                BaseException(ErrorCode.CHAT_ROOM_NOT_FOUND, ErrorCode.CHAT_ROOM_NOT_FOUND.errorMessage)
+            }
+        if (room.isChatArchived()) throw BaseException(ErrorCode.CHAT_ROOM_NOT_FOUND)
+        return room
+    }
 
-    private fun findRoomForUpdate(id: Long) =
-        roomRepository.findByIdForUpdate(id)
-            ?: throw BaseException(ErrorCode.CHAT_ROOM_NOT_FOUND)
+    private fun findRoomForUpdate(id: Long): ChatRoom {
+        val room = roomRepository.findByIdForUpdate(id) ?: throw BaseException(ErrorCode.CHAT_ROOM_NOT_FOUND)
+        if (room.isChatArchived()) throw BaseException(ErrorCode.CHAT_ROOM_NOT_FOUND)
+        return room
+    }
 
     private fun findUser(id: Long) = userRepository.findById(id).orElseThrow { UserNotFoundException(id) }
 

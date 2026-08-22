@@ -126,6 +126,7 @@ class AuthService(
         request.fcmToken
             ?.takeIf { it != user.fcmToken }
             ?.let(user::changeFcmToken)
+        user.recordLogin()
 
         if (user.signupState == SignupState.USER_INFO_REQUIRED) {
             return FirebaseLoginResponse(
@@ -173,6 +174,7 @@ class AuthService(
                 ),
             )
             request.fcmToken?.let(existingUser::changeFcmToken)
+            existingUser.recordLogin()
             return makeTokens(existingUser)
         }
 
@@ -187,6 +189,7 @@ class AuthService(
             )
         user.addAuthIdentity(identity.providerType, identity.uid)
         request.fcmToken?.let(user::changeFcmToken)
+        user.recordLogin()
         val savedUser = userRepository.save(user)
         notificationSettingRepository.save(NotificationSetting(user = savedUser))
         return makeTokens(savedUser)

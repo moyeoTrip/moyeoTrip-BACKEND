@@ -75,14 +75,30 @@ class ChatRoomLifecycleScheduler(
             .forEach(travelCompanionService::collectCompletedTrip)
     }
 
+    @Scheduled(cron = "0 10 0 * * *", zone = "Asia/Seoul")
+    @Transactional
+    fun scheduleCompletedRoomDeletion() {
+        roomRepository
+            .findAllCompletedRoomsWithoutDeletionScheduleForUpdate(ChatRoomStatus.CONFIRMED, LocalDate.now())
+            .forEach { room ->
+                room.scheduleDeletion((room.endDate ?: room.startDate).plusDays(CHAT_ROOM_RETENTION_DAYS))
+            }
+    }
+
     @Scheduled(cron = "0 0 0 * * *", zone = "Asia/Seoul")
     @Transactional
     fun deleteExpiredRooms() {
+        val now = LocalDateTime.now()
         roomRepository.findAllDeletionDueRoomsForUpdate(LocalDate.now()).forEach { room ->
-            val customCourse = room.course.takeIf { it.type == TravelCourseType.CUSTOM }
-            roomRepository.delete(room)
-            roomRepository.flush()
-            customCourse?.let(courseRepository::delete)
+            if (room.status == ChatRoomStatus.CONFIRMED) {
+                messageRepository.deleteAllByChatRoomId(room.id)
+                room.archiveChat(now)
+            } else {
+                val customCourse = room.course.takeIf { it.type == TravelCourseType.CUSTOM }
+                roomRepository.delete(room)
+                roomRepository.flush()
+                customCourse?.let(courseRepository::delete)
+            }
         }
     }
 
@@ -115,6 +131,7 @@ class ChatRoomLifecycleScheduler(
 
     companion object {
         const val MINIMUM_TRIP_PARTICIPANTS = 3L
+        private const val CHAT_ROOM_RETENTION_DAYS = 14L
         private const val TRIP_STARTED_EVENT_KEY = "TRIP_STARTED"
     }
 }

@@ -1,5 +1,6 @@
 package kr.hanchae.moyeotrip.controller.chat.response
 
+import com.fasterxml.jackson.annotation.JsonInclude
 import kr.hanchae.moyeotrip.controller.tour.response.TravelCourseTagResponse
 import kr.hanchae.moyeotrip.entity.chat.ChatMessageType
 import kr.hanchae.moyeotrip.entity.chat.ChatRoomStatus
@@ -241,7 +242,7 @@ data class ChatPollOptionResponse(
 
 data class ChatMessagePageResponse(
     val messages: List<ChatMessageResponse>,
-    val nextCursor: Long?,
+    val nextId: Long?,
     val hasNext: Boolean,
 )
 
@@ -271,18 +272,24 @@ enum class TravelRoadmapProgress {
     UPCOMING,
 }
 
+@JsonInclude(JsonInclude.Include.NON_NULL)
 data class MyChatRoomSummaryResponse(
     val roomId: Long,
+    val courseId: Long,
     val title: String,
-    val thumbnail: String?,
-    val status: ChatRoomStatus,
+    val description: String?,
+    val startDate: LocalDate,
+    val endDate: LocalDate?,
+    val chatAvailable: Boolean,
+    val thumbnail: String? = null,
+    val status: ChatRoomStatus? = null,
+    val recruitmentDDay: Long? = null,
     val ended: Boolean,
     val coursePublicationAvailable: Boolean,
-    val recruitmentDDay: Long,
-    val participantCount: Int,
-    val maxParticipants: Int,
-    val unreadMessageCount: Long,
-    val latestMessage: LatestChatMessageResponse,
+    val participantCount: Int? = null,
+    val maxParticipants: Int? = null,
+    val unreadMessageCount: Long? = null,
+    val latestMessage: LatestChatMessageResponse? = null,
 )
 
 data class SearchChatRoomResponse(

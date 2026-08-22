@@ -75,6 +75,21 @@ interface ChatRoomRepository : JpaRepository<ChatRoom, Long> {
         @Param("date") date: LocalDate,
     ): List<ChatRoom>
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query(
+        """
+        SELECT room FROM ChatRoom room
+        WHERE room.status = :status
+          AND room.deletionScheduledDate IS NULL
+          AND room.chatClosedDateTime IS NULL
+          AND ((room.endDate IS NULL AND room.startDate < :date) OR room.endDate < :date)
+        """,
+    )
+    fun findAllCompletedRoomsWithoutDeletionScheduleForUpdate(
+        @Param("status") status: ChatRoomStatus,
+        @Param("date") date: LocalDate,
+    ): List<ChatRoom>
+
     fun findAllByStatusAndRecruitmentDeadlineDateBetween(
         status: ChatRoomStatus,
         startDate: LocalDate,
@@ -103,4 +118,20 @@ interface ChatRoomRepository : JpaRepository<ChatRoom, Long> {
         @Param("status") status: ChatRoomStatus,
         @Param("date") date: LocalDate,
     ): List<ChatRoom>
+
+    @Query(
+        """
+        SELECT COUNT(room) > 0 FROM ChatRoom room
+        WHERE room.host.id = :hostId
+          AND room.course.id = :courseId
+          AND room.status = :status
+          AND ((room.endDate IS NULL AND room.startDate < :date) OR room.endDate < :date)
+        """,
+    )
+    fun existsCompletedHostRoom(
+        @Param("hostId") hostId: Long,
+        @Param("courseId") courseId: Long,
+        @Param("status") status: ChatRoomStatus,
+        @Param("date") date: LocalDate,
+    ): Boolean
 }

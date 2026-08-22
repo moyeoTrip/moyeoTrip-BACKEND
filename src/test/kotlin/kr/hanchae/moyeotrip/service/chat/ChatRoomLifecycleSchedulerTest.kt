@@ -20,6 +20,7 @@ import org.junit.jupiter.api.Test
 import org.mockito.ArgumentCaptor
 import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito.mock
+import org.mockito.Mockito.never
 import org.mockito.Mockito.verify
 import org.mockito.Mockito.`when`
 import java.time.LocalDate
@@ -93,6 +94,38 @@ class ChatRoomLifecycleSchedulerTest {
         verify(messageRepository).save(messageCaptor.capture())
         assertEquals("오늘 여행이 시작됐어요 🎒", messageCaptor.value.content)
         assertEquals("TRIP_STARTED", messageCaptor.value.systemEventKey)
+    }
+
+    @Test
+    fun `완료된 확정 여행은 여행 종료일로부터 14일 후 메시지 삭제를 예약한다`() {
+        val room =
+            room().also {
+                it.confirm()
+            }
+        `when`(
+            roomRepository.findAllCompletedRoomsWithoutDeletionScheduleForUpdate(ChatRoomStatus.CONFIRMED, LocalDate.now()),
+        ).thenReturn(listOf(room))
+
+        scheduler.scheduleCompletedRoomDeletion()
+
+        assertEquals(room.endDate!!.plusDays(14), room.deletionScheduledDate)
+    }
+
+    @Test
+    fun `삭제 시 확정 여행은 메시지만 삭제하고 채팅방을 보관한다`() {
+        val room =
+            room().also {
+                it.confirm()
+                it.scheduleDeletion(LocalDate.now())
+            }
+        `when`(roomRepository.findAllDeletionDueRoomsForUpdate(LocalDate.now())).thenReturn(listOf(room))
+
+        scheduler.deleteExpiredRooms()
+
+        verify(messageRepository).deleteAllByChatRoomId(room.id)
+        assertEquals(true, room.isChatArchived())
+        verify(roomRepository, never()).delete(room)
+        verify(courseRepository, never()).delete(room.course)
     }
 
     private fun room(): ChatRoom {

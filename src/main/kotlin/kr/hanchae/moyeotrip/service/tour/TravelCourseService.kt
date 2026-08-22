@@ -10,7 +10,6 @@ import kr.hanchae.moyeotrip.exception.ErrorCode
 import kr.hanchae.moyeotrip.repository.ChatRoomRepository
 import kr.hanchae.moyeotrip.repository.TravelCourseRepository
 import kr.hanchae.moyeotrip.repository.TravelCourseTagRepository
-import kr.hanchae.moyeotrip.repository.UserTripHistoryRepository
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.LocalDate
@@ -20,7 +19,6 @@ class TravelCourseService(
     private val courseTagRepository: TravelCourseTagRepository,
     private val roomRepository: ChatRoomRepository,
     private val courseRepository: TravelCourseRepository,
-    private val userTripHistoryRepository: UserTripHistoryRepository,
 ) {
     @Transactional(readOnly = true)
     fun getCourseTags(): List<TravelCourseTagResponse> =
@@ -48,7 +46,5 @@ class TravelCourseService(
     private fun hasCompletedHostedTrip(
         hostId: Long,
         courseId: Long,
-    ): Boolean =
-        userTripHistoryRepository.existsByUserIdAndTravelCourseIdAndHostTrue(hostId, courseId) ||
-            roomRepository.existsCompletedHostRoom(hostId, courseId, ChatRoomStatus.CONFIRMED, LocalDate.now())
+    ): Boolean = roomRepository.existsCompletedHostRoom(hostId, courseId, ChatRoomStatus.CONFIRMED, LocalDate.now())
 }

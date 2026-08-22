@@ -165,6 +165,19 @@ class ChatRoom(
     fun hasCompletedTrip(today: LocalDate = LocalDate.now()): Boolean =
         status == ChatRoomStatus.CONFIRMED && (endDate ?: startDate).isBefore(today)
 
+    fun scheduleDeletion(deletionDate: LocalDate) {
+        require(status == ChatRoomStatus.CONFIRMED)
+        deletionScheduledDate = deletionDate
+    }
+
+    fun archiveChat(now: LocalDateTime) {
+        require(status == ChatRoomStatus.CONFIRMED)
+        chatClosedDateTime = now
+        deletionScheduledDate = null
+    }
+
+    fun isChatArchived(): Boolean = status == ChatRoomStatus.CONFIRMED && chatClosedDateTime != null
+
     fun recruitmentDDay(today: LocalDate = LocalDate.now()): Long = ChronoUnit.DAYS.between(today, recruitmentDeadlineDate)
 }
 
