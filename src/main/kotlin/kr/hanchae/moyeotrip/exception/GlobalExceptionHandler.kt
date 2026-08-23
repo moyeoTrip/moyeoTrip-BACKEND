@@ -18,11 +18,7 @@ class GlobalExceptionHandler(
 ) {
     @ExceptionHandler(BaseException::class)
     fun handleBaseException(exception: BaseException): ResponseEntity<ErrorResponse> {
-        captureBadRequest(
-            exception = exception,
-            httpStatus = exception.errorCode.httpStatus,
-            errorCode = exception.errorCode.code,
-        )
+        sentryExceptionReporter.capture(exception, exception.errorCode.httpStatus, exception.errorCode.code)
         return ResponseEntity
             .status(exception.errorCode.httpStatus)
             .contentType(MediaType.APPLICATION_JSON)
@@ -61,14 +57,16 @@ class GlobalExceptionHandler(
     }
 
     @ExceptionHandler(NoResourceFoundException::class)
-    fun handleNoResourceFound(exception: NoResourceFoundException): ResponseEntity<ErrorResponse> =
-        ResponseEntity
+    fun handleNoResourceFound(exception: NoResourceFoundException): ResponseEntity<ErrorResponse> {
+        sentryExceptionReporter.capture(exception, HttpStatus.NOT_FOUND, ErrorCode.RESOURCE_NOT_FOUND.code)
+        return ResponseEntity
             .status(ErrorCode.RESOURCE_NOT_FOUND.httpStatus)
             .contentType(MediaType.APPLICATION_JSON)
             .body(ErrorResponse.of(ErrorCode.RESOURCE_NOT_FOUND, ErrorCode.RESOURCE_NOT_FOUND.errorMessage))
             .apply {
                 traceManager.doErrorLog(exception)
             }
+    }
 
     @ExceptionHandler(Exception::class)
     fun handleUnexpectedException(exception: Exception): ResponseEntity<ErrorResponse> {
@@ -80,15 +78,5 @@ class GlobalExceptionHandler(
             .apply {
                 traceManager.doErrorLog(exception)
             }
-    }
-
-    private fun captureBadRequest(
-        exception: Throwable,
-        httpStatus: HttpStatus,
-        errorCode: Int,
-    ) {
-        if (httpStatus == HttpStatus.BAD_REQUEST) {
-            sentryExceptionReporter.capture(exception, httpStatus, errorCode)
-        }
     }
 }

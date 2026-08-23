@@ -11,11 +11,21 @@ class SentryExceptionReporter {
         exception: Throwable,
         httpStatus: HttpStatus,
         errorCode: Int,
+    ) = capture(
+        exception,
+        mapOf(
+            "http.status_code" to httpStatus.value().toString(),
+            "error.code" to errorCode.toString(),
+        ),
+    )
+
+    fun capture(
+        exception: Throwable,
+        tags: Map<String, String>,
     ) {
         Sentry.captureException(exception) { scope ->
             MDC.get(TraceFilter.MDC_TRACE_ID)?.let { scope.setTag(TraceFilter.MDC_TRACE_ID, it) }
-            scope.setTag("http.status_code", httpStatus.value().toString())
-            scope.setTag("error.code", errorCode.toString())
+            tags.forEach(scope::setTag)
         }
     }
 }

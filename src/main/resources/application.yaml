@@ -53,10 +53,10 @@ sentry:
   traces-sample-rate: 1.0
   send-default-pii: false
   max-request-body-size: none
-  # ControllerAdvice에서 선별한 400/500만 명시적으로 전송하고, 처리되지 않은 예외만 SDK가 보조 수집한다.
+  # 처리되지 않은 예외는 SDK가 보조 수집하고, 처리된 HTTP·보안·WebSocket 오류는 애플리케이션에서 명시적으로 전송한다.
   exception-resolver-order: 2147483647
   logging:
-    # 모든 4xx를 기록하는 기존 error logger와 분리해 Sentry 전송 대상을 상태 코드로 제어한다.
+    # Trace 로그의 request/response 본문을 Sentry 로그 이벤트로 중복 전송하지 않는다.
     enabled: false
   in-app-includes:
     - kr.hanchae.moyeotrip

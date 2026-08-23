@@ -1,6 +1,7 @@
 package kr.hanchae.moyeotrip.config.websocket
 
 import kr.hanchae.moyeotrip.config.properties.WebCorsProperties
+import kr.hanchae.moyeotrip.logging.SentryExceptionReporter
 import kr.hanchae.moyeotrip.repository.ChatRoomParticipantRepository
 import kr.hanchae.moyeotrip.utils.jwt.JwtUtil
 import kr.hanchae.moyeotrip.utils.jwt.isBearerToken
@@ -25,6 +26,7 @@ class WebSocketConfig(
     private val jwtUtil: JwtUtil,
     private val participantRepository: ChatRoomParticipantRepository,
     private val corsProperties: WebCorsProperties,
+    private val sentryExceptionReporter: SentryExceptionReporter,
 ) : WebSocketMessageBrokerConfigurer {
     override fun configureMessageBroker(registry: MessageBrokerRegistry) {
         registry.enableSimpleBroker("/topic", "/queue")
@@ -44,15 +46,19 @@ class WebSocketConfig(
                 override fun preSend(
                     message: Message<*>,
                     channel: MessageChannel,
-                ): Message<*> {
-                    val accessor = MessageHeaderAccessor.getAccessor(message, StompHeaderAccessor::class.java) ?: return message
-                    when (accessor.command) {
-                        StompCommand.CONNECT -> authenticate(accessor)
-                        StompCommand.SUBSCRIBE -> authorizeSubscription(accessor)
-                        else -> Unit
+                ): Message<*> =
+                    try {
+                        val accessor = MessageHeaderAccessor.getAccessor(message, StompHeaderAccessor::class.java) ?: return message
+                        when (accessor.command) {
+                            StompCommand.CONNECT -> authenticate(accessor)
+                            StompCommand.SUBSCRIBE -> authorizeSubscription(accessor)
+                            else -> Unit
+                        }
+                        message
+                    } catch (exception: RuntimeException) {
+                        sentryExceptionReporter.capture(exception, WEBSOCKET_TAGS)
+                        throw exception
                     }
-                    return message
-                }
             },
         )
     }
@@ -81,5 +87,6 @@ class WebSocketConfig(
 
     companion object {
         private val CHAT_ROOM_TOPIC = Regex("/topic/chat-rooms/(\\d+)/messages")
+        private val WEBSOCKET_TAGS = mapOf("transport" to "websocket")
     }
 }
