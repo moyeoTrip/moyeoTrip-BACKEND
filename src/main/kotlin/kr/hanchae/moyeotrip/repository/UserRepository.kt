@@ -14,6 +14,8 @@ interface UserRepository :
     fun existsByInformationNickname(nickName: String): Boolean
 
     fun findByEmail(email: String): User?
+
+    fun findByFcmToken(fcmToken: String): User?
 }
 
 interface UserCustomRepository {

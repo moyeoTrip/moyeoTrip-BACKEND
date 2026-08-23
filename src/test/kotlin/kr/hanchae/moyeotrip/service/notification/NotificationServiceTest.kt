@@ -58,6 +58,7 @@ class NotificationServiceTest {
     private val roomSettingRepository = mock(ChatRoomNotificationSettingRepository::class.java)
     private val userRepository = mock(UserRepository::class.java)
     private val realtimeMessagingService = mock(RealtimeMessagingService::class.java)
+    private val pushNotificationSender = mock(PushNotificationSender::class.java)
     private val service =
         NotificationService(
             notificationRepository,
@@ -67,6 +68,7 @@ class NotificationServiceTest {
             roomSettingRepository,
             userRepository,
             realtimeMessagingService,
+            pushNotificationSender,
         )
 
     @Test
@@ -133,6 +135,38 @@ class NotificationServiceTest {
         val exception = assertThrows(BaseException::class.java) { service.markRead(2L, 1L) }
 
         assertEquals(ErrorCode.NOTIFICATION_NOT_FOUND, exception.errorCode)
+    }
+
+    @Test
+    fun `FCM 토큰 갱신은 이전 소유자에게서 토큰을 해제하고 현재 사용자에게 저장한다`() {
+        val currentUser = user(2L, "현재 사용자")
+        val previousOwner = user(3L, "이전 사용자").also { it.changeFcmToken("new-token") }
+        `when`(userRepository.findByIdForUpdate(2L)).thenReturn(currentUser)
+        `when`(userRepository.findByFcmToken("new-token")).thenReturn(previousOwner)
+
+        service.updateFcmToken(2L, "  new-token  ")
+
+        assertEquals("new-token", currentUser.fcmToken)
+        assertNull(previousOwner.fcmToken)
+        verify(userRepository).flush()
+    }
+
+    @Test
+    fun `FCM 토큰 삭제는 현재 사용자의 기기 연결을 해제한다`() {
+        val currentUser = user(2L, "현재 사용자").also { it.changeFcmToken("fcm-token") }
+        `when`(userRepository.findByIdForUpdate(2L)).thenReturn(currentUser)
+
+        service.deleteFcmToken(2L)
+
+        assertNull(currentUser.fcmToken)
+    }
+
+    @Test
+    fun `공백 FCM 토큰은 저장할 수 없다`() {
+        val exception = assertThrows(BaseException::class.java) { service.updateFcmToken(2L, "   ") }
+
+        assertEquals(ErrorCode.BAD_REQUEST, exception.errorCode)
+        verifyNoInteractions(userRepository)
     }
 
     @Test
@@ -247,6 +281,17 @@ class NotificationServiceTest {
 
         verify(notificationRepository, org.mockito.Mockito.never()).save(any(Notification::class.java))
         verifyNoInteractions(realtimeMessagingService)
+    }
+
+    @Test
+    fun `채팅방 생성 알림은 앱 내 실시간 알림만 보내고 푸시는 보내지 않는다`() {
+        val room = room(user(1L, "호스트"))
+        stubNotificationSave()
+
+        service.notifyRoomCreated(room)
+
+        verify(realtimeMessagingService).sendNotification(org.mockito.ArgumentMatchers.eq(1L), anyValue())
+        verifyNoInteractions(pushNotificationSender)
     }
 
     @Test
@@ -387,6 +432,7 @@ class NotificationServiceTest {
         assertEquals("테스트 방 모임에서 강퇴되었어요.", notificationCaptor.value.content)
         assertEquals(10L, notificationCaptor.value.chatRoomId)
         assertEquals(44L, notificationCaptor.value.referenceId)
+        verify(pushNotificationSender).send(notificationCaptor.value)
     }
 
     @Test

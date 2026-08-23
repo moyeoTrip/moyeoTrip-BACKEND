@@ -92,6 +92,16 @@ class User(
         this.fcmToken = token
     }
 
+    fun clearFcmTokenIfMatches(token: String): Boolean {
+        if (fcmToken != token) return false
+        clearFcmToken()
+        return true
+    }
+
+    fun clearFcmToken() {
+        fcmToken = null
+    }
+
     fun recordLogin(at: LocalDateTime = LocalDateTime.now()) {
         lastLoginDateTime = at
     }

@@ -43,6 +43,7 @@ class NotificationService(
     private val roomSettingRepository: ChatRoomNotificationSettingRepository,
     private val userRepository: UserRepository,
     private val realtimeMessagingService: RealtimeMessagingService,
+    private val pushNotificationSender: PushNotificationSender,
 ) {
     @Transactional(readOnly = true)
     fun getNotifications(
@@ -83,6 +84,30 @@ class NotificationService(
     @Transactional
     fun markAllRead(userId: Long) {
         repository.findAllByRecipientIdAndReadDateTimeIsNull(userId).forEach(Notification::markRead)
+    }
+
+    @Transactional
+    fun updateFcmToken(
+        userId: Long,
+        fcmToken: String,
+    ) {
+        val normalizedToken = fcmToken.trim().takeIf(String::isNotEmpty) ?: throw BaseException(ErrorCode.BAD_REQUEST)
+        val user = userRepository.findByIdForUpdate(userId) ?: throw BaseException(ErrorCode.USER_NOT_FOUND)
+        val previousOwner =
+            userRepository
+                .findByFcmToken(normalizedToken)
+                ?.takeIf { it.id != userId }
+        previousOwner?.let {
+            it.clearFcmToken()
+            userRepository.flush()
+        }
+        user.changeFcmToken(normalizedToken)
+    }
+
+    @Transactional
+    fun deleteFcmToken(userId: Long) {
+        val user = userRepository.findByIdForUpdate(userId) ?: throw BaseException(ErrorCode.USER_NOT_FOUND)
+        user.clearFcmToken()
     }
 
     @Transactional(readOnly = true)
@@ -323,6 +348,9 @@ class NotificationService(
             )
         if (!isDoNotDisturbing(recipient)) {
             realtimeMessagingService.sendNotification(recipient.id, notification.toResponse())
+            if (type != NotificationType.CHAT_ROOM_CREATED) {
+                pushNotificationSender.send(notification)
+            }
         }
     }
 
