@@ -4,6 +4,7 @@ import kr.hanchae.moyeotrip.controller.tour.request.PublishTravelCourseRequest
 import kr.hanchae.moyeotrip.entity.chat.ChatRoomStatus
 import kr.hanchae.moyeotrip.entity.tour.CoursePublicationStatus
 import kr.hanchae.moyeotrip.entity.tour.TravelCourse
+import kr.hanchae.moyeotrip.entity.tour.TravelCourseTag
 import kr.hanchae.moyeotrip.entity.tour.TravelCourseType
 import kr.hanchae.moyeotrip.entity.user.User
 import kr.hanchae.moyeotrip.entity.user.UserRole
@@ -15,6 +16,7 @@ import kr.hanchae.moyeotrip.repository.TravelCourseTagRepository
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertThrows
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.mockito.Mockito.mock
 import org.mockito.Mockito.`when`
@@ -60,6 +62,65 @@ class TravelCourseServiceTest {
             }
 
         assertEquals(ErrorCode.FORBIDDEN, exception.errorCode)
+    }
+
+    @Test
+    fun `여행 코스 태그는 ID 오름차순 저장소 결과를 응답으로 변환한다`() {
+        `when`(tagRepository.findAllByOrderByIdAsc())
+            .thenReturn(listOf(TravelCourseTag(id = 1L, name = "힐링"), TravelCourseTag(id = 2L, name = "맛집")))
+
+        val response = service.getCourseTags()
+
+        assertEquals(listOf(1L, 2L), response.map { it.tagId })
+        assertEquals(listOf("힐링", "맛집"), response.map { it.name })
+    }
+
+    @Test
+    fun `존재하지 않는 코스는 공개할 수 없다`() {
+        `when`(courseRepository.findById(404L)).thenReturn(Optional.empty())
+
+        val exception =
+            assertThrows(BaseException::class.java) {
+                service.publishCourse(1L, 404L, PublishTravelCourseRequest("코스", "소개", true))
+            }
+
+        assertEquals(ErrorCode.TRAVEL_COURSE_NOT_FOUND, exception.errorCode)
+    }
+
+    @Test
+    fun `등록 코스는 다시 공개 처리할 수 없다`() {
+        val course =
+            TravelCourse(
+                id = 2L,
+                type = TravelCourseType.PUBLIC,
+                owner = User(id = 1L, userRole = UserRole.ROLE_USER),
+                title = "등록 코스",
+            )
+        `when`(courseRepository.findById(2L)).thenReturn(Optional.of(course))
+
+        val exception =
+            assertThrows(BaseException::class.java) {
+                service.publishCourse(1L, 2L, PublishTravelCourseRequest("코스", "소개", true))
+            }
+
+        assertEquals(ErrorCode.TRAVEL_COURSE_PUBLICATION_NOT_ALLOWED, exception.errorCode)
+    }
+
+    @Test
+    fun `완료한 호스트 여행이 없는 커스텀 코스는 공개할 수 없다`() {
+        val course = customCourse()
+        `when`(courseRepository.findById(course.id)).thenReturn(Optional.of(course))
+        `when`(
+            roomRepository.existsCompletedHostRoom(course.owner!!.id, course.id, ChatRoomStatus.CONFIRMED, LocalDate.now()),
+        ).thenReturn(false)
+
+        val exception =
+            assertThrows(BaseException::class.java) {
+                service.publishCourse(1L, course.id, PublishTravelCourseRequest("코스", "소개", true))
+            }
+
+        assertEquals(ErrorCode.TRAVEL_COURSE_PUBLICATION_NOT_ALLOWED, exception.errorCode)
+        assertTrue(course.type == TravelCourseType.CUSTOM)
     }
 
     private fun customCourse(): TravelCourse {

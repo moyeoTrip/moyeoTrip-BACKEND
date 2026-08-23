@@ -37,6 +37,7 @@ import org.mockito.Mockito.never
 import org.mockito.Mockito.verify
 import org.mockito.Mockito.verifyNoInteractions
 import org.mockito.Mockito.`when`
+import org.springframework.transaction.support.TransactionSynchronization
 import org.springframework.transaction.support.TransactionSynchronizationManager
 import java.time.LocalDate
 import java.util.Optional
@@ -112,6 +113,33 @@ class UserServiceTest {
         assertEquals(SignupState.PROFILE_IMAGE_REQUIRED, response.signupState)
         assertNull(user.information?.profileFileName)
         assertEquals(SignupState.PROFILE_IMAGE_REQUIRED, user.signupState)
+    }
+
+    @Test
+    fun `프로필 이미지 생성 트랜잭션이 롤백되면 업로드한 객체를 삭제한다`() {
+        val user = profileImageRequiredUser()
+        val imageBytes = byteArrayOf(1, 2, 3)
+        val optimizedImageBytes = byteArrayOf(4, 5, 6)
+        val imageKey = "user/profile/image/rollback.webp"
+        val prompt = promptFactory.create("따스한 사슴 2347", NicknameColor.BLUE)
+        `when`(userRepository.findByIdForUpdate(7L)).thenReturn(user)
+        `when`(profileImageGenerationClient.generate(prompt)).thenReturn(imageBytes)
+        `when`(profileImageOptimizer.optimizeToHdWebp(imageBytes)).thenReturn(optimizedImageBytes)
+        `when`(objectStorageRepository.uploadGeneratedProfileImage(optimizedImageBytes)).thenReturn(imageKey)
+        `when`(userProfileImageRepository.save(any(UserProfileImage::class.java)))
+            .thenReturn(UserProfileImage(id = 12L, user = user, fileName = imageKey))
+        `when`(objectStorageRepository.getDownloadUrl(imageKey)).thenReturn("https://cdn.example.com/rollback.webp")
+        TransactionSynchronizationManager.initSynchronization()
+
+        try {
+            service.generateProfileImage(7L)
+
+            verify(objectStorageRepository, never()).delete(imageKey)
+            TransactionSynchronizationManager.getSynchronizations().single().afterCompletion(TransactionSynchronization.STATUS_ROLLED_BACK)
+            verify(objectStorageRepository).delete(imageKey)
+        } finally {
+            TransactionSynchronizationManager.clearSynchronization()
+        }
     }
 
     @Test
@@ -240,6 +268,103 @@ class UserServiceTest {
         assertEquals(setOf("안동시", "포항시"), response.interestedRegions.map { it.signguName }.toSet())
         assertEquals(birthDate, response.birthDate)
         assertEquals(Gender.F, response.gender)
+    }
+
+    @Test
+    fun `만 20세 미만 생년월일로 프로필을 수정할 수 없다`() {
+        val user = profileImageRequiredUser()
+        `when`(userRepository.findByIdForUpdate(7L)).thenReturn(user)
+
+        val exception =
+            assertThrows(BaseException::class.java) {
+                service.updateProfile(
+                    7L,
+                    UpdateProfileRequest(
+                        birthDate = LocalDate.now().minusYears(20).plusDays(1),
+                        gender = Gender.F,
+                    ),
+                )
+            }
+
+        assertEquals(ErrorCode.MINIMUM_SIGNUP_AGE_NOT_MET, exception.errorCode)
+        verifyNoInteractions(legalDongCodeRepository, travelStyleRepository)
+    }
+
+    @Test
+    fun `경상북도에 없거나 존재하지 않는 관심 지역은 프로필에 저장할 수 없다`() {
+        val user = profileImageRequiredUser()
+        `when`(userRepository.findByIdForUpdate(7L)).thenReturn(user)
+        `when`(legalDongCodeRepository.findAllById(setOf(99L))).thenReturn(emptyList())
+
+        val exception =
+            assertThrows(BaseException::class.java) {
+                service.updateProfile(
+                    7L,
+                    UpdateProfileRequest(
+                        interestedRegionIds = setOf(99L),
+                        birthDate = LocalDate.now().minusYears(25),
+                        gender = Gender.F,
+                    ),
+                )
+            }
+
+        assertEquals(ErrorCode.BAD_REQUEST, exception.errorCode)
+        verifyNoInteractions(travelStyleRepository)
+    }
+
+    @Test
+    fun `존재하지 않는 여행 스타일은 프로필에 저장할 수 없다`() {
+        val user = profileImageRequiredUser()
+        `when`(userRepository.findByIdForUpdate(7L)).thenReturn(user)
+        `when`(legalDongCodeRepository.findAllById(emptySet())).thenReturn(emptyList())
+        `when`(travelStyleRepository.findAllById(setOf(99L))).thenReturn(emptyList())
+
+        val exception =
+            assertThrows(BaseException::class.java) {
+                service.updateProfile(
+                    7L,
+                    UpdateProfileRequest(
+                        travelStyleIds = setOf(99L),
+                        birthDate = LocalDate.now().minusYears(25),
+                        gender = Gender.F,
+                    ),
+                )
+            }
+
+        assertEquals(ErrorCode.BAD_REQUEST, exception.errorCode)
+    }
+
+    @Test
+    fun `프로필 선택지는 이름 순 여행 스타일과 경상북도 시군을 반환한다`() {
+        `when`(travelStyleRepository.findAllByOrderByLabelAsc())
+            .thenReturn(listOf(TravelStyle(id = 2L, label = "사진"), TravelStyle(id = 1L, label = "자연")))
+        `when`(legalDongCodeRepository.findAllByRegionCodeOrderBySignguNameAsc("47"))
+            .thenReturn(
+                listOf(
+                    LegalDongCode(
+                        id = 1L,
+                        regionCode = "47",
+                        signguCode = "47170",
+                        regionName = "경상북도",
+                        signguName = "안동시",
+                    ),
+                ),
+            )
+
+        val response = service.getProfileOptions()
+
+        assertEquals(listOf("사진", "자연"), response.travelStyles.map { it.label })
+        assertEquals(listOf("안동시"), response.interestedRegions.map { it.signguName })
+    }
+
+    @Test
+    fun `가입 정보 입력 전에는 프로필을 조회할 수 없다`() {
+        val user = User(id = 7L, userRole = UserRole.ROLE_USER)
+        `when`(userRepository.findById(7L)).thenReturn(Optional.of(user))
+
+        val exception = assertThrows(BaseException::class.java) { service.getProfile(7L) }
+
+        assertEquals(ErrorCode.USER_INFO_REQUIRED, exception.errorCode)
     }
 
     private fun profileImageRequiredUser(): User =

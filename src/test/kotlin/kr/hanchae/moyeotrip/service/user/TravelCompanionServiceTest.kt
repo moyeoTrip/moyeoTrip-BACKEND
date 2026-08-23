@@ -1,7 +1,12 @@
 package kr.hanchae.moyeotrip.service.user
 
 import kr.hanchae.moyeotrip.controller.user.request.ReviewTravelCompanionRequest
+import kr.hanchae.moyeotrip.entity.chat.ChatParticipantRole
 import kr.hanchae.moyeotrip.entity.chat.ChatRoom
+import kr.hanchae.moyeotrip.entity.chat.ChatRoomParticipant
+import kr.hanchae.moyeotrip.entity.chat.ChatRoomStatus
+import kr.hanchae.moyeotrip.entity.tour.TravelCourse
+import kr.hanchae.moyeotrip.entity.tour.TravelCourseType
 import kr.hanchae.moyeotrip.entity.user.Gender
 import kr.hanchae.moyeotrip.entity.user.NicknameColor
 import kr.hanchae.moyeotrip.entity.user.TravelCompanion
@@ -19,6 +24,7 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
 import org.mockito.Mockito.mock
+import org.mockito.Mockito.verify
 import org.mockito.Mockito.verifyNoInteractions
 import org.mockito.Mockito.`when`
 import java.time.LocalDate
@@ -71,6 +77,112 @@ class TravelCompanionServiceTest {
         assertEquals(ErrorCode.FORBIDDEN, exception.errorCode)
         verifyNoInteractions(roomRepository, companionRepository, userRepository)
     }
+
+    @Test
+    fun `완료 여행의 모든 참가자를 방향별 동행 기록으로 수집하되 기존 기록은 건너뛴다`() {
+        val first = user(1L, "첫째")
+        val second = user(2L, "둘째")
+        val room = completedRoom(10L, "경주 여행", LocalDate.now().minusDays(2))
+        `when`(participantRepository.findAllByChatRoomIdOrderByCreatedDateTimeAsc(10L))
+            .thenReturn(
+                listOf(
+                    ChatRoomParticipant(chatRoom = room, user = first, role = ChatParticipantRole.HOST),
+                    ChatRoomParticipant(chatRoom = room, user = second, role = ChatParticipantRole.MEMBER),
+                ),
+            )
+        `when`(companionRepository.existsByOwnerIdAndCompanionIdAndChatRoomId(1L, 2L, 10L)).thenReturn(true)
+
+        service.collectCompletedTrip(room)
+
+        verify(companionRepository, org.mockito.Mockito.never()).save(
+            org.mockito.ArgumentMatchers.argThat { it.owner.id == 1L },
+        )
+        verify(companionRepository).save(
+            org.mockito.ArgumentMatchers.argThat { it.owner.id == 2L && it.companion.id == 1L },
+        )
+    }
+
+    @Test
+    fun `완료 여행 동행자 목록은 평가 여부를 포함한다`() {
+        val owner = user(1L, "여행자")
+        val target = user(2L, "동행자")
+        val room = completedRoom(10L, "안동 여행", LocalDate.now().minusDays(1))
+        val record = TravelCompanion(id = 3L, owner = owner, companion = target, chatRoom = room, mannerScore = 4)
+        `when`(participantRepository.hasCompletedTrip(10L, 1L, LocalDate.now())).thenReturn(true)
+        `when`(roomRepository.findById(10L)).thenReturn(Optional.of(room))
+        `when`(participantRepository.findAllByChatRoomIdOrderByCreatedDateTimeAsc(10L)).thenReturn(emptyList())
+        `when`(companionRepository.findAllByOwnerIdAndChatRoomIdOrderByIdAsc(1L, 10L)).thenReturn(listOf(record))
+
+        val response = service.getTripCompanions(1L, 10L)
+
+        assertEquals(true, response.single().reviewed)
+        assertEquals(4, response.single().mannerScore)
+    }
+
+    @Test
+    fun `자기 자신이나 여행에 없던 사용자는 동행자로 평가할 수 없다`() {
+        val room = completedRoom(10L, "안동 여행", LocalDate.now().minusDays(1))
+        `when`(participantRepository.hasCompletedTrip(10L, 1L, LocalDate.now())).thenReturn(true)
+        `when`(roomRepository.findById(10L)).thenReturn(Optional.of(room))
+
+        val selfException =
+            assertThrows(BaseException::class.java) {
+                service.reviewCompanion(1L, 10L, 1L, ReviewTravelCompanionRequest(5, null))
+            }
+        val outsiderException =
+            assertThrows(BaseException::class.java) {
+                service.reviewCompanion(1L, 10L, 2L, ReviewTravelCompanionRequest(5, null))
+            }
+
+        assertEquals(ErrorCode.FORBIDDEN, selfException.errorCode)
+        assertEquals(ErrorCode.FORBIDDEN, outsiderException.errorCode)
+    }
+
+    @Test
+    fun `여행 도감은 같은 동행자와 다녀온 여행을 최신순으로 묶는다`() {
+        val owner = user(1L, "여행자")
+        val target = user(2L, "동행자")
+        val oldRoom = completedRoom(10L, "경주 여행", LocalDate.of(2026, 5, 1))
+        val recentRoom = completedRoom(11L, "안동 여행", LocalDate.of(2026, 8, 1))
+        `when`(userRepository.findById(1L)).thenReturn(Optional.of(owner))
+        `when`(companionRepository.findAllByOwnerId(1L))
+            .thenReturn(
+                listOf(
+                    TravelCompanion(owner = owner, companion = target, chatRoom = oldRoom, oneLineReview = "좋았어요"),
+                    TravelCompanion(owner = owner, companion = target, chatRoom = recentRoom),
+                ),
+            )
+
+        val response = service.getMyTravelDex(1L)
+
+        assertEquals(1, response.totalCount)
+        assertEquals(2, response.companions.single().tripCount)
+        assertEquals("안동 여행", response.companions.single().latestTripTitle)
+        assertEquals(
+            listOf(11L, 10L),
+            response.companions
+                .single()
+                .memories
+                .map { it.chatRoomId },
+        )
+    }
+
+    private fun completedRoom(
+        id: Long,
+        title: String,
+        startDate: LocalDate,
+    ) = ChatRoom(
+        id = id,
+        host = user(99L, "호스트"),
+        course = TravelCourse(id = id, type = TravelCourseType.PUBLIC, title = "코스"),
+        roomTitle = title,
+        maxParticipants = 3,
+        startDate = startDate,
+        endDate = startDate.plusDays(1),
+        recruitmentDeadlineDate = startDate.minusDays(1),
+        meetingDateTime = startDate.atStartOfDay(),
+        status = ChatRoomStatus.CONFIRMED,
+    )
 
     private fun user(
         id: Long,

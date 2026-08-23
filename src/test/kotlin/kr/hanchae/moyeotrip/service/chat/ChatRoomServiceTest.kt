@@ -3,10 +3,12 @@ package kr.hanchae.moyeotrip.service.chat
 import kr.hanchae.moyeotrip.controller.chat.request.CreateChatPollRequest
 import kr.hanchae.moyeotrip.controller.chat.request.CreateChatRoomRequest
 import kr.hanchae.moyeotrip.controller.chat.request.CreateCustomCourseRequest
+import kr.hanchae.moyeotrip.controller.chat.request.CreateSettlementMemoRequest
 import kr.hanchae.moyeotrip.controller.chat.request.CustomCoursePlaceRequest
 import kr.hanchae.moyeotrip.controller.chat.request.JoinChatRoomRequest
 import kr.hanchae.moyeotrip.controller.chat.request.MyChatRoomFilter
 import kr.hanchae.moyeotrip.controller.chat.request.SendChatMessageRequest
+import kr.hanchae.moyeotrip.controller.chat.request.ShareTourismContentRequest
 import kr.hanchae.moyeotrip.controller.chat.request.UpdateMeetingInfoRequest
 import kr.hanchae.moyeotrip.controller.chat.response.TravelRoadmapProgress
 import kr.hanchae.moyeotrip.controller.tour.request.UpdateTravelCourseRequest
@@ -14,6 +16,7 @@ import kr.hanchae.moyeotrip.entity.chat.ChatMessage
 import kr.hanchae.moyeotrip.entity.chat.ChatMessageType
 import kr.hanchae.moyeotrip.entity.chat.ChatParticipantRole
 import kr.hanchae.moyeotrip.entity.chat.ChatPollOption
+import kr.hanchae.moyeotrip.entity.chat.ChatPollVote
 import kr.hanchae.moyeotrip.entity.chat.ChatRoom
 import kr.hanchae.moyeotrip.entity.chat.ChatRoomFavorite
 import kr.hanchae.moyeotrip.entity.chat.ChatRoomJoinApplication
@@ -66,7 +69,10 @@ import org.mockito.Mockito.mock
 import org.mockito.Mockito.verify
 import org.mockito.Mockito.verifyNoInteractions
 import org.mockito.Mockito.`when`
+import org.springframework.data.domain.PageRequest
 import org.springframework.web.multipart.MultipartFile
+import java.io.ByteArrayInputStream
+import java.io.InputStream
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
@@ -143,6 +149,32 @@ class ChatRoomServiceTest {
     }
 
     @Test
+    fun `모임 찾기는 빈 검색어와 제한값을 정규화하고 방 카드 정보를 반환한다`() {
+        val course = TravelCourse(id = 5L, type = TravelCourseType.CUSTOM, title = "경주 코스")
+        course.addTags(listOf(TravelCourseTag(id = 2L, name = "역사"), TravelCourseTag(id = 1L, name = "힐링")))
+        course.publish()
+        val room = room(user(1L), course = course)
+        `when`(userBlockRepository.findRelatedUserIds(2L)).thenReturn(emptyList())
+        `when`(
+            roomRepository.searchRooms(
+                2L,
+                listOf(-1L),
+                null,
+                LocalDate.now(),
+                PageRequest.of(0, 20),
+            ),
+        ).thenReturn(listOf(room))
+        `when`(participantRepository.countByChatRoomId(10L)).thenReturn(2L)
+
+        val response = service.searchRooms(2L, "   ", 100)
+
+        assertEquals(1, response.size)
+        assertEquals("경주 코스", response.single().courseTitle)
+        assertEquals(listOf(1L, 2L), response.single().tags.map { it.tagId })
+        assertEquals(2, response.single().participantCount)
+    }
+
+    @Test
     fun `채팅 사진은 20MB를 초과하면 공유할 수 없다`() {
         val image = mock(MultipartFile::class.java)
         `when`(image.isEmpty).thenReturn(false)
@@ -159,6 +191,30 @@ class ChatRoomServiceTest {
     }
 
     @Test
+    fun `비어 있는 파일은 채팅 사진으로 공유할 수 없다`() {
+        val image = mock(MultipartFile::class.java)
+        `when`(image.isEmpty).thenReturn(true)
+
+        val exception = assertThrows(BaseException::class.java) { service.shareImage(2L, 10L, image, null) }
+
+        assertEquals(ErrorCode.BAD_REQUEST, exception.errorCode)
+        verifyNoInteractions(participantRepository, messageRepository)
+    }
+
+    @Test
+    fun `이미지 형식이 아닌 파일은 채팅 사진으로 공유할 수 없다`() {
+        val image = mock(MultipartFile::class.java)
+        `when`(image.isEmpty).thenReturn(false)
+        `when`(image.size).thenReturn(1024L)
+        `when`(image.contentType).thenReturn("text/plain")
+
+        val exception = assertThrows(BaseException::class.java) { service.shareImage(2L, 10L, image, null) }
+
+        assertEquals(ErrorCode.BAD_REQUEST, exception.errorCode)
+        verifyNoInteractions(participantRepository, messageRepository)
+    }
+
+    @Test
     fun `같은 채팅방 참가자가 아닌 사용자는 멘션할 수 없다`() {
         val member = user(2L)
         val room = room(user(1L))
@@ -172,6 +228,148 @@ class ChatRoomServiceTest {
             }
 
         assertEquals(ErrorCode.BAD_REQUEST, exception.errorCode)
+        verify(messageRepository, org.mockito.Mockito.never()).saveAndFlush(any(ChatMessage::class.java))
+    }
+
+    @Test
+    fun `채팅 메시지는 공백을 정리하고 멘션과 읽음 상태를 저장한 뒤 실시간 전파한다`() {
+        val sender = profiledUser(2L, Gender.F, LocalDate.now().minusYears(30))
+        val mentioned = profiledUser(3L, Gender.M, LocalDate.now().minusYears(31))
+        val room = room(user(1L))
+        val senderParticipant = ChatRoomParticipant(chatRoom = room, user = sender, role = ChatParticipantRole.MEMBER)
+        val mentionedParticipant = ChatRoomParticipant(chatRoom = room, user = mentioned, role = ChatParticipantRole.MEMBER)
+        val saved = message(30L, room, sender, content = "안녕하세요")
+        `when`(saved.mentionedUsers).thenReturn(setOf(mentioned))
+        `when`(participantRepository.findByChatRoomIdAndUserId(10L, 2L)).thenReturn(senderParticipant)
+        `when`(participantRepository.findAllByChatRoomIdOrderByCreatedDateTimeAsc(10L))
+            .thenReturn(listOf(senderParticipant, mentionedParticipant))
+        `when`(messageRepository.saveAndFlush(any(ChatMessage::class.java))).thenReturn(saved)
+
+        val response =
+            service.sendMessage(
+                2L,
+                10L,
+                SendChatMessageRequest("  안녕하세요  ", mentionedUserIds = setOf(3L)),
+            )
+
+        val captor = ArgumentCaptor.forClass(ChatMessage::class.java)
+        verify(messageRepository).saveAndFlush(captor.capture())
+        assertEquals("안녕하세요", captor.value.content)
+        assertEquals(setOf(mentioned), captor.value.mentionedUsers)
+        assertEquals(30L, senderParticipant.lastReadMessageId)
+        assertEquals(30L, response.messageId)
+        verify(notificationService).notifyMessage(saved)
+        verify(realtimeMessagingService).sendChatMessage(10L, response)
+    }
+
+    @Test
+    fun `관광 콘텐츠를 채팅방에 공유하면 콘텐츠 카드 메시지를 저장한다`() {
+        val sender = profiledUser(2L, Gender.F, LocalDate.now().minusYears(30))
+        val room = room(user(1L))
+        val participant = ChatRoomParticipant(chatRoom = room, user = sender, role = ChatParticipantRole.MEMBER)
+        val content =
+            TourismContent(
+                contentId = 100L,
+                contentType = TourismContentType(12, "관광지"),
+                title = "불국사",
+                latitude = 35.7900,
+                longitude = 129.3320,
+            )
+        val saved = message(31L, room, sender, ChatMessageType.TOURISM_CONTENT, "불국사")
+        `when`(saved.tourismContent).thenReturn(content)
+        `when`(participantRepository.findByChatRoomIdAndUserId(10L, 2L)).thenReturn(participant)
+        `when`(tourismContentRepository.findByContentId(100L)).thenReturn(content)
+        `when`(messageRepository.saveAndFlush(any(ChatMessage::class.java))).thenReturn(saved)
+
+        val response = service.shareTourismContent(2L, 10L, ShareTourismContentRequest(100L))
+
+        assertEquals(ChatMessageType.TOURISM_CONTENT, response.type)
+        assertEquals(100L, response.tourismContent?.contentId)
+        verify(realtimeMessagingService).sendChatMessage(10L, response)
+    }
+
+    @Test
+    fun `유효한 채팅 이미지는 저장소에 업로드하고 사진 메시지로 공유한다`() {
+        val sender = profiledUser(2L, Gender.F, LocalDate.now().minusYears(30))
+        val room = room(user(1L))
+        val participant = ChatRoomParticipant(chatRoom = room, user = sender, role = ChatParticipantRole.MEMBER)
+        val image = mock(MultipartFile::class.java)
+        val stream = ByteArrayInputStream(byteArrayOf(1, 2, 3))
+        val saved = message(32L, room, sender, ChatMessageType.IMAGE, "여행 사진")
+        `when`(saved.imageUrl).thenReturn("https://cdn.example.com/chat/image.png")
+        `when`(image.isEmpty).thenReturn(false)
+        `when`(image.size).thenReturn(3L)
+        `when`(image.contentType).thenReturn("image/png")
+        `when`(image.originalFilename).thenReturn("TRIP.PNG")
+        `when`(image.inputStream).thenReturn(stream)
+        `when`(participantRepository.findByChatRoomIdAndUserId(10L, 2L)).thenReturn(participant)
+        `when`(
+            objectStorageRepository.upload(
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString(),
+                anyInputStream(),
+            ),
+        ).thenReturn("chat/message/image/generated.png")
+        `when`(objectStorageRepository.getDownloadUrl("chat/message/image/generated.png"))
+            .thenReturn("https://cdn.example.com/chat/image.png")
+        `when`(messageRepository.saveAndFlush(any(ChatMessage::class.java))).thenReturn(saved)
+
+        val response = service.shareImage(2L, 10L, image, "  여행 사진  ")
+
+        assertEquals(ChatMessageType.IMAGE, response.type)
+        assertEquals("https://cdn.example.com/chat/image.png", response.imageUrl)
+        val captor = ArgumentCaptor.forClass(ChatMessage::class.java)
+        verify(messageRepository).saveAndFlush(captor.capture())
+        assertEquals("여행 사진", captor.value.content)
+    }
+
+    @Test
+    fun `정산 메모는 공백을 정리해 카드 메시지로 공유한다`() {
+        val sender = profiledUser(2L, Gender.F, LocalDate.now().minusYears(30))
+        val room = room(user(1L))
+        val participant = ChatRoomParticipant(chatRoom = room, user = sender, role = ChatParticipantRole.MEMBER)
+        val saved = message(33L, room, sender, ChatMessageType.SETTLEMENT_MEMO, "1인 9000원")
+        `when`(participantRepository.findByChatRoomIdAndUserId(10L, 2L)).thenReturn(participant)
+        `when`(messageRepository.saveAndFlush(any(ChatMessage::class.java))).thenReturn(saved)
+
+        val response = service.shareSettlementMemo(2L, 10L, CreateSettlementMemoRequest("  1인 9000원  "))
+
+        assertEquals(ChatMessageType.SETTLEMENT_MEMO, response.type)
+        val captor = ArgumentCaptor.forClass(ChatMessage::class.java)
+        verify(messageRepository).saveAndFlush(captor.capture())
+        assertEquals("1인 9000원", captor.value.content)
+    }
+
+    @Test
+    fun `취소된 채팅방에는 새 메시지를 보낼 수 없다`() {
+        val sender = profiledUser(2L, Gender.F, LocalDate.now().minusYears(30))
+        val closedRoom = room(user(1L), status = ChatRoomStatus.CANCELLED)
+        val participant = ChatRoomParticipant(chatRoom = closedRoom, user = sender, role = ChatParticipantRole.MEMBER)
+        `when`(participantRepository.findByChatRoomIdAndUserId(10L, 2L)).thenReturn(participant)
+
+        val exception =
+            assertThrows(BaseException::class.java) {
+                service.sendMessage(2L, 10L, SendChatMessageRequest("아직 보낼 수 있나요?"))
+            }
+
+        assertEquals(ErrorCode.CHAT_DISABLED, exception.errorCode)
+        verifyNoInteractions(messageRepository, notificationService, realtimeMessagingService)
+    }
+
+    @Test
+    fun `존재하지 않거나 다른 방의 메시지에는 답글을 보낼 수 없다`() {
+        val sender = profiledUser(2L, Gender.F, LocalDate.now().minusYears(30))
+        val room = room(user(1L))
+        val participant = ChatRoomParticipant(chatRoom = room, user = sender, role = ChatParticipantRole.MEMBER)
+        `when`(participantRepository.findByChatRoomIdAndUserId(10L, 2L)).thenReturn(participant)
+        `when`(messageRepository.findByIdAndChatRoomId(999L, 10L)).thenReturn(null)
+
+        val exception =
+            assertThrows(BaseException::class.java) {
+                service.sendMessage(2L, 10L, SendChatMessageRequest("답글", replyToMessageId = 999L))
+            }
+
+        assertEquals(ErrorCode.RESOURCE_NOT_FOUND, exception.errorCode)
         verify(messageRepository, org.mockito.Mockito.never()).saveAndFlush(any(ChatMessage::class.java))
     }
 
@@ -203,6 +401,176 @@ class ChatRoomServiceTest {
         assertEquals(ChatMessageType.POLL, messageCaptor.value.type)
         assertEquals(true, messageCaptor.value.pollAnonymous)
         verify(pollOptionRepository).saveAllAndFlush(org.mockito.Mockito.anyList<ChatPollOption>())
+    }
+
+    @Test
+    fun `공백을 제거한 투표 선택지가 중복되면 투표를 만들 수 없다`() {
+        val exception =
+            assertThrows(BaseException::class.java) {
+                service.createPoll(
+                    2L,
+                    10L,
+                    CreateChatPollRequest(question = "점심 메뉴", options = listOf("한식", " 한식 ")),
+                )
+            }
+
+        assertEquals(ErrorCode.BAD_REQUEST, exception.errorCode)
+        verifyNoInteractions(participantRepository, messageRepository, pollOptionRepository)
+    }
+
+    @Test
+    fun `투표 선택을 바꾸면 기존 표를 지우고 새 선택지를 저장한다`() {
+        val voter = profiledUser(2L, Gender.F, LocalDate.now().minusYears(30))
+        val room = room(user(1L))
+        val participant = ChatRoomParticipant(chatRoom = room, user = voter, role = ChatParticipantRole.MEMBER)
+        val pollMessage = message(30L, room, user(1L), ChatMessageType.POLL, "어디서 만날까요?")
+        `when`(pollMessage.pollAnonymous).thenReturn(true)
+        val oldOption = ChatPollOption(id = 40L, message = pollMessage, text = "서울역", sequence = 1)
+        val newOption = ChatPollOption(id = 41L, message = pollMessage, text = "용산역", sequence = 2)
+        val oldVote = ChatPollVote(id = 50L, message = pollMessage, option = oldOption, user = voter)
+        `when`(participantRepository.findByChatRoomIdAndUserId(10L, 2L)).thenReturn(participant)
+        `when`(messageRepository.findByIdAndChatRoomId(30L, 10L)).thenReturn(pollMessage)
+        `when`(pollOptionRepository.findByIdAndMessageId(41L, 30L)).thenReturn(newOption)
+        `when`(pollVoteRepository.findByMessageIdAndUserId(30L, 2L)).thenReturn(oldVote)
+        `when`(pollVoteRepository.saveAndFlush(any(ChatPollVote::class.java))).thenAnswer { it.arguments[0] }
+        `when`(pollOptionRepository.findAllByMessageIdOrderBySequenceAsc(30L)).thenReturn(listOf(oldOption, newOption))
+        `when`(pollVoteRepository.findAllByMessageId(30L)).thenReturn(emptyList())
+
+        service.votePoll(2L, 10L, 30L, 41L)
+
+        verify(pollVoteRepository).delete(oldVote)
+        verify(pollVoteRepository).flush()
+        val captor = ArgumentCaptor.forClass(ChatPollVote::class.java)
+        verify(pollVoteRepository).saveAndFlush(captor.capture())
+        assertEquals(41L, captor.value.option.id)
+        assertEquals(2L, captor.value.user.id)
+    }
+
+    @Test
+    fun `투표 취소는 내 표가 있을 때만 삭제하고 현재 투표 결과를 반환한다`() {
+        val voter = profiledUser(2L, Gender.F, LocalDate.now().minusYears(30))
+        val room = room(user(1L))
+        val participant = ChatRoomParticipant(chatRoom = room, user = voter, role = ChatParticipantRole.MEMBER)
+        val pollMessage = message(30L, room, user(1L), ChatMessageType.POLL, "어디서 만날까요?")
+        `when`(pollMessage.pollAnonymous).thenReturn(true)
+        val option = ChatPollOption(id = 40L, message = pollMessage, text = "서울역", sequence = 1)
+        val vote = ChatPollVote(id = 50L, message = pollMessage, option = option, user = voter)
+        `when`(participantRepository.findByChatRoomIdAndUserId(10L, 2L)).thenReturn(participant)
+        `when`(messageRepository.findByIdAndChatRoomId(30L, 10L)).thenReturn(pollMessage)
+        `when`(pollVoteRepository.findByMessageIdAndUserId(30L, 2L)).thenReturn(vote)
+        `when`(pollOptionRepository.findAllByMessageIdOrderBySequenceAsc(30L)).thenReturn(listOf(option))
+        `when`(pollVoteRepository.findAllByMessageId(30L)).thenReturn(emptyList())
+
+        val response = service.cancelPollVote(2L, 10L, 30L)
+
+        verify(pollVoteRepository).delete(vote)
+        assertEquals(0, response.poll?.totalVoteCount)
+    }
+
+    @Test
+    fun `집합 위치 공유는 위도가 없으면 거부한다`() {
+        val member = user(2L)
+        val room = mock(ChatRoom::class.java)
+        `when`(room.canChat()).thenReturn(true)
+        `when`(room.meetingLatitude).thenReturn(null)
+        `when`(room.meetingLongitude).thenReturn(129.3747)
+        `when`(participantRepository.findByChatRoomIdAndUserId(10L, 2L))
+            .thenReturn(ChatRoomParticipant(chatRoom = room, user = member, role = ChatParticipantRole.MEMBER))
+
+        val exception = assertThrows(BaseException::class.java) { service.shareLocation(2L, 10L) }
+
+        assertEquals(ErrorCode.BAD_REQUEST, exception.errorCode)
+        verifyNoInteractions(messageRepository)
+    }
+
+    @Test
+    fun `집합 위치 공유는 경도가 없으면 거부한다`() {
+        val member = user(2L)
+        val room = mock(ChatRoom::class.java)
+        `when`(room.canChat()).thenReturn(true)
+        `when`(room.meetingLatitude).thenReturn(36.0322)
+        `when`(room.meetingLongitude).thenReturn(null)
+        `when`(participantRepository.findByChatRoomIdAndUserId(10L, 2L))
+            .thenReturn(ChatRoomParticipant(chatRoom = room, user = member, role = ChatParticipantRole.MEMBER))
+
+        val exception = assertThrows(BaseException::class.java) { service.shareLocation(2L, 10L) }
+
+        assertEquals(ErrorCode.BAD_REQUEST, exception.errorCode)
+        verifyNoInteractions(messageRepository)
+    }
+
+    @Test
+    fun `집합 장소명이 공백이면 기본 이름으로 위치를 공유한다`() {
+        val member = user(2L)
+        val room = room(user(1L), meetingDetails = "   ")
+        val savedMessage = message(30L, room, member, ChatMessageType.LOCATION, "만날 위치")
+        `when`(participantRepository.findByChatRoomIdAndUserId(10L, 2L))
+            .thenReturn(ChatRoomParticipant(chatRoom = room, user = member, role = ChatParticipantRole.MEMBER))
+        `when`(messageRepository.saveAndFlush(any(ChatMessage::class.java))).thenReturn(savedMessage)
+
+        val response = service.shareLocation(2L, 10L)
+
+        assertEquals("만날 위치", response.content)
+        verify(realtimeMessagingService).sendChatMessage(10L, response)
+    }
+
+    @Test
+    fun `커서가 없을 때 다음 페이지가 있으면 가장 오래된 반환 메시지 ID를 다음 커서로 준다`() {
+        val member = user(2L)
+        val room = room(user(1L))
+        val participant = ChatRoomParticipant(chatRoom = room, user = member, role = ChatParticipantRole.MEMBER)
+        val messages =
+            listOf(
+                message(12L, room, member),
+                message(11L, room, member),
+                message(10L, room, member),
+            )
+        `when`(roomRepository.findById(10L)).thenReturn(Optional.of(room))
+        `when`(participantRepository.findByChatRoomIdAndUserId(10L, 2L)).thenReturn(participant)
+        `when`(messageRepository.findAllByChatRoomIdOrderByIdDesc(10L, PageRequest.of(0, 3))).thenReturn(messages)
+
+        val response = service.getMessages(2L, 10L, beforeMessageId = null, limit = 2)
+
+        assertEquals(listOf(11L, 12L), response.messages.map { it.messageId })
+        assertEquals(11L, response.nextId)
+        assertEquals(true, response.hasNext)
+        assertEquals(12L, participant.lastReadMessageId)
+    }
+
+    @Test
+    fun `커서 다음 메시지가 없으면 다음 커서를 반환하지 않는다`() {
+        val member = user(2L)
+        val room = room(user(1L))
+        val participant = ChatRoomParticipant(chatRoom = room, user = member, role = ChatParticipantRole.MEMBER)
+        val messages = listOf(message(8L, room, member), message(7L, room, member))
+        `when`(roomRepository.findById(10L)).thenReturn(Optional.of(room))
+        `when`(participantRepository.findByChatRoomIdAndUserId(10L, 2L)).thenReturn(participant)
+        `when`(
+            messageRepository.findAllByChatRoomIdAndIdLessThanOrderByIdDesc(
+                10L,
+                9L,
+                PageRequest.of(0, 3),
+            ),
+        ).thenReturn(messages)
+
+        val response = service.getMessages(2L, 10L, beforeMessageId = 9L, limit = 2)
+
+        assertEquals(listOf(7L, 8L), response.messages.map { it.messageId })
+        assertEquals(null, response.nextId)
+        assertEquals(false, response.hasNext)
+    }
+
+    @Test
+    fun `여행 기간이 아니면 현재 로드맵은 비활성 상태다`() {
+        val member = user(2L)
+        val room = room(user(1L), status = ChatRoomStatus.CONFIRMED)
+        `when`(participantRepository.findByChatRoomIdAndUserId(10L, 2L))
+            .thenReturn(ChatRoomParticipant(chatRoom = room, user = member, role = ChatParticipantRole.MEMBER))
+
+        val response = service.getCurrentRoadmap(2L, 10L, LocalDateTime.now())
+
+        assertEquals(false, response.active)
+        assertEquals(emptyList<Any>(), response.places)
     }
 
     @Test
@@ -288,6 +656,71 @@ class ChatRoomServiceTest {
         service.createNotice(1L, 10L, "준비물 공지", pinned = true)
 
         verify(noticeRepository).save(any(ChatRoomNotice::class.java))
+    }
+
+    @Test
+    fun `호스트는 기존 공지의 내용과 고정 여부를 수정할 수 있다`() {
+        val host = user(1L)
+        val room = room(host)
+        val notice = ChatRoomNotice(id = 7L, chatRoom = room, author = host, content = "기존 공지", pinned = false)
+        `when`(roomRepository.findByIdForUpdate(10L)).thenReturn(room)
+        `when`(noticeRepository.findByIdAndChatRoomId(7L, 10L)).thenReturn(notice)
+        `when`(messageRepository.saveAndFlush(any(ChatMessage::class.java))).thenAnswer { it.arguments[0] }
+
+        service.updateNotice(1L, 10L, 7L, "  수정된 공지  ", pinned = true)
+
+        assertEquals("수정된 공지", notice.content)
+        assertEquals(true, notice.pinned)
+        val captor = ArgumentCaptor.forClass(ChatMessage::class.java)
+        verify(messageRepository).saveAndFlush(captor.capture())
+        assertEquals(true, captor.value.content.contains("수정된 공지"))
+    }
+
+    @Test
+    fun `내용과 고정 여부를 모두 생략하면 기존 공지를 삭제한다`() {
+        val host = user(1L)
+        val room = room(host)
+        val notice = ChatRoomNotice(id = 7L, chatRoom = room, author = host, content = "삭제할 공지", pinned = true)
+        `when`(roomRepository.findByIdForUpdate(10L)).thenReturn(room)
+        `when`(noticeRepository.findByIdAndChatRoomId(7L, 10L)).thenReturn(notice)
+
+        service.updateNotice(1L, 10L, 7L, notice = null, pinned = null)
+
+        verify(noticeRepository).delete(notice)
+        verifyNoInteractions(messageRepository)
+    }
+
+    @Test
+    fun `빈 공지는 등록하거나 기존 공지의 내용으로 저장할 수 없다`() {
+        val room = room(user(1L))
+        `when`(roomRepository.findByIdForUpdate(10L)).thenReturn(room)
+
+        val createException =
+            assertThrows(BaseException::class.java) {
+                service.createNotice(1L, 10L, "   ", pinned = false)
+            }
+        val updateException =
+            assertThrows(BaseException::class.java) {
+                service.updateNotice(1L, 10L, 7L, "   ", pinned = null)
+            }
+
+        assertEquals(ErrorCode.BAD_REQUEST, createException.errorCode)
+        assertEquals(ErrorCode.BAD_REQUEST, updateException.errorCode)
+        verifyNoInteractions(noticeRepository)
+    }
+
+    @Test
+    fun `존재하지 않는 공지는 수정할 수 없다`() {
+        val room = room(user(1L))
+        `when`(roomRepository.findByIdForUpdate(10L)).thenReturn(room)
+        `when`(noticeRepository.findByIdAndChatRoomId(7L, 10L)).thenReturn(null)
+
+        val exception =
+            assertThrows(BaseException::class.java) {
+                service.updateNotice(1L, 10L, 7L, "새 공지", pinned = true)
+            }
+
+        assertEquals(ErrorCode.CHAT_ROOM_NOTICE_NOT_FOUND, exception.errorCode)
     }
 
     @Test
@@ -452,6 +885,51 @@ class ChatRoomServiceTest {
     }
 
     @Test
+    fun `강퇴 사유가 공백이면 멤버를 삭제하지 않는다`() {
+        val host = user(1L)
+        val member = user(2L)
+        val room = room(host)
+        val participant = ChatRoomParticipant(chatRoom = room, user = member, role = ChatParticipantRole.MEMBER)
+        `when`(roomRepository.findByIdForUpdate(10L)).thenReturn(room)
+        `when`(participantRepository.findByChatRoomIdAndUserId(10L, 2L)).thenReturn(participant)
+
+        val exception = assertThrows(BaseException::class.java) { service.kickMember(1L, 10L, 2L, "   ") }
+
+        assertEquals(ErrorCode.BAD_REQUEST, exception.errorCode)
+        verify(participantRepository, org.mockito.Mockito.never()).delete(participant)
+        verifyNoInteractions(kickHistoryRepository, notificationService, messageRepository)
+    }
+
+    @Test
+    fun `호스트가 아닌 사용자는 멤버를 강퇴할 수 없다`() {
+        val room = room(user(1L))
+        `when`(roomRepository.findByIdForUpdate(10L)).thenReturn(room)
+
+        val exception = assertThrows(BaseException::class.java) { service.kickMember(2L, 10L, 3L, "사유") }
+
+        assertEquals(ErrorCode.FORBIDDEN, exception.errorCode)
+        verifyNoInteractions(participantRepository, kickHistoryRepository, notificationService, messageRepository)
+    }
+
+    @Test
+    fun `강퇴된 사용자는 자신의 강퇴 사유 이력을 최신순 응답으로 조회한다`() {
+        val history = mock(ChatRoomKickHistory::class.java)
+        val kickedAt = LocalDateTime.of(2026, 8, 23, 10, 0)
+        `when`(history.id).thenReturn(44L)
+        `when`(history.chatRoomId).thenReturn(10L)
+        `when`(history.roomTitle).thenReturn("경주 여행")
+        `when`(history.reason).thenReturn("반복적인 약속 불이행")
+        `when`(history.createdDateTime).thenReturn(kickedAt)
+        `when`(kickHistoryRepository.findAllByKickedUserIdOrderByCreatedDateTimeDescIdDesc(2L)).thenReturn(listOf(history))
+
+        val response = service.getMyKickHistories(2L)
+
+        assertEquals(44L, response.single().kickHistoryId)
+        assertEquals("반복적인 약속 불이행", response.single().reason)
+        assertEquals(kickedAt, response.single().kickedAt)
+    }
+
+    @Test
     fun `신청중 목록은 승인 대기와 승인 후 대기 상태만 조회한다`() {
         `when`(
             applicationRepository.findAllByUserIdAndStatusInOrderByCreatedDateTimeDesc(
@@ -466,6 +944,54 @@ class ChatRoomServiceTest {
             2L,
             listOf(JoinApplicationStatus.PENDING, JoinApplicationStatus.WAITLISTED),
         )
+    }
+
+    @Test
+    fun `신청중 목록은 승인 대기는 순번 없이 대기열 신청은 현재 순번과 함께 반환한다`() {
+        val room = room(user(1L))
+        val applicant = user(2L)
+        val pending =
+            ChatRoomJoinApplication(
+                id = 20L,
+                chatRoom = room,
+                user = applicant,
+                applicationMessage = "승인 대기",
+                status = JoinApplicationStatus.PENDING,
+            )
+        val firstWaiter =
+            ChatRoomJoinApplication(
+                id = 21L,
+                chatRoom = room,
+                user = user(3L),
+                applicationMessage = "첫 대기",
+                status = JoinApplicationStatus.WAITLISTED,
+            )
+        val myWaitlist =
+            ChatRoomJoinApplication(
+                id = 22L,
+                chatRoom = room,
+                user = applicant,
+                applicationMessage = "내 대기",
+                status = JoinApplicationStatus.WAITLISTED,
+            )
+        `when`(
+            applicationRepository.findAllByUserIdAndStatusInOrderByCreatedDateTimeDesc(
+                2L,
+                listOf(JoinApplicationStatus.PENDING, JoinApplicationStatus.WAITLISTED),
+            ),
+        ).thenReturn(listOf(pending, myWaitlist))
+        `when`(
+            applicationRepository.findAllByChatRoomIdAndStatusOrderByCreatedDateTimeAscIdAsc(
+                10L,
+                JoinApplicationStatus.WAITLISTED,
+            ),
+        ).thenReturn(listOf(firstWaiter, myWaitlist))
+        `when`(participantRepository.countByChatRoomId(10L)).thenReturn(3L)
+
+        val response = service.getMyWaitingRooms(2L)
+
+        assertEquals(listOf(null, 2), response.map { it.waitlistPosition })
+        assertEquals(listOf(JoinApplicationStatus.PENDING, JoinApplicationStatus.WAITLISTED), response.map { it.applicationStatus })
     }
 
     @Test
@@ -510,6 +1036,51 @@ class ChatRoomServiceTest {
             }
 
         assertEquals(ErrorCode.CHAT_JOIN_APPLICATION_NOT_FOUND, exception.errorCode)
+    }
+
+    @Test
+    fun `참가자가 아닌 사용자가 나가면 승인 대기 또는 대기열 신청을 취소한다`() {
+        val room = room(user(1L))
+        val pending =
+            ChatRoomJoinApplication(
+                id = 20L,
+                chatRoom = room,
+                user = user(2L),
+                applicationMessage = "승인 대기",
+                status = JoinApplicationStatus.PENDING,
+            )
+        val waitlisted =
+            ChatRoomJoinApplication(
+                id = 21L,
+                chatRoom = room,
+                user = user(3L),
+                applicationMessage = "대기열",
+                status = JoinApplicationStatus.WAITLISTED,
+            )
+        `when`(roomRepository.findByIdForUpdate(10L)).thenReturn(room)
+        val activeStatuses = listOf(JoinApplicationStatus.PENDING, JoinApplicationStatus.WAITLISTED)
+        `when`(
+            applicationRepository.findFirstByChatRoomIdAndUserIdAndStatusInOrderByCreatedDateTimeDescIdDesc(
+                10L,
+                2L,
+                activeStatuses,
+            ),
+        ).thenReturn(pending)
+        `when`(
+            applicationRepository.findFirstByChatRoomIdAndUserIdAndStatusInOrderByCreatedDateTimeDescIdDesc(
+                10L,
+                3L,
+                activeStatuses,
+            ),
+        ).thenReturn(waitlisted)
+
+        val pendingResponse = service.leaveRoom(2L, 10L)
+        val waitlistResponse = service.leaveRoom(3L, 10L)
+
+        assertEquals("APPLICATION_CANCELLED", pendingResponse.result.name)
+        assertEquals("WAITLIST_CANCELLED", waitlistResponse.result.name)
+        verify(applicationRepository).delete(pending)
+        verify(applicationRepository).delete(waitlisted)
     }
 
     @Test
@@ -597,6 +1168,30 @@ class ChatRoomServiceTest {
     }
 
     @Test
+    fun `작성자 비공개 코스는 작성자와 원본 여행 및 평점 정보 없이 반환한다`() {
+        val course =
+            TravelCourse(
+                id = 5L,
+                type = TravelCourseType.CUSTOM,
+                owner = user(1L),
+                title = "작성자 비공개 코스",
+            ).also { it.publish(showCreatorNickname = false) }
+        `when`(courseRepository.findByIdAndType(5L, TravelCourseType.PUBLIC)).thenReturn(course)
+        `when`(roomRepository.countByCourseIdAndStatusNot(5L, ChatRoomStatus.CANCELLED)).thenReturn(0L)
+        `when`(ratingRepository.findAverageByCourseId(5L)).thenReturn(null)
+        `when`(ratingRepository.countByCourseId(5L)).thenReturn(0L)
+
+        val response = service.getCourse(5L)
+
+        assertEquals(null, response.creatorNickname)
+        assertEquals(null, response.creatorTravelStartDate)
+        assertEquals(null, response.creatorTravelEndDate)
+        assertEquals(null, response.averageRating)
+        assertEquals(null, response.thumbnail)
+        assertEquals(emptyList<Any>(), response.places)
+    }
+
+    @Test
     fun `태그를 선택하면 해당 태그의 공개 코스만 조회한다`() {
         val course = TravelCourse(id = 5L, type = TravelCourseType.PUBLIC, title = "힐링 코스")
         `when`(courseRepository.findAllByTypeAndTagIdOrderByCreatedDateTimeDesc(TravelCourseType.PUBLIC, 7L))
@@ -617,6 +1212,50 @@ class ChatRoomServiceTest {
 
         assertEquals(emptyList<Any>(), response)
         verify(courseRepository).findAllByTypeOrderByCreatedDateTimeDesc(TravelCourseType.PUBLIC)
+    }
+
+    @Test
+    fun `인기 코스는 당일 시간 숙박 기간 정보 없음과 장소 간 거리를 계산해 반환한다`() {
+        val contentType = TourismContentType(12, "관광지")
+        val dayCourse =
+            TravelCourse(id = 11L, type = TravelCourseType.CUSTOM, title = "당일 코스", durationMinutes = 90L).also { course ->
+                course.addCustomPlace(
+                    TourismContent(
+                        contentId = 101L,
+                        contentType = contentType,
+                        title = "출발지",
+                        latitude = 37.5665,
+                        longitude = 126.9780,
+                    ),
+                    1,
+                    1,
+                    LocalTime.of(9, 0),
+                )
+                course.addCustomPlace(
+                    TourismContent(
+                        contentId = 102L,
+                        contentType = contentType,
+                        title = "도착지",
+                        latitude = 37.5512,
+                        longitude = 126.9882,
+                    ),
+                    1,
+                    2,
+                    LocalTime.of(11, 0),
+                )
+                course.publish()
+            }
+        val exactHour = TravelCourse(id = 12L, type = TravelCourseType.PUBLIC, title = "두 시간 코스", durationMinutes = 120L)
+        val overnight = TravelCourse(id = 13L, type = TravelCourseType.PUBLIC, title = "숙박 코스", tripNights = 1, tripDays = 2)
+        val unknown = TravelCourse(id = 14L, type = TravelCourseType.PUBLIC, title = "미정 코스")
+        `when`(courseRepository.findPopularPublicCourses(PageRequest.of(0, 3)))
+            .thenReturn(listOf(dayCourse, exactHour, overnight, unknown))
+
+        val response = service.getPopularPublicCourses()
+
+        assertEquals(listOf("1시간 30분", "2시간", "1박 2일", "정보 없음"), response.map { it.travelTime })
+        assertEquals(true, response.first().distanceKm > 0.0)
+        assertEquals(2, response.first().places.size)
     }
 
     @Test
@@ -661,6 +1300,36 @@ class ChatRoomServiceTest {
         assertEquals(5, rating.score)
         verify(ratingRepository).findByChatRoomIdAndUserId(10L, 2L)
         verifyNoInteractions(userRepository)
+    }
+
+    @Test
+    fun `완료한 여행의 첫 코스 평가는 새 평점으로 저장한다`() {
+        val reviewer = user(2L)
+        val room = room(user(1L))
+        `when`(roomRepository.findById(10L)).thenReturn(Optional.of(room))
+        `when`(participantRepository.hasCompletedTrip(10L, 2L, LocalDate.now())).thenReturn(true)
+        `when`(ratingRepository.findByChatRoomIdAndUserId(10L, 2L)).thenReturn(null)
+        `when`(userRepository.findById(2L)).thenReturn(Optional.of(reviewer))
+        `when`(ratingRepository.save(any(TravelCourseRating::class.java))).thenAnswer { it.arguments[0] }
+
+        service.rateCourse(2L, 10L, 4)
+
+        val captor = ArgumentCaptor.forClass(TravelCourseRating::class.java)
+        verify(ratingRepository).save(captor.capture())
+        assertEquals(4, captor.value.score)
+        assertEquals(10L, captor.value.chatRoom.id)
+    }
+
+    @Test
+    fun `완료하지 않은 여행의 코스는 평가할 수 없다`() {
+        val room = room(user(1L))
+        `when`(roomRepository.findById(10L)).thenReturn(Optional.of(room))
+        `when`(participantRepository.hasCompletedTrip(10L, 2L, LocalDate.now())).thenReturn(false)
+
+        val exception = assertThrows(BaseException::class.java) { service.rateCourse(2L, 10L, 4) }
+
+        assertEquals(ErrorCode.TRAVEL_COURSE_RATING_NOT_ALLOWED, exception.errorCode)
+        verifyNoInteractions(ratingRepository, userRepository)
     }
 
     @Test
@@ -744,6 +1413,105 @@ class ChatRoomServiceTest {
     }
 
     @Test
+    fun `커스텀 코스로 채팅방을 만들면 코스 장소 태그 호스트와 개설 메시지를 저장한다`() {
+        val host = profiledUser(1L, Gender.F, LocalDate.now().minusYears(30))
+        val contentType = TourismContentType(12, "관광지")
+        val first = TourismContent(contentId = 100L, contentType = contentType, title = "서울역")
+        val second = TourismContent(contentId = 101L, contentType = contentType, title = "남산")
+        val tag = TravelCourseTag(id = 7L, name = "힐링")
+        val startDate = LocalDate.now().plusDays(10)
+        val request =
+            CreateChatRoomRequest(
+                title = " 서울 당일 여행 ",
+                description = " 함께 여행해요 ",
+                maxParticipants = 4,
+                tripType = TripType.DAY_TRIP,
+                startDate = startDate,
+                recruitmentDeadlineDate = startDate.minusDays(3),
+                dayTripStartTime = LocalTime.of(9, 0),
+                dayTripEndTime = LocalTime.of(18, 0),
+                meetingDateTime = startDate.atTime(8, 30),
+                genderRestriction = GenderRestriction.NONE,
+                joinApprovalMode = JoinApprovalMode.MANUAL,
+                courseType = TravelCourseType.CUSTOM,
+                customCourse =
+                    CreateCustomCourseRequest(
+                        title = " 서울 명소 코스 ",
+                        description = " 대표 명소 ",
+                        places = listOf(place(100L, 1, 1, 9, 0), place(101L, 1, 2, 11, 0)),
+                        tagIds = setOf(7L),
+                    ),
+            )
+        `when`(userRepository.findById(1L)).thenReturn(Optional.of(host))
+        `when`(courseRepository.saveAndFlush(any(TravelCourse::class.java))).thenAnswer { it.arguments[0] }
+        `when`(tourismContentRepository.findByContentId(100L)).thenReturn(first)
+        `when`(tourismContentRepository.findByContentId(101L)).thenReturn(second)
+        `when`(tagRepository.findAllById(setOf(7L))).thenReturn(listOf(tag))
+        `when`(roomRepository.saveAndFlush(any(ChatRoom::class.java))).thenAnswer { it.arguments[0] }
+        `when`(participantRepository.saveAndFlush(any(ChatRoomParticipant::class.java))).thenAnswer { it.arguments[0] }
+        `when`(messageRepository.saveAndFlush(any(ChatMessage::class.java))).thenAnswer { it.arguments[0] }
+
+        service.createRoom(1L, request)
+
+        val roomCaptor = ArgumentCaptor.forClass(ChatRoom::class.java)
+        verify(roomRepository).saveAndFlush(roomCaptor.capture())
+        assertEquals("서울 당일 여행", roomCaptor.value.roomTitle)
+        assertEquals("함께 여행해요", roomCaptor.value.description)
+        assertEquals(2, roomCaptor.value.course.places.size)
+        assertEquals(540L, roomCaptor.value.course.durationMinutes)
+        verify(placeRepository, org.mockito.Mockito.times(2)).save(any())
+        verify(notificationService).notifyRoomCreated(roomCaptor.value)
+    }
+
+    @Test
+    fun `등록된 공개 코스로 채팅방을 만들면 기존 코스를 그대로 연결한다`() {
+        val host = profiledUser(1L, Gender.M, LocalDate.now().minusYears(30))
+        val publicCourse = TravelCourse(id = 5L, type = TravelCourseType.PUBLIC, title = "공개 코스")
+        val thumbnail = mock(MultipartFile::class.java)
+        val thumbnailStream = ByteArrayInputStream(byteArrayOf(1, 2, 3))
+        val startDate = LocalDate.now().plusDays(10)
+        val request =
+            CreateChatRoomRequest(
+                title = "공개 코스 여행",
+                maxParticipants = 3,
+                tripType = TripType.OVERNIGHT,
+                startDate = startDate,
+                endDate = startDate.plusDays(1),
+                recruitmentDeadlineDate = startDate.minusDays(3),
+                meetingDateTime = startDate.atTime(8, 0),
+                genderRestriction = GenderRestriction.NONE,
+                joinApprovalMode = JoinApprovalMode.AUTO,
+                courseType = TravelCourseType.PUBLIC,
+                courseId = 5L,
+            )
+        `when`(userRepository.findById(1L)).thenReturn(Optional.of(host))
+        `when`(courseRepository.findByIdAndType(5L, TravelCourseType.PUBLIC)).thenReturn(publicCourse)
+        `when`(thumbnail.isEmpty).thenReturn(false)
+        `when`(thumbnail.originalFilename).thenReturn("cover.webp")
+        `when`(thumbnail.inputStream).thenReturn(thumbnailStream)
+        `when`(
+            objectStorageRepository.upload(
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString(),
+                anyInputStream(),
+            ),
+        ).thenReturn("chat-room/thumbnail/cover.webp")
+        `when`(objectStorageRepository.getDownloadUrl("chat-room/thumbnail/cover.webp"))
+            .thenReturn("https://cdn.example.com/cover.webp")
+        `when`(roomRepository.saveAndFlush(any(ChatRoom::class.java))).thenAnswer { it.arguments[0] }
+        `when`(participantRepository.saveAndFlush(any(ChatRoomParticipant::class.java))).thenAnswer { it.arguments[0] }
+        `when`(messageRepository.saveAndFlush(any(ChatMessage::class.java))).thenAnswer { it.arguments[0] }
+
+        service.createRoom(1L, request, thumbnail)
+
+        val roomCaptor = ArgumentCaptor.forClass(ChatRoom::class.java)
+        verify(roomRepository).saveAndFlush(roomCaptor.capture())
+        assertEquals(publicCourse, roomCaptor.value.course)
+        assertEquals("https://cdn.example.com/cover.webp", roomCaptor.value.thumbnail)
+        verifyNoInteractions(placeRepository, tagRepository, tourismContentRepository)
+    }
+
+    @Test
     fun `등록 코스를 사용하는 방도 호스트가 확정 전에 집합 정보만 수정할 수 있다`() {
         val room = room(user(1L))
         val changedDateTime = LocalDateTime.now().plusDays(9)
@@ -765,6 +1533,35 @@ class ChatRoomServiceTest {
         assertEquals(changedDateTime, room.meetingDateTime)
         verify(notificationService).notifyMeetingInfoUpdated(room, 0L)
         verifyNoInteractions(placeRepository)
+    }
+
+    @Test
+    fun `집합 위치는 위도와 경도를 함께 입력해야 한다`() {
+        val room = room(user(1L))
+        `when`(roomRepository.findByIdForUpdate(10L)).thenReturn(room)
+        val request =
+            UpdateMeetingInfoRequest(
+                meetingLatitude = 37.5547,
+                meetingLongitude = null,
+                meetingDateTime = room.startDate.atTime(8, 0),
+            )
+
+        val exception = assertThrows(BaseException::class.java) { service.updateMeetingInfo(1L, 10L, request) }
+
+        assertEquals(ErrorCode.BAD_REQUEST, exception.errorCode)
+        verifyNoInteractions(messageRepository)
+    }
+
+    @Test
+    fun `집합 일시는 여행 시작일 이후로 정할 수 없다`() {
+        val room = room(user(1L))
+        `when`(roomRepository.findByIdForUpdate(10L)).thenReturn(room)
+        val request = UpdateMeetingInfoRequest(meetingDateTime = room.startDate.plusDays(1).atStartOfDay())
+
+        val exception = assertThrows(BaseException::class.java) { service.updateMeetingInfo(1L, 10L, request) }
+
+        assertEquals(ErrorCode.BAD_REQUEST, exception.errorCode)
+        verifyNoInteractions(messageRepository)
     }
 
     @Test
@@ -826,6 +1623,27 @@ class ChatRoomServiceTest {
     }
 
     @Test
+    fun `호스트가 신청자를 승인할 때 자리가 있으면 참가자로 전환하고 신청을 삭제한다`() {
+        val host = user(1L)
+        val applicant = profiledUser(3L, Gender.F, LocalDate.now().minusYears(30))
+        val room = room(host)
+        val application =
+            ChatRoomJoinApplication(id = 30L, chatRoom = room, user = applicant, applicationMessage = "함께 가고 싶어요")
+        `when`(roomRepository.findByIdForUpdate(10L)).thenReturn(room)
+        `when`(applicationRepository.findByIdAndChatRoomId(30L, 10L)).thenReturn(application)
+        `when`(participantRepository.countByChatRoomId(10L)).thenReturn(2L)
+        `when`(participantRepository.save(any(ChatRoomParticipant::class.java))).thenAnswer { it.arguments[0] }
+        `when`(messageRepository.saveAndFlush(any(ChatMessage::class.java))).thenAnswer { it.arguments[0] }
+
+        val response = service.approveApplication(1L, 10L, 30L)
+
+        assertEquals("JOINED", response.result.name)
+        assertEquals(null, response.waitlistPosition)
+        verify(applicationRepository).delete(application)
+        verify(participantRepository).save(any(ChatRoomParticipant::class.java))
+    }
+
+    @Test
     fun `자동 승인 방은 조건에 맞는 신청자를 즉시 참가시킨다`() {
         val host = user(1L)
         val applicant = user(2L)
@@ -840,6 +1658,27 @@ class ChatRoomServiceTest {
 
         assertEquals("JOINED", response.result.name)
         verify(participantRepository).saveAndFlush(any(ChatRoomParticipant::class.java))
+    }
+
+    @Test
+    fun `여행 시작 하루 전부터는 참가 신청을 받지 않는다`() {
+        val startDate = LocalDate.now().plusDays(1)
+        val room =
+            room(
+                host = user(1L),
+                startDate = startDate,
+                endDate = startDate.plusDays(1),
+                recruitmentDeadlineDate = LocalDate.now(),
+            )
+        `when`(roomRepository.findByIdForUpdate(10L)).thenReturn(room)
+
+        val exception =
+            assertThrows(BaseException::class.java) {
+                service.applyToJoin(2L, 10L, JoinChatRoomRequest("신청합니다"))
+            }
+
+        assertEquals(ErrorCode.CHAT_ROOM_CLOSED, exception.errorCode)
+        verifyNoInteractions(userRepository, applicationRepository, messageRepository)
     }
 
     @Test
@@ -896,6 +1735,28 @@ class ChatRoomServiceTest {
     }
 
     @Test
+    fun `마감된 방이거나 이미 참가 신청 중이면 참가 가능 여부는 false다`() {
+        val tomorrow = LocalDate.now().plusDays(1)
+        val closedRoom =
+            room(
+                host = user(1L),
+                startDate = tomorrow,
+                endDate = tomorrow.plusDays(1),
+                recruitmentDeadlineDate = LocalDate.now(),
+            )
+        val openRoom = room(user(1L))
+        `when`(roomRepository.findById(10L)).thenReturn(Optional.of(closedRoom), Optional.of(openRoom))
+        `when`(participantRepository.existsByChatRoomIdAndUserId(10L, 2L)).thenReturn(true)
+
+        val closedResponse = service.getJoinEligibility(2L, 10L)
+        val duplicateResponse = service.getJoinEligibility(2L, 10L)
+
+        assertEquals(false, closedResponse.canApply)
+        assertEquals(false, duplicateResponse.canApply)
+        verifyNoInteractions(userRepository)
+    }
+
+    @Test
     fun `최소 나이만 설정된 방은 최소 나이 이상인 신청자를 허용한다`() {
         val host = user(1L)
         val applicant = profiledUser(2L, Gender.F, LocalDate.now().minusYears(30))
@@ -946,6 +1807,149 @@ class ChatRoomServiceTest {
     }
 
     @Test
+    fun `수동 승인 방 참가 신청은 호스트에게 전할 말을 정리해 승인 대기로 저장한다`() {
+        val applicant = profiledUser(2L, Gender.F, LocalDate.now().minusYears(30))
+        val room = room(user(1L), joinApprovalMode = JoinApprovalMode.MANUAL)
+        `when`(roomRepository.findByIdForUpdate(10L)).thenReturn(room)
+        `when`(userRepository.findById(2L)).thenReturn(Optional.of(applicant))
+        `when`(applicationRepository.save(any(ChatRoomJoinApplication::class.java))).thenAnswer { it.arguments[0] }
+
+        val response = service.applyToJoin(2L, 10L, JoinChatRoomRequest("  사진 찍는 것을 좋아해요  "))
+
+        val captor = ArgumentCaptor.forClass(ChatRoomJoinApplication::class.java)
+        verify(applicationRepository).save(captor.capture())
+        assertEquals(JoinApplicationStatus.PENDING, captor.value.status)
+        assertEquals("사진 찍는 것을 좋아해요", captor.value.applicationMessage)
+        assertEquals("PENDING_APPROVAL", response.result.name)
+    }
+
+    @Test
+    fun `자동 승인 방이 정원이면 조건을 충족한 신청자를 대기열에 저장한다`() {
+        val applicant = profiledUser(2L, Gender.F, LocalDate.now().minusYears(30))
+        val room = room(user(1L), joinApprovalMode = JoinApprovalMode.AUTO)
+        `when`(roomRepository.findByIdForUpdate(10L)).thenReturn(room)
+        `when`(userRepository.findById(2L)).thenReturn(Optional.of(applicant))
+        `when`(participantRepository.countByChatRoomId(10L)).thenReturn(3L)
+        `when`(applicationRepository.save(any(ChatRoomJoinApplication::class.java))).thenAnswer { it.arguments[0] }
+
+        val response = service.applyToJoin(2L, 10L, JoinChatRoomRequest("대기할게요"))
+
+        val captor = ArgumentCaptor.forClass(ChatRoomJoinApplication::class.java)
+        verify(applicationRepository).save(captor.capture())
+        assertEquals(JoinApplicationStatus.WAITLISTED, captor.value.status)
+        assertEquals("WAITLISTED", response.result.name)
+        verify(participantRepository, org.mockito.Mockito.never()).saveAndFlush(any(ChatRoomParticipant::class.java))
+    }
+
+    @Test
+    fun `이미 참가했거나 활성 신청이 있으면 중복 참가 신청을 거부한다`() {
+        val room = room(user(1L))
+        `when`(roomRepository.findByIdForUpdate(10L)).thenReturn(room)
+        `when`(participantRepository.existsByChatRoomIdAndUserId(10L, 2L)).thenReturn(true)
+
+        val exception =
+            assertThrows(BaseException::class.java) {
+                service.applyToJoin(2L, 10L, JoinChatRoomRequest("신청합니다"))
+            }
+
+        assertEquals(ErrorCode.CHAT_ROOM_ALREADY_JOINED, exception.errorCode)
+        verifyNoInteractions(userRepository)
+    }
+
+    @Test
+    fun `호스트는 승인 대기 신청자의 프로필과 신청 메시지를 조회한다`() {
+        val host = user(1L)
+        val applicant = profiledUser(2L, Gender.F, LocalDate.now().minusYears(28))
+        val room = room(host)
+        val application = mock(ChatRoomJoinApplication::class.java)
+        `when`(application.id).thenReturn(30L)
+        `when`(application.user).thenReturn(applicant)
+        `when`(application.applicationMessage).thenReturn("사진 찍는 것을 좋아해요")
+        `when`(application.createdDateTime).thenReturn(LocalDateTime.of(2026, 8, 23, 10, 0))
+        `when`(roomRepository.findById(10L)).thenReturn(Optional.of(room))
+        `when`(
+            applicationRepository.findAllByChatRoomIdAndStatusOrderByCreatedDateTimeAscIdAsc(
+                10L,
+                JoinApplicationStatus.PENDING,
+            ),
+        ).thenReturn(listOf(application))
+        `when`(participantRepository.countCompletedTrips(2L)).thenReturn(4L)
+
+        val response = service.getPendingApplications(1L, 10L)
+
+        assertEquals(1, response.size)
+        assertEquals("사진 찍는 것을 좋아해요", response.single().applicationMessage)
+        assertEquals(4, response.single().applicant.completedTripCount)
+    }
+
+    @Test
+    fun `호스트가 승인 대기 신청을 거절하면 거절 상태가 유지된다`() {
+        val host = user(1L)
+        val room = room(host)
+        val application =
+            ChatRoomJoinApplication(
+                id = 30L,
+                chatRoom = room,
+                user = user(2L),
+                applicationMessage = "신청합니다",
+            )
+        `when`(roomRepository.findByIdForUpdate(10L)).thenReturn(room)
+        `when`(applicationRepository.findByIdAndChatRoomId(30L, 10L)).thenReturn(application)
+
+        service.rejectApplication(1L, 10L, 30L)
+
+        assertEquals(JoinApplicationStatus.REJECTED, application.status)
+    }
+
+    @Test
+    fun `호스트는 모집 중인 여행을 확정할 수 있다`() {
+        val room = room(user(1L))
+        `when`(roomRepository.findByIdForUpdate(10L)).thenReturn(room)
+        `when`(messageRepository.saveAndFlush(any(ChatMessage::class.java))).thenAnswer { it.arguments[0] }
+
+        service.changeStatus(1L, 10L, ChatRoomStatus.CONFIRMED)
+
+        assertEquals(ChatRoomStatus.CONFIRMED, room.status)
+        val captor = ArgumentCaptor.forClass(ChatMessage::class.java)
+        verify(messageRepository).saveAndFlush(captor.capture())
+        assertEquals("여행이 확정되었어요.", captor.value.content)
+    }
+
+    @Test
+    fun `호스트는 모집 중인 여행을 취소할 수 있다`() {
+        val room = room(user(1L))
+        `when`(roomRepository.findByIdForUpdate(10L)).thenReturn(room)
+        `when`(messageRepository.saveAndFlush(any(ChatMessage::class.java))).thenAnswer { it.arguments[0] }
+
+        service.changeStatus(1L, 10L, ChatRoomStatus.CANCELLED)
+
+        assertEquals(ChatRoomStatus.CANCELLED, room.status)
+        val captor = ArgumentCaptor.forClass(ChatMessage::class.java)
+        verify(messageRepository).saveAndFlush(captor.capture())
+        assertEquals("여행이 불발되었어요.", captor.value.content)
+    }
+
+    @Test
+    fun `모집 중이 아니거나 모집 중 상태로의 변경은 거부한다`() {
+        val confirmedRoom = room(user(1L), status = ChatRoomStatus.CONFIRMED)
+        val recruitingRoom = room(user(1L))
+        `when`(roomRepository.findByIdForUpdate(10L)).thenReturn(confirmedRoom, recruitingRoom)
+
+        val closedRoomException =
+            assertThrows(BaseException::class.java) {
+                service.changeStatus(1L, 10L, ChatRoomStatus.CANCELLED)
+            }
+        val sameStatusException =
+            assertThrows(BaseException::class.java) {
+                service.changeStatus(1L, 10L, ChatRoomStatus.RECRUITING)
+            }
+
+        assertEquals(ErrorCode.INVALID_CHAT_ROOM_STATUS, closedRoomException.errorCode)
+        assertEquals(ErrorCode.INVALID_CHAT_ROOM_STATUS, sameStatusException.errorCode)
+        verifyNoInteractions(messageRepository)
+    }
+
+    @Test
     fun `참가자가 나가면 호스트가 승인한 대기자 중 첫 사용자가 자동 참가한다`() {
         val host = user(1L)
         val leavingUser = user(2L)
@@ -979,6 +1983,23 @@ class ChatRoomServiceTest {
         verify(participantRepository).saveAndFlush(any(ChatRoomParticipant::class.java))
     }
 
+    @Test
+    fun `호스트가 방을 나가면 모임을 취소하고 호스트 참가 관계를 삭제한다`() {
+        val host = profiledUser(1L, Gender.F, LocalDate.now().minusYears(30))
+        val room = room(host)
+        val participant = ChatRoomParticipant(chatRoom = room, user = host, role = ChatParticipantRole.HOST)
+        `when`(roomRepository.findByIdForUpdate(10L)).thenReturn(room)
+        `when`(participantRepository.findByChatRoomIdAndUserId(10L, 1L)).thenReturn(participant)
+        `when`(messageRepository.saveAndFlush(any(ChatMessage::class.java))).thenAnswer { it.arguments[0] }
+
+        val response = service.leaveRoom(1L, 10L)
+
+        assertEquals(ChatRoomStatus.CANCELLED, room.status)
+        assertEquals("HOST_LEFT_AND_ROOM_CANCELLED", response.result.name)
+        verify(participantRepository).delete(participant)
+        verify(participantRepository).flush()
+    }
+
     private fun user(id: Long) = User(id = id, userRole = UserRole.ROLE_USER)
 
     private fun notice(
@@ -993,6 +2014,23 @@ class ChatRoomServiceTest {
             `when`(it.pinned).thenReturn(pinned)
             `when`(it.author).thenReturn(author)
             `when`(it.createdDateTime).thenReturn(createdAt)
+        }
+
+    private fun message(
+        id: Long,
+        room: ChatRoom,
+        sender: User,
+        type: ChatMessageType = ChatMessageType.USER,
+        content: String = "메시지 $id",
+    ): ChatMessage =
+        mock(ChatMessage::class.java).also {
+            `when`(it.id).thenReturn(id)
+            `when`(it.chatRoom).thenReturn(room)
+            `when`(it.sender).thenReturn(sender)
+            `when`(it.type).thenReturn(type)
+            `when`(it.content).thenReturn(content)
+            `when`(it.createdDateTime).thenReturn(LocalDateTime.of(2026, 8, 22, 18, 0).plusMinutes(id))
+            `when`(it.mentionedUsers).thenReturn(emptySet())
         }
 
     private fun profiledUser(
@@ -1055,6 +2093,11 @@ class ChatRoomServiceTest {
                 ),
         )
 
+    private fun anyInputStream(): InputStream {
+        any(InputStream::class.java)
+        return ByteArrayInputStream(byteArrayOf())
+    }
+
     private fun room(
         host: User,
         course: TravelCourse = TravelCourse(id = 5L, type = TravelCourseType.PUBLIC, title = "울릉도 대표 코스"),
@@ -1067,6 +2110,9 @@ class ChatRoomServiceTest {
         recruitmentDeadlineDate: LocalDate = LocalDate.now().plusDays(5),
         status: ChatRoomStatus = ChatRoomStatus.RECRUITING,
         thumbnail: String? = "https://cdn.example.com/chat-room.png",
+        meetingLatitude: Double? = 36.0322,
+        meetingLongitude: Double? = 129.3747,
+        meetingDetails: String? = null,
     ) = ChatRoom(
         id = 10L,
         host = host,
@@ -1077,8 +2123,9 @@ class ChatRoomServiceTest {
         startDate = startDate,
         endDate = endDate,
         recruitmentDeadlineDate = recruitmentDeadlineDate,
-        meetingLatitude = 36.0322,
-        meetingLongitude = 129.3747,
+        meetingLatitude = meetingLatitude,
+        meetingLongitude = meetingLongitude,
+        meetingDetails = meetingDetails,
         meetingDateTime = startDate.atStartOfDay(),
         participationFee = 100000L,
         genderRestriction = genderRestriction,

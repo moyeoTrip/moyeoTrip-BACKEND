@@ -7,6 +7,7 @@ import kr.hanchae.moyeotrip.entity.chat.ChatParticipantRole
 import kr.hanchae.moyeotrip.entity.chat.ChatRoom
 import kr.hanchae.moyeotrip.entity.chat.ChatRoomKickHistory
 import kr.hanchae.moyeotrip.entity.chat.ChatRoomParticipant
+import kr.hanchae.moyeotrip.entity.feed.Feed
 import kr.hanchae.moyeotrip.entity.notification.ChatNotificationMode
 import kr.hanchae.moyeotrip.entity.notification.ChatRoomNotificationSetting
 import kr.hanchae.moyeotrip.entity.notification.Notification
@@ -14,10 +15,14 @@ import kr.hanchae.moyeotrip.entity.notification.NotificationSetting
 import kr.hanchae.moyeotrip.entity.notification.NotificationType
 import kr.hanchae.moyeotrip.entity.tour.TravelCourse
 import kr.hanchae.moyeotrip.entity.tour.TravelCourseType
+import kr.hanchae.moyeotrip.entity.user.FriendRequest
+import kr.hanchae.moyeotrip.entity.user.Friendship
 import kr.hanchae.moyeotrip.entity.user.NicknameColor
 import kr.hanchae.moyeotrip.entity.user.User
 import kr.hanchae.moyeotrip.entity.user.UserInformation
 import kr.hanchae.moyeotrip.entity.user.UserRole
+import kr.hanchae.moyeotrip.exception.BaseException
+import kr.hanchae.moyeotrip.exception.ErrorCode
 import kr.hanchae.moyeotrip.repository.ChatRoomKickHistoryRepository
 import kr.hanchae.moyeotrip.repository.ChatRoomNotificationSettingRepository
 import kr.hanchae.moyeotrip.repository.ChatRoomParticipantRepository
@@ -27,6 +32,9 @@ import kr.hanchae.moyeotrip.repository.UserRepository
 import kr.hanchae.moyeotrip.service.realtime.RealtimeMessagingService
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertNotNull
+import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.mockito.ArgumentCaptor
@@ -35,10 +43,12 @@ import org.mockito.Mockito.mock
 import org.mockito.Mockito.verify
 import org.mockito.Mockito.verifyNoInteractions
 import org.mockito.Mockito.`when`
+import org.springframework.data.domain.PageRequest
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
+import java.util.Optional
 
 class NotificationServiceTest {
     private val notificationRepository = mock(NotificationRepository::class.java)
@@ -58,6 +68,197 @@ class NotificationServiceTest {
             userRepository,
             realtimeMessagingService,
         )
+
+    @Test
+    fun `알림 목록은 lastId 커서와 다음 페이지 및 안 읽은 수를 반환한다`() {
+        val recipient = user(2L, "받는이")
+        val notifications =
+            listOf(
+                notification(5L, recipient),
+                notification(4L, recipient),
+                notification(3L, recipient),
+            )
+        `when`(
+            notificationRepository.findAllByRecipientIdAndIdLessThanOrderByIdDesc(
+                2L,
+                Long.MAX_VALUE,
+                PageRequest.of(0, 3),
+            ),
+        ).thenReturn(notifications)
+        `when`(notificationRepository.countByRecipientIdAndReadDateTimeIsNull(2L)).thenReturn(4L)
+
+        val response = service.getNotifications(2L, lastId = null, size = 2, unreadOnly = false)
+
+        assertEquals(listOf(5L, 4L), response.notifications.map { it.notificationId })
+        assertEquals(4L, response.nextLastId)
+        assertTrue(response.hasNext)
+        assertEquals(4L, response.unreadCount)
+    }
+
+    @Test
+    fun `안 읽은 알림만 커서 이전에서 조회한다`() {
+        `when`(
+            notificationRepository.findAllByRecipientIdAndReadDateTimeIsNullAndIdLessThanOrderByIdDesc(
+                2L,
+                10L,
+                PageRequest.of(0, 3),
+            ),
+        ).thenReturn(emptyList())
+
+        val response = service.getNotifications(2L, lastId = 10L, size = 2, unreadOnly = true)
+
+        assertFalse(response.hasNext)
+        assertNull(response.nextLastId)
+    }
+
+    @Test
+    fun `내 알림 한 건과 전체 안 읽은 알림을 읽음 처리한다`() {
+        val recipient = user(2L, "받는이")
+        val first = notification(1L, recipient)
+        val second = notification(2L, recipient)
+        `when`(notificationRepository.findByIdAndRecipientId(1L, 2L)).thenReturn(first)
+        `when`(notificationRepository.findAllByRecipientIdAndReadDateTimeIsNull(2L)).thenReturn(listOf(second))
+
+        service.markRead(2L, 1L)
+        service.markAllRead(2L)
+
+        assertNotNull(first.readDateTime)
+        assertNotNull(second.readDateTime)
+    }
+
+    @Test
+    fun `내 알림이 아니면 읽음 처리할 수 없다`() {
+        `when`(notificationRepository.findByIdAndRecipientId(1L, 2L)).thenReturn(null)
+
+        val exception = assertThrows(BaseException::class.java) { service.markRead(2L, 1L) }
+
+        assertEquals(ErrorCode.NOTIFICATION_NOT_FOUND, exception.errorCode)
+    }
+
+    @Test
+    fun `강퇴 타입이 아닌 알림으로 강퇴 이력을 조회할 수 없다`() {
+        val recipient = user(2L, "받는이")
+        val notification =
+            Notification(1L, recipient, NotificationType.FEED_LIKE, "좋아요", chatRoomId = 10L, referenceId = 3L)
+        `when`(notificationRepository.findByIdAndRecipientId(1L, 2L)).thenReturn(notification)
+
+        val exception = assertThrows(BaseException::class.java) { service.getKickHistory(2L, 1L) }
+
+        assertEquals(ErrorCode.BAD_REQUEST, exception.errorCode)
+        verifyNoInteractions(kickHistoryRepository)
+    }
+
+    @Test
+    fun `알림 설정이 없으면 기본 설정을 생성한다`() {
+        val recipient = user(2L, "받는이")
+        `when`(settingRepository.findByUserId(2L)).thenReturn(null)
+        `when`(userRepository.findById(2L)).thenReturn(Optional.of(recipient))
+        `when`(settingRepository.save(any(NotificationSetting::class.java))).thenAnswer { it.arguments[0] }
+
+        val response = service.getSetting(2L)
+
+        assertFalse(response.doNotDisturbEnabled)
+        verify(settingRepository).save(any(NotificationSetting::class.java))
+    }
+
+    @Test
+    fun `방해 금지를 켤 때 시간이나 요일이 빠지면 거부한다`() {
+        val invalidCases =
+            listOf(
+                Triple(null, LocalTime.of(7, 0), setOf(DayOfWeek.MONDAY)),
+                Triple(LocalTime.of(22, 0), null, setOf(DayOfWeek.MONDAY)),
+                Triple(LocalTime.of(22, 0), LocalTime.of(22, 0), setOf(DayOfWeek.MONDAY)),
+                Triple(LocalTime.of(22, 0), LocalTime.of(7, 0), emptySet()),
+            )
+
+        invalidCases.forEach { (start, end, days) ->
+            val exception =
+                assertThrows(BaseException::class.java) {
+                    service.updateSetting(2L, ChatNotificationMode.ALL, true, true, false, true, start, end, days)
+                }
+            assertEquals(ErrorCode.BAD_REQUEST, exception.errorCode)
+        }
+        verifyNoInteractions(userRepository)
+    }
+
+    @Test
+    fun `채팅방 알림 설정이 없으면 참가자 기준으로 생성하고 이후에는 갱신한다`() {
+        val recipient = user(2L, "받는이")
+        val room = room(user(1L, "호스트"))
+        val participant = ChatRoomParticipant(chatRoom = room, user = recipient, role = ChatParticipantRole.MEMBER)
+        val existing = ChatRoomNotificationSetting(user = recipient, chatRoom = room, enabled = false)
+        `when`(participantRepository.findByChatRoomIdAndUserId(10L, 2L)).thenReturn(participant)
+        `when`(roomSettingRepository.findByUserIdAndChatRoomId(2L, 10L)).thenReturn(null, existing)
+        `when`(roomSettingRepository.save(any(ChatRoomNotificationSetting::class.java))).thenAnswer { it.arguments[0] }
+
+        val created = service.updateChatRoomSetting(2L, 10L, enabled = false)
+        val updated = service.updateChatRoomSetting(2L, 10L, enabled = true)
+
+        assertFalse(created.enabled)
+        assertTrue(updated.enabled)
+    }
+
+    @Test
+    fun `채팅 메시지 발신자가 없으면 알림을 만들지 않는다`() {
+        val message = ChatMessage(id = 20L, chatRoom = room(user(1L, "호스트")), type = ChatMessageType.SYSTEM, content = "안내")
+
+        service.notifyMessage(message)
+
+        verifyNoInteractions(participantRepository, notificationRepository)
+    }
+
+    @Test
+    fun `멘션된 사용자는 멘션 전용 설정에서도 실시간 알림을 받는다`() {
+        val sender = user(1L, "보낸이")
+        val recipient = user(2L, "받는이")
+        val room = room(sender)
+        val message = ChatMessage(id = 20L, chatRoom = room, sender = sender, type = ChatMessageType.USER, content = "확인해주세요")
+        message.mention(listOf(recipient))
+        `when`(participantRepository.findAllByChatRoomIdOrderByCreatedDateTimeAsc(10L))
+            .thenReturn(
+                listOf(
+                    ChatRoomParticipant(chatRoom = room, user = sender, role = ChatParticipantRole.HOST),
+                    ChatRoomParticipant(chatRoom = room, user = recipient, role = ChatParticipantRole.MEMBER),
+                ),
+            )
+        `when`(settingRepository.findByUserId(2L))
+            .thenReturn(NotificationSetting(user = recipient, chatNotificationMode = ChatNotificationMode.MENTIONS_AND_REPLIES))
+        `when`(notificationRepository.save(any(Notification::class.java)))
+            .thenAnswer { (it.arguments[0] as Notification).withCreatedAt(LocalDateTime.now()) }
+
+        service.notifyMessage(message)
+
+        verify(notificationRepository).save(any(Notification::class.java))
+        verify(realtimeMessagingService).sendNotification(org.mockito.ArgumentMatchers.eq(2L), anyValue())
+    }
+
+    @Test
+    fun `이미 생성된 동일 알림은 중복 저장하지 않는다`() {
+        val room = room(user(1L, "호스트"))
+        `when`(
+            notificationRepository.existsByRecipientIdAndTypeAndReferenceId(
+                1L,
+                NotificationType.CHAT_ROOM_CREATED,
+                10L,
+            ),
+        ).thenReturn(true)
+
+        service.notifyRoomCreated(room)
+
+        verify(notificationRepository, org.mockito.Mockito.never()).save(any(Notification::class.java))
+        verifyNoInteractions(realtimeMessagingService)
+    }
+
+    @Test
+    fun `자기 피드 좋아요는 알림을 만들지 않는다`() {
+        val author = user(1L, "작성자")
+        val feed = mock(kr.hanchae.moyeotrip.entity.feed.Feed::class.java)
+        `when`(feed.author).thenReturn(author)
+
+        service.notifyFeedLiked(feed, author)
+
+        verifyNoInteractions(notificationRepository)
+    }
 
     @Test
     fun `멘션 답글 전용 설정은 일반 채팅 알림을 만들지 않는다`() {
@@ -188,6 +389,123 @@ class NotificationServiceTest {
         assertEquals(44L, notificationCaptor.value.referenceId)
     }
 
+    @Test
+    fun `채팅방 알림 설정 조회는 참가자의 저장값 또는 기본 활성값을 반환한다`() {
+        val recipient = user(2L, "받는이")
+        val room = room(user(1L, "호스트"))
+        val participant = ChatRoomParticipant(chatRoom = room, user = recipient, role = ChatParticipantRole.MEMBER)
+        `when`(participantRepository.findByChatRoomIdAndUserId(10L, 2L)).thenReturn(participant)
+        `when`(roomSettingRepository.findByUserIdAndChatRoomId(2L, 10L))
+            .thenReturn(null, ChatRoomNotificationSetting(user = recipient, chatRoom = room, enabled = false))
+
+        assertTrue(service.getChatRoomSetting(2L, 10L).enabled)
+        assertFalse(service.getChatRoomSetting(2L, 10L).enabled)
+    }
+
+    @Test
+    fun `전체 알림 설정을 정상 값으로 갱신한다`() {
+        val recipient = user(2L, "받는이")
+        val setting = NotificationSetting(user = recipient)
+        `when`(settingRepository.findByUserId(2L)).thenReturn(setting)
+
+        val response =
+            service.updateSetting(
+                userId = 2L,
+                chatNotificationMode = ChatNotificationMode.NONE,
+                recruitmentDeadlineEnabled = false,
+                socialActivityEnabled = false,
+                marketingEnabled = true,
+                doNotDisturbEnabled = true,
+                doNotDisturbStartTime = LocalTime.of(22, 0),
+                doNotDisturbEndTime = LocalTime.of(7, 0),
+                doNotDisturbDays = setOf(DayOfWeek.MONDAY),
+            )
+
+        assertTrue(response.doNotDisturbEnabled)
+        assertEquals(LocalTime.of(22, 0), response.doNotDisturbStartTime)
+        assertEquals(setOf(DayOfWeek.MONDAY), response.doNotDisturbDays)
+        assertEquals(ChatNotificationMode.NONE, setting.chatNotificationMode)
+    }
+
+    @Test
+    fun `코스와 집합 정보 변경 알림은 호스트를 제외한 멤버에게 저장한다`() {
+        val host = user(1L, "호스트")
+        val member = user(2L, "멤버")
+        val room = room(host)
+        `when`(participantRepository.findAllByChatRoomIdOrderByCreatedDateTimeAsc(10L))
+            .thenReturn(
+                listOf(
+                    ChatRoomParticipant(chatRoom = room, user = host, role = ChatParticipantRole.HOST),
+                    ChatRoomParticipant(chatRoom = room, user = member, role = ChatParticipantRole.MEMBER),
+                ),
+            )
+        stubNotificationSave()
+
+        service.notifyCourseUpdated(room, 101L)
+        service.notifyMeetingInfoUpdated(room, 102L)
+
+        val captor = ArgumentCaptor.forClass(Notification::class.java)
+        verify(notificationRepository, org.mockito.Mockito.times(2)).save(captor.capture())
+        assertEquals(
+            listOf(NotificationType.TRAVEL_COURSE_UPDATED, NotificationType.MEETING_INFO_UPDATED),
+            captor.allValues.map { it.type },
+        )
+        assertTrue(captor.allValues.all { it.recipient.id == 2L })
+    }
+
+    @Test
+    fun `모집 마감 알림은 현재 인원과 디데이를 모든 참가자에게 안내한다`() {
+        val host = user(1L, "호스트")
+        val member = user(2L, "멤버")
+        val room = room(host)
+        `when`(participantRepository.countByChatRoomId(10L)).thenReturn(2L)
+        `when`(participantRepository.findAllByChatRoomIdOrderByCreatedDateTimeAsc(10L))
+            .thenReturn(
+                listOf(
+                    ChatRoomParticipant(chatRoom = room, user = host, role = ChatParticipantRole.HOST),
+                    ChatRoomParticipant(chatRoom = room, user = member, role = ChatParticipantRole.MEMBER),
+                ),
+            )
+        stubNotificationSave()
+
+        service.notifyRecruitmentDeadline(room)
+
+        val captor = ArgumentCaptor.forClass(Notification::class.java)
+        verify(notificationRepository, org.mockito.Mockito.times(2)).save(captor.capture())
+        assertTrue(captor.allValues.all { it.type == NotificationType.RECRUITMENT_DEADLINE })
+        assertTrue(captor.allValues.all { it.content.contains("현재 2/3명") })
+    }
+
+    @Test
+    fun `피드 좋아요와 친구 신청 수락 이벤트를 각각 알림으로 저장한다`() {
+        val author = user(1L, "작성자")
+        val actor = user(2L, "좋아요 사용자")
+        val receiver = user(3L, "친구 신청 수신자")
+        val feed = mock(Feed::class.java)
+        `when`(feed.id).thenReturn(20L)
+        `when`(feed.author).thenReturn(author)
+        `when`(feed.chatRoom).thenReturn(room(author))
+        val friendRequest = FriendRequest(id = 30L, requester = actor, receiver = receiver)
+        val friendship = Friendship(id = 40L, firstUser = author, secondUser = actor)
+        stubNotificationSave()
+
+        service.notifyFeedLiked(feed, actor)
+        service.notifyFriendRequested(friendRequest)
+        service.notifyFriendAccepted(friendship, actor)
+
+        val captor = ArgumentCaptor.forClass(Notification::class.java)
+        verify(notificationRepository, org.mockito.Mockito.times(3)).save(captor.capture())
+        assertEquals(
+            listOf(NotificationType.FEED_LIKE, NotificationType.FRIEND_REQUEST, NotificationType.FRIEND_ACCEPTED),
+            captor.allValues.map { it.type },
+        )
+    }
+
+    private fun stubNotificationSave() {
+        `when`(notificationRepository.save(any(Notification::class.java)))
+            .thenAnswer { (it.arguments[0] as Notification).withCreatedAt(LocalDateTime.now()) }
+    }
+
     private fun user(
         id: Long,
         nickname: String,
@@ -196,6 +514,17 @@ class NotificationServiceTest {
         userRole = UserRole.ROLE_USER,
         userInformation = UserInformation(nickname, NicknameColor.GREEN, kr.hanchae.moyeotrip.entity.user.Gender.N),
     )
+
+    private fun notification(
+        id: Long,
+        recipient: User,
+    ) = Notification(
+        id = id,
+        recipient = recipient,
+        type = NotificationType.FRIEND_REQUEST,
+        content = "알림 $id",
+        referenceId = id,
+    ).withCreatedAt(LocalDateTime.of(2026, 8, 23, 12, 0).plusMinutes(id))
 
     private fun room(host: User) =
         ChatRoom(
@@ -217,4 +546,7 @@ class NotificationServiceTest {
             .set(this, createdAt)
         return this
     }
+
+    @Suppress("UNCHECKED_CAST")
+    private fun <T> anyValue(): T = org.mockito.Mockito.any<T>()
 }
