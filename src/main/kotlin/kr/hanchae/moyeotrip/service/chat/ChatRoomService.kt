@@ -224,33 +224,50 @@ class ChatRoomService(
         limit: Int,
     ): List<SearchChatRoomResponse> {
         val blockedUserIds = userBlockRepository.findRelatedUserIds(userId).ifEmpty { listOf(NO_USER_ID) }
-        return roomRepository
-            .searchRooms(
-                userId = userId,
-                blockedUserIds = blockedUserIds,
-                keyword = keyword?.trim()?.takeIf(String::isNotEmpty),
-                today = LocalDate.now(),
-                pageable = PageRequest.of(0, limit.coerceIn(1, MAX_DISCOVER_ROOM_LIMIT)),
-            ).map { room ->
-                SearchChatRoomResponse(
-                    roomId = room.id,
-                    title = room.roomTitle,
-                    description = room.description,
-                    thumbnail = room.thumbnail,
-                    tripType = room.tripType,
-                    startDate = room.startDate,
-                    endDate = room.endDate,
-                    recruitmentDeadlineDate = room.recruitmentDeadlineDate,
-                    hostId = room.host.id,
-                    participantCount = participantRepository.countByChatRoomId(room.id).toInt(),
-                    maxParticipants = room.maxParticipants,
-                    courseTitle = room.course.title,
-                    tags =
-                        room.course.tags
-                            .sortedBy { it.id }
-                            .map { TravelCourseTagResponse(it.id, it.name) },
+        val rooms =
+            roomRepository
+                .searchRooms(
+                    userId = userId,
+                    blockedUserIds = blockedUserIds,
+                    keyword = keyword?.trim()?.takeIf(String::isNotEmpty),
+                    today = LocalDate.now(),
+                    pageable = PageRequest.of(0, limit.coerceIn(1, MAX_DISCOVER_ROOM_LIMIT)),
                 )
-            }
+        val favoriteRoomIds =
+            rooms
+                .map(ChatRoom::id)
+                .takeIf(List<Long>::isNotEmpty)
+                ?.let { roomFavoriteRepository.findChatRoomIdsByUserIdAndChatRoomIdIn(userId, it) }
+                .orEmpty()
+        return rooms.map { room ->
+            SearchChatRoomResponse(
+                roomId = room.id,
+                title = room.roomTitle,
+                description = room.description,
+                thumbnail = room.thumbnail,
+                tripType = room.tripType,
+                startDate = room.startDate,
+                endDate = room.endDate,
+                dayTripStartTime = room.dayTripStartTime,
+                dayTripEndTime = room.dayTripEndTime,
+                recruitmentDeadlineDate = room.recruitmentDeadlineDate,
+                recruitmentDDay = room.recruitmentDDay(),
+                status = room.status,
+                favorite = room.id in favoriteRoomIds,
+                meetingLatitude = room.meetingLatitude,
+                meetingLongitude = room.meetingLongitude,
+                meetingDetails = room.meetingDetails,
+                meetingDateTime = room.meetingDateTime,
+                hostId = room.host.id,
+                participantCount = participantRepository.countByChatRoomId(room.id).toInt(),
+                maxParticipants = room.maxParticipants,
+                courseTitle = room.course.title,
+                tags =
+                    room.course.tags
+                        .sortedBy { it.id }
+                        .map { TravelCourseTagResponse(it.id, it.name) },
+            )
+        }
     }
 
     @Transactional(readOnly = true)

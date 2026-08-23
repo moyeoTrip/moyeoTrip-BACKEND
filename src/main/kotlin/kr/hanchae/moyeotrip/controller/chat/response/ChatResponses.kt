@@ -536,8 +536,26 @@ data class SearchChatRoomResponse(
     val startDate: LocalDate,
     @field:Schema(description = "숙박 여행 종료일. 당일 여행이면 null", nullable = true, type = "string", format = "date")
     val endDate: LocalDate?,
+    @field:Schema(description = "당일 여행 시작 시각. 숙박 여행이면 null", example = "09:00", nullable = true)
+    val dayTripStartTime: LocalTime?,
+    @field:Schema(description = "당일 여행 종료 시각. 숙박 여행이면 null", example = "18:00", nullable = true)
+    val dayTripEndTime: LocalTime?,
     @field:Schema(description = "참가 신청 마감일", example = "2026-09-09", type = "string", format = "date")
     val recruitmentDeadlineDate: LocalDate,
+    @field:Schema(description = "모집 마감일까지 남은 일수", example = "3")
+    val recruitmentDDay: Long,
+    @field:Schema(description = "채팅방 여행 상태", example = "RECRUITING")
+    val status: ChatRoomStatus,
+    @field:Schema(description = "로그인 사용자의 찜 여부", example = "false")
+    val favorite: Boolean,
+    @field:Schema(description = "집합 장소 위도. 미정이면 null", example = "36.435612", nullable = true)
+    val meetingLatitude: Double?,
+    @field:Schema(description = "집합 장소 경도. 미정이면 null", example = "129.057214", nullable = true)
+    val meetingLongitude: Double?,
+    @field:Schema(description = "집합 장소 이름 또는 상세 안내. 미정이면 null", example = "포항역 1번 출구", nullable = true)
+    val meetingDetails: String?,
+    @field:Schema(description = "집합 일시", example = "2026-09-12T08:30:00")
+    val meetingDateTime: LocalDateTime,
     @field:Schema(description = "호스트 사용자 ID", example = "12")
     val hostId: Long,
     @field:Schema(description = "현재 승인된 참가자 수", example = "4")

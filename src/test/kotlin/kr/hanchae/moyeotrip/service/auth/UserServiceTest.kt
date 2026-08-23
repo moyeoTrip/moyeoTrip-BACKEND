@@ -242,6 +242,40 @@ class UserServiceTest {
         assertEquals(Gender.F, response.gender)
     }
 
+    @Test
+    fun `존재하지 않는 관심 지역 ID가 포함되면 프로필 수정을 거부한다`() {
+        val user = profileImageRequiredUser()
+        val birthDate = LocalDate.now().minusYears(25)
+        `when`(userRepository.findByIdForUpdate(7L)).thenReturn(user)
+        `when`(legalDongCodeRepository.findAllById(setOf(1L, 99999L)))
+            .thenReturn(
+                listOf(
+                    LegalDongCode(
+                        id = 1L,
+                        regionCode = "47",
+                        signguCode = "47170",
+                        regionName = "경상북도",
+                        signguName = "안동시",
+                    ),
+                ),
+            )
+
+        val exception =
+            assertThrows(BaseException::class.java) {
+                service.updateProfile(
+                    7L,
+                    UpdateProfileRequest(
+                        interestedRegionIds = setOf(1L, 99999L),
+                        birthDate = birthDate,
+                        gender = Gender.F,
+                    ),
+                )
+            }
+
+        assertEquals(ErrorCode.BAD_REQUEST, exception.errorCode)
+        verifyNoInteractions(travelStyleRepository)
+    }
+
     private fun profileImageRequiredUser(): User =
         User(
             id = 7L,
