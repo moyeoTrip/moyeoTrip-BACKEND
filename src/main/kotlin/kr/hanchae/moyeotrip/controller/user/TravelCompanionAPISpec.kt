@@ -2,6 +2,7 @@ package kr.hanchae.moyeotrip.controller.user
 
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.Parameter
+import io.swagger.v3.oas.annotations.media.ArraySchema
 import io.swagger.v3.oas.annotations.media.Content
 import io.swagger.v3.oas.annotations.media.ExampleObject
 import io.swagger.v3.oas.annotations.media.Schema
@@ -21,15 +22,15 @@ interface TravelCompanionAPISpec {
             ApiResponse(
                 responseCode = "200",
                 description = "여행 동행자 목록 조회 성공",
-                content = [Content(schema = Schema(implementation = TripCompanionResponse::class))],
+                content = [Content(array = ArraySchema(schema = Schema(implementation = TripCompanionResponse::class)))],
             ),
             ApiResponse(
                 responseCode = "403",
-                description = "완료한 여행의 참가자가 아니어서 동행자를 조회할 수 없음",
+                description = "채팅방 참가자가 아니어서 동행자를 조회할 수 없음",
                 content = [
                     Content(
                         schema = Schema(implementation = ErrorResponse::class),
-                        examples = [ExampleObject(value = TravelCompanionSwaggerExamples.FORBIDDEN)],
+                        examples = [ExampleObject(value = TravelCompanionSwaggerExamples.NOT_PARTICIPANT)],
                     ),
                 ],
             ),
@@ -40,6 +41,16 @@ interface TravelCompanionAPISpec {
                     Content(
                         schema = Schema(implementation = ErrorResponse::class),
                         examples = [ExampleObject(value = TravelCompanionSwaggerExamples.CHAT_ROOM_NOT_FOUND)],
+                    ),
+                ],
+            ),
+            ApiResponse(
+                responseCode = "409",
+                description = "여행이 아직 완료되지 않음",
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [ExampleObject(value = TravelCompanionSwaggerExamples.TRIP_NOT_COMPLETED)],
                     ),
                 ],
             ),
@@ -93,6 +104,16 @@ interface TravelCompanionAPISpec {
                     ),
                 ],
             ),
+            ApiResponse(
+                responseCode = "409",
+                description = "여행이 아직 완료되지 않음",
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [ExampleObject(value = TravelCompanionSwaggerExamples.TRIP_NOT_COMPLETED)],
+                    ),
+                ],
+            ),
         ],
     )
     fun reviewCompanion(
@@ -133,6 +154,8 @@ interface TravelCompanionAPISpec {
 private object TravelCompanionSwaggerExamples {
     const val BAD_REQUEST = """{"code":40000,"errorMessage":"잘못된 요청입니다."}"""
     const val FORBIDDEN = """{"code":40300,"errorMessage":"접근 권한이 없습니다."}"""
+    const val NOT_PARTICIPANT = """{"code":40301,"errorMessage":"사용자가 채팅방에 참여하고 있지 않습니다."}"""
+    const val TRIP_NOT_COMPLETED = """{"code":40915,"errorMessage":"아직 완료되지 않은 여행입니다."}"""
     const val CHAT_ROOM_NOT_FOUND = """{"code":40405,"errorMessage":"채팅방을 찾을 수 없습니다."}"""
     const val TRAVEL_COMPANION_NOT_FOUND = """{"code":40402,"errorMessage":"요청한 리소스를 찾을 수 없습니다."}"""
     const val USER_NOT_FOUND = """{"code":40400,"errorMessage":"해당 유저를 찾을 수 없습니다."}"""

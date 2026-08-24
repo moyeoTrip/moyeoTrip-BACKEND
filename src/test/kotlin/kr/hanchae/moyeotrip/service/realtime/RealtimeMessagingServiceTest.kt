@@ -9,10 +9,12 @@ import kr.hanchae.moyeotrip.controller.notification.response.NotificationRespons
 import kr.hanchae.moyeotrip.entity.chat.ChatMessageType
 import kr.hanchae.moyeotrip.entity.notification.NotificationType
 import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.Assertions.assertDoesNotThrow
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 import org.mockito.ArgumentCaptor
 import org.mockito.ArgumentMatchers.any
+import org.mockito.ArgumentMatchers.anyString
 import org.mockito.ArgumentMatchers.eq
 import org.mockito.Mockito.mock
 import org.mockito.Mockito.never
@@ -43,11 +45,9 @@ class RealtimeMessagingServiceTest {
     @Test
     fun `Redis 구독 메시지를 채팅방 웹소켓 구독자에게 전달하고 해제한다`() {
         val listener = subscribe()
-        val message = chatMessage()
-        service.sendChatMessage(10L, message)
-        val json = publishedJson()
+        service.sendChatMessage(10L, chatMessage())
 
-        listener.onMessage("moyeotrip:realtime-events", json)
+        listener.onMessage("moyeotrip:realtime-events", publishedJson())
         service.unsubscribe()
 
         verify(messagingTemplate).convertAndSend(eq("/topic/chat-rooms/10/messages"), any(JsonNode::class.java))
@@ -83,18 +83,41 @@ class RealtimeMessagingServiceTest {
     }
 
     @Test
+    fun `Redis 발행 실패가 채팅 REST 요청의 실패로 전파되지 않는다`() {
+        subscribe()
+        `when`(topic.publish(anyString())).thenThrow(IllegalStateException("Redis unavailable"))
+
+        assertDoesNotThrow { service.sendChatMessage(101L, systemMessage()) }
+    }
+
+    @Test
     fun `트랜잭션 중 생성된 이벤트는 커밋 후 Redis에 발행한다`() {
         subscribe()
-        TransactionSynchronizationManager.setActualTransactionActive(true)
         TransactionSynchronizationManager.initSynchronization()
+        TransactionSynchronizationManager.setActualTransactionActive(true)
 
         service.sendChatMessage(10L, chatMessage())
 
-        verify(topic, never()).publish(any(String::class.java))
+        verify(topic, never()).publish(anyString())
         val synchronizations = TransactionSynchronizationManager.getSynchronizations()
         assertEquals(1, synchronizations.size)
         synchronizations.single().afterCommit()
-        verify(topic).publish(any(String::class.java))
+        verify(topic).publish(anyString())
+    }
+
+    @Test
+    fun `트랜잭션 중 생성한 이벤트는 커밋 후 발행하며 Redis 실패를 전파하지 않는다`() {
+        subscribe()
+        `when`(topic.publish(anyString())).thenThrow(IllegalStateException("Redis unavailable"))
+        TransactionSynchronizationManager.initSynchronization()
+        TransactionSynchronizationManager.setActualTransactionActive(true)
+
+        service.sendChatMessage(101L, systemMessage())
+
+        verify(topic, never()).publish(anyString())
+        val synchronization = TransactionSynchronizationManager.getSynchronizations().single()
+        assertDoesNotThrow { synchronization.afterCommit() }
+        verify(topic).publish(anyString())
     }
 
     @Test
@@ -104,6 +127,15 @@ class RealtimeMessagingServiceTest {
         listener.onMessage("moyeotrip:realtime-events", "not-json")
 
         verify(messagingTemplate, never()).convertAndSend(any(String::class.java), any<Any>())
+    }
+
+    @Test
+    fun `구독 해제 시 등록한 Redis 리스너를 제거한다`() {
+        subscribe()
+
+        service.unsubscribe()
+
+        verify(topic).removeListener(7)
     }
 
     private fun subscribe(): MessageListener<String> {
@@ -128,6 +160,16 @@ class RealtimeMessagingServiceTest {
             senderNickname = "여행자",
             content = "안녕하세요",
             createdAt = LocalDateTime.now(),
+        )
+
+    private fun systemMessage() =
+        ChatMessageResponse(
+            messageId = 1L,
+            type = ChatMessageType.SYSTEM,
+            senderId = null,
+            senderNickname = "시스템",
+            content = "테스트 메시지",
+            createdAt = LocalDateTime.of(2026, 8, 23, 12, 0),
         )
 
     @Suppress("UNCHECKED_CAST")

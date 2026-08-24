@@ -8,6 +8,7 @@ import org.springframework.boot.security.autoconfigure.web.servlet.SecurityFilte
 import org.springframework.core.Ordered
 import org.springframework.stereotype.Component
 import org.springframework.web.filter.OncePerRequestFilter
+import org.springframework.web.servlet.HandlerMapping
 import org.springframework.web.util.ContentCachingRequestWrapper
 import org.springframework.web.util.ContentCachingResponseWrapper
 import java.time.Duration
@@ -20,6 +21,7 @@ import java.util.UUID
 class TraceFilter(
     private val traceManager: TraceManager,
     private val traceRepository: TraceRepository,
+    private val sentryMetricsReporter: SentryMetricsRecorder,
 ) : OncePerRequestFilter(),
     Ordered {
     override fun doFilterInternal(
@@ -38,12 +40,15 @@ class TraceFilter(
         traceManager.wrappedRequest = wrappedRequest
         traceManager.wrappedResponse = wrappedResponse
 
+        var unhandledThrowable: Throwable? = null
         try {
             filterChain.doFilter(wrappedRequest, wrappedResponse)
         } catch (throwable: Throwable) {
+            unhandledThrowable = throwable
             traceManager.doErrorLog(throwable)
             throw throwable
         } finally {
+            val elapsedMillis = Duration.between(startedAt, Instant.now()).toMillis()
             try {
                 if (traceManager.httpTrace == null) {
                     traceRepository.addTrace(
@@ -51,10 +56,16 @@ class TraceFilter(
                             request = wrappedRequest,
                             response = wrappedResponse,
                             startedAt = startedAt,
-                            elapsedMillis = Duration.between(startedAt, Instant.now()).toMillis(),
+                            elapsedMillis = elapsedMillis,
                         ),
                     )
                 }
+                sentryMetricsReporter.recordHttpResponse(
+                    method = request.method,
+                    route = resolveRoute(request),
+                    statusCode = resolvedStatusCode(wrappedResponse.status, unhandledThrowable),
+                    elapsedMillis = elapsedMillis,
+                )
                 wrappedResponse.copyBodyToResponse()
             } finally {
                 MDC.remove(MDC_TRACE_ID)
@@ -64,6 +75,19 @@ class TraceFilter(
 
     // 요청 컨텍스트가 준비된 뒤, Spring Security 바로 앞에서 실행되어 401/403 응답까지 추적한다.
     override fun getOrder(): Int = SecurityFilterProperties.DEFAULT_FILTER_ORDER - 1
+
+    private fun resolveRoute(request: HttpServletRequest): String =
+        request.getAttribute(HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE) as? String ?: "unmatched"
+
+    private fun resolvedStatusCode(
+        responseStatus: Int,
+        unhandledThrowable: Throwable?,
+    ): Int =
+        if (unhandledThrowable != null && responseStatus < HttpServletResponse.SC_BAD_REQUEST) {
+            HttpServletResponse.SC_INTERNAL_SERVER_ERROR
+        } else {
+            responseStatus
+        }
 
     companion object {
         const val MDC_TRACE_ID = "traceId"

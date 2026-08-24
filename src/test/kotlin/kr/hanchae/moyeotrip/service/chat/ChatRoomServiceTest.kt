@@ -178,6 +178,46 @@ class ChatRoomServiceTest {
     }
 
     @Test
+    fun `모임 찾기는 상태 마감 디데이 찜 여부와 집합 좌표를 반환한다`() {
+        val startDate = LocalDate.now().plusDays(10)
+        val room =
+            room(
+                user(1L),
+                startDate = startDate,
+                endDate = null,
+                dayTripStartTime = LocalTime.of(9, 0),
+                dayTripEndTime = LocalTime.of(18, 0),
+                recruitmentDeadlineDate = LocalDate.now().plusDays(5),
+                meetingDetails = "포항역 1번 출구",
+            )
+        `when`(userBlockRepository.findRelatedUserIds(7L)).thenReturn(emptyList())
+        `when`(
+            roomRepository.searchRooms(
+                7L,
+                listOf(-1L),
+                null,
+                LocalDate.now(),
+                org.springframework.data.domain.PageRequest
+                    .of(0, 20),
+            ),
+        ).thenReturn(listOf(room))
+        `when`(participantRepository.countByChatRoomId(10L)).thenReturn(2L)
+        `when`(favoriteRepository.findChatRoomIdsByUserIdAndChatRoomIdIn(7L, listOf(10L))).thenReturn(setOf(10L))
+
+        val response = service.searchRooms(7L, null, 20).single()
+
+        assertEquals(ChatRoomStatus.RECRUITING, response.status)
+        assertEquals(5L, response.recruitmentDDay)
+        assertEquals(true, response.favorite)
+        assertEquals(LocalTime.of(9, 0), response.dayTripStartTime)
+        assertEquals(LocalTime.of(18, 0), response.dayTripEndTime)
+        assertEquals(36.0322, response.meetingLatitude)
+        assertEquals(129.3747, response.meetingLongitude)
+        assertEquals("포항역 1번 출구", response.meetingDetails)
+        assertEquals(startDate.atStartOfDay(), response.meetingDateTime)
+    }
+
+    @Test
     fun `채팅 사진은 20MB를 초과하면 공유할 수 없다`() {
         val image = mock(MultipartFile::class.java)
         `when`(image.isEmpty).thenReturn(false)
@@ -722,11 +762,14 @@ class ChatRoomServiceTest {
     @Test
     fun `고정 공지는 개수 제한 없이 추가할 수 있다`() {
         val room = room(user(1L))
+        val savedNotice = ChatRoomNotice(id = 7L, chatRoom = room, author = room.host, content = "준비물 공지", pinned = true)
         `when`(roomRepository.findByIdForUpdate(10L)).thenReturn(room)
+        `when`(noticeRepository.save(any(ChatRoomNotice::class.java))).thenReturn(savedNotice)
         `when`(messageRepository.saveAndFlush(any(ChatMessage::class.java))).thenAnswer { it.arguments[0] }
 
-        service.createNotice(1L, 10L, "준비물 공지", pinned = true)
+        val noticeId = service.createNotice(1L, 10L, "준비물 공지", pinned = true)
 
+        assertEquals(7L, noticeId)
         verify(noticeRepository).save(any(ChatRoomNotice::class.java))
     }
 
@@ -1775,6 +1818,62 @@ class ChatRoomServiceTest {
     }
 
     @Test
+    fun `수동 승인 신청은 호스트 승인 대기 결과를 반환한다`() {
+        val host = user(1L)
+        val applicant = user(2L)
+        val room = room(host)
+        `when`(roomRepository.findByIdForUpdate(10L)).thenReturn(room)
+        `when`(userRepository.findById(2L)).thenReturn(Optional.of(applicant))
+        `when`(applicationRepository.saveAndFlush(any(ChatRoomJoinApplication::class.java)))
+            .thenReturn(
+                ChatRoomJoinApplication(
+                    id = 30L,
+                    chatRoom = room,
+                    user = applicant,
+                    applicationMessage = "함께 가고 싶어요",
+                ),
+            )
+
+        val response = service.applyToJoin(2L, 10L, JoinChatRoomRequest("함께 가고 싶어요"))
+
+        assertEquals("PENDING_APPROVAL", response.result.name)
+        assertEquals(30L, response.applicationId)
+        assertEquals(JoinApplicationStatus.PENDING, response.applicationStatus)
+        val savedApplication = ArgumentCaptor.forClass(ChatRoomJoinApplication::class.java)
+        verify(applicationRepository).saveAndFlush(savedApplication.capture())
+        assertEquals(JoinApplicationStatus.PENDING, savedApplication.value.status)
+    }
+
+    @Test
+    fun `자동 승인 방이 가득 차면 대기열 결과를 반환한다`() {
+        val host = user(1L)
+        val applicant = user(2L)
+        val room = room(host, joinApprovalMode = JoinApprovalMode.AUTO)
+        `when`(roomRepository.findByIdForUpdate(10L)).thenReturn(room)
+        `when`(userRepository.findById(2L)).thenReturn(Optional.of(applicant))
+        `when`(participantRepository.countByChatRoomId(10L)).thenReturn(3L)
+        `when`(applicationRepository.saveAndFlush(any(ChatRoomJoinApplication::class.java)))
+            .thenReturn(
+                ChatRoomJoinApplication(
+                    id = 31L,
+                    chatRoom = room,
+                    user = applicant,
+                    applicationMessage = "함께 가고 싶어요",
+                    status = JoinApplicationStatus.WAITLISTED,
+                ),
+            )
+
+        val response = service.applyToJoin(2L, 10L, JoinChatRoomRequest("함께 가고 싶어요"))
+
+        assertEquals("WAITLISTED", response.result.name)
+        assertEquals(31L, response.applicationId)
+        assertEquals(JoinApplicationStatus.WAITLISTED, response.applicationStatus)
+        val savedApplication = ArgumentCaptor.forClass(ChatRoomJoinApplication::class.java)
+        verify(applicationRepository).saveAndFlush(savedApplication.capture())
+        assertEquals(JoinApplicationStatus.WAITLISTED, savedApplication.value.status)
+    }
+
+    @Test
     fun `참가 신청자가 성별 조건을 충족하지 않으면 거절한다`() {
         val host = user(1L)
         val applicant = profiledUser(2L, Gender.M, LocalDate.now().minusYears(30))
@@ -1905,15 +2004,17 @@ class ChatRoomServiceTest {
         val room = room(user(1L), joinApprovalMode = JoinApprovalMode.MANUAL)
         `when`(roomRepository.findByIdForUpdate(10L)).thenReturn(room)
         `when`(userRepository.findById(2L)).thenReturn(Optional.of(applicant))
-        `when`(applicationRepository.save(any(ChatRoomJoinApplication::class.java))).thenAnswer { it.arguments[0] }
+        `when`(applicationRepository.saveAndFlush(any(ChatRoomJoinApplication::class.java))).thenAnswer { it.arguments[0] }
 
         val response = service.applyToJoin(2L, 10L, JoinChatRoomRequest("  사진 찍는 것을 좋아해요  "))
 
         val captor = ArgumentCaptor.forClass(ChatRoomJoinApplication::class.java)
-        verify(applicationRepository).save(captor.capture())
+        verify(applicationRepository).saveAndFlush(captor.capture())
         assertEquals(JoinApplicationStatus.PENDING, captor.value.status)
         assertEquals("사진 찍는 것을 좋아해요", captor.value.applicationMessage)
         assertEquals("PENDING_APPROVAL", response.result.name)
+        assertEquals(captor.value.id, response.applicationId)
+        assertEquals(JoinApplicationStatus.PENDING, response.applicationStatus)
     }
 
     @Test
@@ -1923,14 +2024,16 @@ class ChatRoomServiceTest {
         `when`(roomRepository.findByIdForUpdate(10L)).thenReturn(room)
         `when`(userRepository.findById(2L)).thenReturn(Optional.of(applicant))
         `when`(participantRepository.countByChatRoomId(10L)).thenReturn(3L)
-        `when`(applicationRepository.save(any(ChatRoomJoinApplication::class.java))).thenAnswer { it.arguments[0] }
+        `when`(applicationRepository.saveAndFlush(any(ChatRoomJoinApplication::class.java))).thenAnswer { it.arguments[0] }
 
         val response = service.applyToJoin(2L, 10L, JoinChatRoomRequest("대기할게요"))
 
         val captor = ArgumentCaptor.forClass(ChatRoomJoinApplication::class.java)
-        verify(applicationRepository).save(captor.capture())
+        verify(applicationRepository).saveAndFlush(captor.capture())
         assertEquals(JoinApplicationStatus.WAITLISTED, captor.value.status)
         assertEquals("WAITLISTED", response.result.name)
+        assertEquals(captor.value.id, response.applicationId)
+        assertEquals(JoinApplicationStatus.WAITLISTED, response.applicationStatus)
         verify(participantRepository, org.mockito.Mockito.never()).saveAndFlush(any(ChatRoomParticipant::class.java))
     }
 
@@ -2200,12 +2303,14 @@ class ChatRoomServiceTest {
         joinApprovalMode: JoinApprovalMode = JoinApprovalMode.MANUAL,
         startDate: LocalDate = LocalDate.now().plusDays(10),
         endDate: LocalDate? = LocalDate.now().plusDays(11),
+        dayTripStartTime: LocalTime? = null,
+        dayTripEndTime: LocalTime? = null,
         recruitmentDeadlineDate: LocalDate = LocalDate.now().plusDays(5),
         status: ChatRoomStatus = ChatRoomStatus.RECRUITING,
         thumbnail: String? = "https://cdn.example.com/chat-room.png",
+        meetingDetails: String? = null,
         meetingLatitude: Double? = 36.0322,
         meetingLongitude: Double? = 129.3747,
-        meetingDetails: String? = null,
     ) = ChatRoom(
         id = 10L,
         host = host,
@@ -2215,6 +2320,8 @@ class ChatRoomServiceTest {
         maxParticipants = 3,
         startDate = startDate,
         endDate = endDate,
+        dayTripStartTime = dayTripStartTime,
+        dayTripEndTime = dayTripEndTime,
         recruitmentDeadlineDate = recruitmentDeadlineDate,
         meetingLatitude = meetingLatitude,
         meetingLongitude = meetingLongitude,

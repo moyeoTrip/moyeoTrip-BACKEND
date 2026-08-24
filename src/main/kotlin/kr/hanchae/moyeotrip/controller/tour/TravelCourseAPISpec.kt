@@ -2,6 +2,7 @@ package kr.hanchae.moyeotrip.controller.tour
 
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.Parameter
+import io.swagger.v3.oas.annotations.media.ArraySchema
 import io.swagger.v3.oas.annotations.media.Content
 import io.swagger.v3.oas.annotations.media.ExampleObject
 import io.swagger.v3.oas.annotations.media.Schema
@@ -28,7 +29,7 @@ interface TravelCourseAPISpec {
             ApiResponse(
                 responseCode = "200",
                 description = "공개 여행 코스 목록 조회 성공",
-                content = [Content(schema = Schema(implementation = TravelCourseInformationResponse::class))],
+                content = [Content(array = ArraySchema(schema = Schema(implementation = TravelCourseInformationResponse::class)))],
             ),
             ApiResponse(
                 responseCode = "404",
@@ -53,7 +54,7 @@ interface TravelCourseAPISpec {
             ApiResponse(
                 responseCode = "200",
                 description = "인기 공개 여행 코스 조회 성공",
-                content = [Content(schema = Schema(implementation = TravelCourseInformationResponse::class))],
+                content = [Content(array = ArraySchema(schema = Schema(implementation = TravelCourseInformationResponse::class)))],
             ),
             ApiResponse(
                 responseCode = "500",

@@ -6,7 +6,6 @@ import io.swagger.v3.oas.annotations.media.Schema
 import io.swagger.v3.oas.annotations.parameters.RequestBody
 import io.swagger.v3.oas.annotations.responses.ApiResponses
 import kr.hanchae.moyeotrip.controller.auth.AuthAPISpec
-import kr.hanchae.moyeotrip.controller.auth.TestTokenAPISpec
 import kr.hanchae.moyeotrip.controller.chat.ChatRoomAPISpec
 import kr.hanchae.moyeotrip.controller.chat.request.MyChatRoomFilter
 import kr.hanchae.moyeotrip.controller.chat.response.ApprovalResult
@@ -17,6 +16,7 @@ import kr.hanchae.moyeotrip.controller.feed.FeedAPISpec
 import kr.hanchae.moyeotrip.controller.feed.request.FeedTab
 import kr.hanchae.moyeotrip.controller.notification.NotificationAPISpec
 import kr.hanchae.moyeotrip.controller.terms.TermsAPISpec
+import kr.hanchae.moyeotrip.controller.test.TestSupportAPISpec
 import kr.hanchae.moyeotrip.controller.tour.TourismContentAPISpec
 import kr.hanchae.moyeotrip.controller.tour.TravelCourseAPISpec
 import kr.hanchae.moyeotrip.controller.user.FriendAPISpec
@@ -287,7 +287,7 @@ class SwaggerErrorExamplesTest {
         val apiSpecs =
             listOf(
                 AuthAPISpec::class.java,
-                TestTokenAPISpec::class.java,
+                TestSupportAPISpec::class.java,
                 ChatRoomAPISpec::class.java,
                 FeedAPISpec::class.java,
                 NotificationAPISpec::class.java,

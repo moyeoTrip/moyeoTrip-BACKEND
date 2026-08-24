@@ -1,5 +1,6 @@
 package kr.hanchae.moyeotrip.repository
 
+import jakarta.persistence.EntityManager
 import kr.hanchae.moyeotrip.entity.chat.ChatMessage
 import kr.hanchae.moyeotrip.entity.chat.ChatMessageType
 import kr.hanchae.moyeotrip.entity.chat.ChatParticipantRole
@@ -17,6 +18,9 @@ import java.time.LocalDate
 import java.time.LocalDateTime
 
 class ChatRoomRepositoryTest : RepositoryIntegrationTestSupport() {
+    @Autowired
+    private lateinit var entityManager: EntityManager
+
     @Autowired
     private lateinit var chatMessageRepository: ChatMessageRepository
 
@@ -138,6 +142,23 @@ class ChatRoomRepositoryTest : RepositoryIntegrationTestSupport() {
 
     @Nested
     inner class LifecycleQueries {
+        @Test
+        fun `QA용 완료 처리는 여행을 확정하고 과거 일정으로 갱신한다`() {
+            val host = savedUser()
+            val course = savedCourse()
+            val completedEndDate = LocalDate.now().minusDays(1)
+            val dayTrip = savedRoom(host, course, startDate = LocalDate.now().plusDays(3))
+
+            assertEquals(1, chatRoomRepository.completeForTest(dayTrip.id, completedEndDate, null))
+
+            entityManager.clear()
+            val completedRoom = chatRoomRepository.findById(dayTrip.id).orElseThrow()
+            assertEquals(ChatRoomStatus.CONFIRMED, completedRoom.status)
+            assertEquals(completedEndDate, completedRoom.startDate)
+            assertNull(completedRoom.endDate)
+            assertTrue(completedRoom.hasCompletedTrip())
+        }
+
         @Test
         fun `모집 만료와 삭제 예정 방을 각각 조회한다`() {
             val host = savedUser()

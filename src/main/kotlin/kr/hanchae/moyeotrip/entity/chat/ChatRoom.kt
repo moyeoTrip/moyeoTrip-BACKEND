@@ -184,7 +184,6 @@ class ChatRoom(
 
 @Schema(
     description = "채팅방 여행 상태. RECRUITING=모집 중, CONFIRMED=여행 확정, CANCELLED=여행 불발·취소",
-    allowableValues = ["RECRUITING", "CONFIRMED", "CANCELLED"],
 )
 enum class ChatRoomStatus {
     RECRUITING,
@@ -194,7 +193,6 @@ enum class ChatRoomStatus {
 
 @Schema(
     description = "참가 성별 조건. NONE=제한 없음, FEMALE_ONLY=여성만, MALE_ONLY=남성만",
-    allowableValues = ["NONE", "FEMALE_ONLY", "MALE_ONLY"],
 )
 enum class GenderRestriction {
     NONE,

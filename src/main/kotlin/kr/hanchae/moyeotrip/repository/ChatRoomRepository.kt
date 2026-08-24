@@ -80,6 +80,12 @@ interface ChatRoomCustomRepository {
         status: ChatRoomStatus,
         date: LocalDate,
     ): Boolean
+
+    fun completeForTest(
+        roomId: Long,
+        startDate: LocalDate,
+        endDate: LocalDate?,
+    ): Int
 }
 
 class ChatRoomCustomRepositoryImpl(
@@ -249,6 +255,39 @@ class ChatRoomCustomRepositoryImpl(
                     ).then(true).`else`(false),
                 ).from(existsRoot)
             }.firstOrNull() ?: false
+
+    override fun completeForTest(
+        roomId: Long,
+        startDate: LocalDate,
+        endDate: LocalDate?,
+    ): Int {
+        if (endDate == null) {
+            return kotlinJdslJpqlExecutor.update {
+                val room = entity(ChatRoom::class)
+
+                update(room)
+                    .set(room.path(ChatRoom::status), ChatRoomStatus.CONFIRMED)
+                    .set(room.path(ChatRoom::startDate), startDate)
+                    .set(room.path(ChatRoom::recruitmentDeadlineDate), startDate)
+                    .set(room.path(ChatRoom::chatClosedDateTime), null)
+                    .set(room.path(ChatRoom::deletionScheduledDate), null)
+                    .where(room.path(ChatRoom::id).eq(roomId))
+            }
+        }
+
+        return kotlinJdslJpqlExecutor.update {
+            val room = entity(ChatRoom::class)
+
+            update(room)
+                .set(room.path(ChatRoom::status), ChatRoomStatus.CONFIRMED)
+                .set(room.path(ChatRoom::startDate), startDate)
+                .set(room.path(ChatRoom::endDate), endDate)
+                .set(room.path(ChatRoom::recruitmentDeadlineDate), startDate)
+                .set(room.path(ChatRoom::chatClosedDateTime), null)
+                .set(room.path(ChatRoom::deletionScheduledDate), null)
+                .where(room.path(ChatRoom::id).eq(roomId))
+        }
+    }
 
     private fun Jpql.completedTripPredicate(
         room: Entity<ChatRoom>,

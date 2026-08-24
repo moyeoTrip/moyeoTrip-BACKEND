@@ -10,6 +10,7 @@ import kr.hanchae.moyeotrip.controller.notification.response.NotificationRespons
 import org.redisson.api.RTopic
 import org.redisson.api.RedissonClient
 import org.redisson.client.codec.StringCodec
+import org.slf4j.LoggerFactory
 import org.springframework.messaging.simp.SimpMessagingTemplate
 import org.springframework.stereotype.Service
 import org.springframework.transaction.support.TransactionSynchronization
@@ -43,26 +44,34 @@ class RealtimeMessagingService(
         roomId: Long,
         message: ChatMessageResponse,
     ) {
-        publish(
-            RealtimeRedisEvent(
-                type = RealtimeEventType.CHAT_MESSAGE,
-                targetId = roomId,
-                payload = objectMapper.valueToTree(message),
-            ),
-        )
+        runCatching {
+            publish(
+                RealtimeRedisEvent(
+                    type = RealtimeEventType.CHAT_MESSAGE,
+                    targetId = roomId,
+                    payload = objectMapper.valueToTree(message),
+                ),
+            )
+        }.onFailure { exception ->
+            logger.warn("채팅 실시간 이벤트 발행을 건너뜁니다. roomId={}", roomId, exception)
+        }
     }
 
     fun sendNotification(
         userId: Long,
         notification: NotificationResponse,
     ) {
-        publish(
-            RealtimeRedisEvent(
-                type = RealtimeEventType.NOTIFICATION,
-                targetId = userId,
-                payload = objectMapper.valueToTree(notification),
-            ),
-        )
+        runCatching {
+            publish(
+                RealtimeRedisEvent(
+                    type = RealtimeEventType.NOTIFICATION,
+                    targetId = userId,
+                    payload = objectMapper.valueToTree(notification),
+                ),
+            )
+        }.onFailure { exception ->
+            logger.warn("알림 실시간 이벤트 발행을 건너뜁니다. userId={}", userId, exception)
+        }
     }
 
     fun sendChatPollUpdated(
@@ -86,13 +95,18 @@ class RealtimeMessagingService(
             TransactionSynchronizationManager.registerSynchronization(
                 object : TransactionSynchronization {
                     override fun afterCommit() {
-                        topic.publish(json)
+                        publishToRedis(json)
                     }
                 },
             )
         } else {
-            topic.publish(json)
+            publishToRedis(json)
         }
+    }
+
+    private fun publishToRedis(json: String) {
+        runCatching { topic.publish(json) }
+            .onFailure { exception -> logger.warn("Redis 실시간 이벤트 발행에 실패했습니다.", exception) }
     }
 
     private fun deliverToLocalWebSocketSessions(event: RealtimeRedisEvent) {
@@ -110,6 +124,7 @@ class RealtimeMessagingService(
 
     companion object {
         private const val REALTIME_CHANNEL = "moyeotrip:realtime-events"
+        private val logger = LoggerFactory.getLogger(RealtimeMessagingService::class.java)
     }
 }
 

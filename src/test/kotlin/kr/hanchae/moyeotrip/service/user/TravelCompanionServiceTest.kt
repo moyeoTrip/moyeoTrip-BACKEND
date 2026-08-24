@@ -51,11 +51,12 @@ class TravelCompanionServiceTest {
         val target = user(2L, "동행자")
         val room = mock(ChatRoom::class.java)
         val record = TravelCompanion(id = 3L, owner = owner, companion = target, chatRoom = room)
-        `when`(participantRepository.hasCompletedTrip(10L, 1L, LocalDate.now())).thenReturn(true)
+        `when`(participantRepository.existsByChatRoomIdAndUserId(10L, 1L)).thenReturn(true)
         `when`(participantRepository.existsByChatRoomIdAndUserId(10L, 2L)).thenReturn(true)
         `when`(participantRepository.findAllByChatRoomIdOrderByCreatedDateTimeAsc(10L)).thenReturn(emptyList())
         `when`(roomRepository.findById(10L)).thenReturn(Optional.of(room))
         `when`(room.id).thenReturn(10L)
+        `when`(room.hasCompletedTrip(LocalDate.now())).thenReturn(true)
         `when`(companionRepository.findByOwnerIdAndCompanionIdAndChatRoomId(1L, 2L, 10L)).thenReturn(record)
         `when`(userRepository.findByIdForUpdate(2L)).thenReturn(target)
         `when`(companionRepository.averageMannerScoreByCompanionId(2L)).thenReturn(4.5)
@@ -68,14 +69,32 @@ class TravelCompanionServiceTest {
     }
 
     @Test
-    fun `완료한 여행의 참가자가 아니면 동행을 평가할 수 없다`() {
+    fun `채팅방 참가자가 아니면 동행자를 조회할 수 없다`() {
+        val room = mock(ChatRoom::class.java)
+        `when`(roomRepository.findById(10L)).thenReturn(Optional.of(room))
+
         val exception =
             assertThrows(BaseException::class.java) {
-                service.reviewCompanion(1L, 10L, 2L, ReviewTravelCompanionRequest(5, null))
+                service.getTripCompanions(1L, 10L)
             }
 
-        assertEquals(ErrorCode.FORBIDDEN, exception.errorCode)
-        verifyNoInteractions(roomRepository, companionRepository, userRepository)
+        assertEquals(ErrorCode.CHAT_ROOM_NOT_PARTICIPANT, exception.errorCode)
+        verifyNoInteractions(companionRepository, userRepository)
+    }
+
+    @Test
+    fun `참가한 여행이 아직 끝나지 않았으면 완료 전용 기능을 사용할 수 없다`() {
+        val room = mock(ChatRoom::class.java)
+        `when`(roomRepository.findById(10L)).thenReturn(Optional.of(room))
+        `when`(participantRepository.existsByChatRoomIdAndUserId(10L, 1L)).thenReturn(true)
+
+        val exception =
+            assertThrows(BaseException::class.java) {
+                service.getTripCompanions(1L, 10L)
+            }
+
+        assertEquals(ErrorCode.TRIP_NOT_COMPLETED, exception.errorCode)
+        verifyNoInteractions(companionRepository, userRepository)
     }
 
     @Test
@@ -106,10 +125,10 @@ class TravelCompanionServiceTest {
     fun `완료 여행 동행자 목록은 평가 여부를 포함한다`() {
         val owner = user(1L, "여행자")
         val target = user(2L, "동행자")
-        val room = completedRoom(10L, "안동 여행", LocalDate.now().minusDays(1))
+        val room = completedRoom(10L, "안동 여행", LocalDate.now().minusDays(2))
         val record = TravelCompanion(id = 3L, owner = owner, companion = target, chatRoom = room, mannerScore = 4)
-        `when`(participantRepository.hasCompletedTrip(10L, 1L, LocalDate.now())).thenReturn(true)
         `when`(roomRepository.findById(10L)).thenReturn(Optional.of(room))
+        `when`(participantRepository.existsByChatRoomIdAndUserId(10L, 1L)).thenReturn(true)
         `when`(participantRepository.findAllByChatRoomIdOrderByCreatedDateTimeAsc(10L)).thenReturn(emptyList())
         `when`(companionRepository.findAllByOwnerIdAndChatRoomIdOrderByIdAsc(1L, 10L)).thenReturn(listOf(record))
 
@@ -121,9 +140,9 @@ class TravelCompanionServiceTest {
 
     @Test
     fun `자기 자신이나 여행에 없던 사용자는 동행자로 평가할 수 없다`() {
-        val room = completedRoom(10L, "안동 여행", LocalDate.now().minusDays(1))
-        `when`(participantRepository.hasCompletedTrip(10L, 1L, LocalDate.now())).thenReturn(true)
+        val room = completedRoom(10L, "안동 여행", LocalDate.now().minusDays(2))
         `when`(roomRepository.findById(10L)).thenReturn(Optional.of(room))
+        `when`(participantRepository.existsByChatRoomIdAndUserId(10L, 1L)).thenReturn(true)
 
         val selfException =
             assertThrows(BaseException::class.java) {

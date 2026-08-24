@@ -27,6 +27,7 @@ import kr.hanchae.moyeotrip.controller.chat.response.ChatRoomMemberListResponse
 import kr.hanchae.moyeotrip.controller.chat.response.ChatRoomMemberResponse
 import kr.hanchae.moyeotrip.controller.chat.response.ChatRoomNoticeHistoryResponse
 import kr.hanchae.moyeotrip.controller.chat.response.ChatRoomNoticeResponse
+import kr.hanchae.moyeotrip.controller.chat.response.CreateChatRoomResponse
 import kr.hanchae.moyeotrip.controller.chat.response.CurrentTravelRoadmapResponse
 import kr.hanchae.moyeotrip.controller.chat.response.JoinApplicationResponse
 import kr.hanchae.moyeotrip.controller.chat.response.JoinChatRoomResponse
@@ -140,7 +141,7 @@ class ChatRoomService(
         userId: Long,
         request: CreateChatRoomRequest,
         thumbnail: MultipartFile? = null,
-    ) {
+    ): CreateChatRoomResponse {
         validateTripSchedule(request)
         validateAgeRestriction(request)
         val host = findUser(userId)
@@ -179,6 +180,7 @@ class ChatRoomService(
         val openingMessage = saveSystemMessage(room, "${host.nickname()}님이 모임을 개설했어요.")
         hostParticipant.readThrough(openingMessage.id)
         notificationService.notifyRoomCreated(room)
+        return CreateChatRoomResponse(roomId = room.id)
     }
 
     @Transactional(readOnly = true)
@@ -226,33 +228,50 @@ class ChatRoomService(
         limit: Int,
     ): List<SearchChatRoomResponse> {
         val blockedUserIds = userBlockRepository.findRelatedUserIds(userId).ifEmpty { listOf(NO_USER_ID) }
-        return roomRepository
-            .searchRooms(
-                userId = userId,
-                blockedUserIds = blockedUserIds,
-                keyword = keyword?.trim()?.takeIf(String::isNotEmpty),
-                today = LocalDate.now(),
-                pageable = PageRequest.of(0, limit.coerceIn(1, MAX_DISCOVER_ROOM_LIMIT)),
-            ).map { room ->
-                SearchChatRoomResponse(
-                    roomId = room.id,
-                    title = room.roomTitle,
-                    description = room.description,
-                    thumbnail = room.thumbnail,
-                    tripType = room.tripType,
-                    startDate = room.startDate,
-                    endDate = room.endDate,
-                    recruitmentDeadlineDate = room.recruitmentDeadlineDate,
-                    hostId = room.host.id,
-                    participantCount = participantRepository.countByChatRoomId(room.id).toInt(),
-                    maxParticipants = room.maxParticipants,
-                    courseTitle = room.course.title,
-                    tags =
-                        room.course.tags
-                            .sortedBy { it.id }
-                            .map { TravelCourseTagResponse(it.id, it.name) },
+        val rooms =
+            roomRepository
+                .searchRooms(
+                    userId = userId,
+                    blockedUserIds = blockedUserIds,
+                    keyword = keyword?.trim()?.takeIf(String::isNotEmpty),
+                    today = LocalDate.now(),
+                    pageable = PageRequest.of(0, limit.coerceIn(1, MAX_DISCOVER_ROOM_LIMIT)),
                 )
-            }
+        val favoriteRoomIds =
+            rooms
+                .map(ChatRoom::id)
+                .takeIf(List<Long>::isNotEmpty)
+                ?.let { roomFavoriteRepository.findChatRoomIdsByUserIdAndChatRoomIdIn(userId, it) }
+                .orEmpty()
+        return rooms.map { room ->
+            SearchChatRoomResponse(
+                roomId = room.id,
+                title = room.roomTitle,
+                description = room.description,
+                thumbnail = room.thumbnail,
+                tripType = room.tripType,
+                startDate = room.startDate,
+                endDate = room.endDate,
+                dayTripStartTime = room.dayTripStartTime,
+                dayTripEndTime = room.dayTripEndTime,
+                recruitmentDeadlineDate = room.recruitmentDeadlineDate,
+                recruitmentDDay = room.recruitmentDDay(),
+                status = room.status,
+                favorite = room.id in favoriteRoomIds,
+                meetingLatitude = room.meetingLatitude,
+                meetingLongitude = room.meetingLongitude,
+                meetingDetails = room.meetingDetails,
+                meetingDateTime = room.meetingDateTime,
+                hostId = room.host.id,
+                participantCount = participantRepository.countByChatRoomId(room.id).toInt(),
+                maxParticipants = room.maxParticipants,
+                courseTitle = room.course.title,
+                tags =
+                    room.course.tags
+                        .sortedBy { it.id }
+                        .map { TravelCourseTagResponse(it.id, it.name) },
+            )
+        }
     }
 
     @Transactional(readOnly = true)
@@ -471,27 +490,29 @@ class ChatRoomService(
                     ?.trim()
                     ?.takeIf(String::isNotEmpty)
                     ?: throw BaseException(ErrorCode.CHAT_JOIN_APPLICATION_MESSAGE_REQUIRED)
-            applicationRepository.save(
-                ChatRoomJoinApplication(
-                    chatRoom = room,
-                    user = user,
-                    applicationMessage = applicationMessage,
-                ),
-            )
-            return JoinChatRoomResponse(roomId, JoinResult.PENDING_APPROVAL)
+            val application =
+                applicationRepository.saveAndFlush(
+                    ChatRoomJoinApplication(
+                        chatRoom = room,
+                        user = user,
+                        applicationMessage = applicationMessage,
+                    ),
+                )
+            return JoinChatRoomResponse(roomId, JoinResult.PENDING_APPROVAL, application.id, application.status)
         }
 
         val participantCount = participantRepository.countByChatRoomId(roomId).toInt()
         if (participantCount >= room.maxParticipants) {
-            applicationRepository.save(
-                ChatRoomJoinApplication(
-                    chatRoom = room,
-                    user = user,
-                    applicationMessage = request.applicationMessage?.trim().orEmpty(),
-                    status = JoinApplicationStatus.WAITLISTED,
-                ),
-            )
-            return JoinChatRoomResponse(roomId, JoinResult.WAITLISTED)
+            val application =
+                applicationRepository.saveAndFlush(
+                    ChatRoomJoinApplication(
+                        chatRoom = room,
+                        user = user,
+                        applicationMessage = request.applicationMessage?.trim().orEmpty(),
+                        status = JoinApplicationStatus.WAITLISTED,
+                    ),
+                )
+            return JoinChatRoomResponse(roomId, JoinResult.WAITLISTED, application.id, application.status)
         }
 
         val participant =
@@ -741,13 +762,14 @@ class ChatRoomService(
         roomId: Long,
         notice: String,
         pinned: Boolean,
-    ) {
+    ): Long {
         val room = findRoomForUpdate(roomId)
         requireHost(room, hostId)
         requireChatEnabled(room)
         val content = notice.trim().takeIf(String::isNotEmpty) ?: throw BaseException(ErrorCode.BAD_REQUEST)
-        noticeRepository.save(ChatRoomNotice(chatRoom = room, author = room.host, content = content, pinned = pinned))
+        val savedNotice = noticeRepository.save(ChatRoomNotice(chatRoom = room, author = room.host, content = content, pinned = pinned))
         saveSystemMessage(room, "공지가 등록되었어요.\n$content")
+        return savedNotice.id
     }
 
     @Transactional

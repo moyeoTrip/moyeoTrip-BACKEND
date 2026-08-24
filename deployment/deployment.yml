@@ -53,11 +53,6 @@ spec:
                 -XX:InitialRAMPercentage=50
                 -XX:MaxRAMPercentage=50
                 -XX:MinRAMPercentage=50
-            - name: TOUR_API_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: moyeo-trip-secret
-                  key: tourApiKey
           startupProbe:
             httpGet:
               port: 8888

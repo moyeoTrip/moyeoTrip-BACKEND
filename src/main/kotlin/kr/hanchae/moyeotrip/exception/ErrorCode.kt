@@ -66,6 +66,7 @@ enum class ErrorCode(
     TRAVEL_COURSE_NOT_EDITABLE(HttpStatus.CONFLICT, 40912, "여행 확정 전의 커스텀 코스만 호스트가 수정할 수 있습니다."),
     MEETING_INFO_NOT_EDITABLE(HttpStatus.CONFLICT, 40913, "여행 확정 전까지만 집합 정보를 수정할 수 있습니다."),
     TRAVEL_COURSE_PUBLICATION_NOT_ALLOWED(HttpStatus.CONFLICT, 40914, "공개 여부를 선택할 수 있는 완료 코스가 아닙니다."),
+    TRIP_NOT_COMPLETED(HttpStatus.CONFLICT, 40915, "아직 완료되지 않은 여행입니다."),
 
     // 요청 한도 초과는 42900부터 시작
     PROFILE_IMAGE_GENERATION_LIMIT(HttpStatus.TOO_MANY_REQUESTS, 42900, "프로필 이미지는 사용자당 최대 3번까지 생성할 수 있습니다."),

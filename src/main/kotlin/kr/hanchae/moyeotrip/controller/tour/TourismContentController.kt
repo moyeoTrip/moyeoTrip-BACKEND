@@ -21,9 +21,10 @@ class TourismContentController(
     @GetMapping
     override fun getContents(
         @RequestParam(required = false) contentTypeId: Int?,
+        @RequestParam(required = false) keyword: String?,
         @RequestParam(defaultValue = "0") page: Int,
         @RequestParam(defaultValue = "20") size: Int,
-    ): TourismContentPageResponse = tourismContentService.getContents(contentTypeId, page, size.coerceIn(1, 100))
+    ): TourismContentPageResponse = tourismContentService.getContents(contentTypeId, keyword, page, size.coerceIn(1, 100))
 
     @GetMapping("/{contentId}")
     override fun getContent(

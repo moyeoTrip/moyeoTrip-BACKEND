@@ -6,7 +6,6 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 import org.mockito.Mockito.mock
 import org.mockito.Mockito.verify
-import org.mockito.Mockito.verifyNoInteractions
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
 import org.springframework.web.servlet.resource.NoResourceFoundException
@@ -27,7 +26,8 @@ class GlobalExceptionHandlerTest {
         assertEquals(ErrorCode.RESOURCE_NOT_FOUND.code, response.body?.code)
         assertEquals(ErrorCode.RESOURCE_NOT_FOUND.errorMessage, response.body?.errorMessage)
         verify(traceManager).doErrorLog(exception)
-        verifyNoInteractions(sentryExceptionReporter)
+        verify(sentryExceptionReporter)
+            .capture(exception, HttpStatus.NOT_FOUND, ErrorCode.RESOURCE_NOT_FOUND.code)
     }
 
     @Test
@@ -51,6 +51,22 @@ class GlobalExceptionHandlerTest {
 
         assertEquals(HttpStatus.BAD_REQUEST, response.statusCode)
         verify(sentryExceptionReporter).capture(exception, HttpStatus.BAD_REQUEST, ErrorCode.BAD_REQUEST.code)
+        verify(traceManager).doErrorLog(exception)
+    }
+
+    @Test
+    fun `5xx BaseException은 Sentry에 전송한다`() {
+        val exception = BaseException(ErrorCode.PROFILE_IMAGE_GENERATION_FAILED, "upstream failed")
+
+        val response = handler.handleBaseException(exception)
+
+        assertEquals(HttpStatus.BAD_GATEWAY, response.statusCode)
+        assertEquals(ErrorCode.PROFILE_IMAGE_GENERATION_FAILED.code, response.body?.code)
+        verify(sentryExceptionReporter).capture(
+            exception,
+            HttpStatus.BAD_GATEWAY,
+            ErrorCode.PROFILE_IMAGE_GENERATION_FAILED.code,
+        )
         verify(traceManager).doErrorLog(exception)
     }
 }

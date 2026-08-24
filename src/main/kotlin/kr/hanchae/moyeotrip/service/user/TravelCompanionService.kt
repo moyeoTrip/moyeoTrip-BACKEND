@@ -92,10 +92,14 @@ class TravelCompanionService(
         userId: Long,
         roomId: Long,
     ): ChatRoom {
-        if (!participantRepository.hasCompletedTrip(roomId, userId, LocalDate.now())) {
-            throw BaseException(ErrorCode.FORBIDDEN)
+        val room = roomRepository.findById(roomId).orElseThrow { BaseException(ErrorCode.CHAT_ROOM_NOT_FOUND) }
+        if (!participantRepository.existsByChatRoomIdAndUserId(roomId, userId)) {
+            throw BaseException(ErrorCode.CHAT_ROOM_NOT_PARTICIPANT)
         }
-        return roomRepository.findById(roomId).orElseThrow { BaseException(ErrorCode.CHAT_ROOM_NOT_FOUND) }
+        if (!room.hasCompletedTrip(LocalDate.now())) {
+            throw BaseException(ErrorCode.TRIP_NOT_COMPLETED)
+        }
+        return room
     }
 
     private fun TravelCompanion.toTripResponse(): TripCompanionResponse {

@@ -15,6 +15,7 @@ import kr.hanchae.moyeotrip.repository.TourismContentTypeRepository
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
+import org.mockito.ArgumentMatchers.anyList
 import org.mockito.Mockito.mock
 import org.mockito.Mockito.never
 import org.mockito.Mockito.verify
@@ -43,7 +44,10 @@ class TourismContentServiceTest {
 
     @Test
     fun `여행코스 타입은 관광지 목록으로 조회할 수 없다`() {
-        val exception = assertThrows(BaseException::class.java) { service.getContents(25, 0, 20) }
+        val exception =
+            assertThrows(BaseException::class.java) {
+                service.getContents(contentTypeId = 25, keyword = null, page = 0, size = 20)
+            }
 
         assertEquals(ErrorCode.TOURISM_COURSE_CONTENT_NOT_LISTED, exception.errorCode)
         verifyNoInteractions(repository)
@@ -53,26 +57,48 @@ class TourismContentServiceTest {
     fun `관광 타입을 지정하면 해당 타입의 페이지를 반환한다`() {
         val pageable = PageRequest.of(1, 2, Sort.by("title").ascending())
         val content = content(100L, 12, "주산지")
-        `when`(repository.findAllByContentTypeCode(12, pageable))
+        `when`(repository.searchListableContents(25, 12, null, pageable))
             .thenReturn(PageImpl(listOf(content), pageable, 5))
 
-        val response = service.getContents(12, 1, 2)
+        val response = service.getContents(contentTypeId = 12, keyword = null, page = 1, size = 2)
 
         assertEquals(1, response.page)
         assertEquals(5, response.totalElements)
         assertEquals("주산지", response.items.single().title)
+        verify(repository).searchListableContents(25, 12, null, pageable)
     }
 
     @Test
     fun `관광 타입을 생략하면 여행코스를 제외한 페이지를 반환한다`() {
         val pageable = PageRequest.of(0, 20, Sort.by("title").ascending())
-        `when`(repository.findAllByContentTypeCodeNot(25, pageable))
+        `when`(repository.searchListableContents(25, null, null, pageable))
             .thenReturn(PageImpl(emptyList(), pageable, 0))
 
-        val response = service.getContents(null, 0, 20)
+        val response = service.getContents(contentTypeId = null, keyword = null, page = 0, size = 20)
 
         assertEquals(0, response.totalElements)
-        verify(repository).findAllByContentTypeCodeNot(25, pageable)
+        verify(repository).searchListableContents(25, null, null, pageable)
+    }
+
+    @Test
+    fun `여행지 검색어는 앞뒤 공백을 제거하고 제목과 주소 검색 패턴으로 전달한다`() {
+        val pageable = PageRequest.of(0, 20, Sort.by("title").ascending())
+        `when`(repository.searchListableContents(25, 12, "%주왕산%", pageable)).thenReturn(PageImpl(emptyList()))
+
+        val response = service.getContents(contentTypeId = 12, keyword = "  주왕산  ", page = 0, size = 20)
+
+        assertEquals(0, response.totalElements)
+        verify(repository).searchListableContents(25, 12, "%주왕산%", pageable)
+    }
+
+    @Test
+    fun `빈 검색어는 전체 조회 조건으로 전달한다`() {
+        val pageable = PageRequest.of(0, 20, Sort.by("title").ascending())
+        `when`(repository.searchListableContents(25, null, null, pageable)).thenReturn(PageImpl(emptyList()))
+
+        service.getContents(contentTypeId = null, keyword = "  ", page = 0, size = 20)
+
+        verify(repository).searchListableContents(25, null, null, pageable)
     }
 
     @Test
@@ -104,7 +130,7 @@ class TourismContentServiceTest {
         assertEquals("https://image", response.contentImages.single().originalImageUrl)
         assertEquals(emptyList<Any>(), response.menuImages)
         verify(tourApiClient, never()).getImages(100L, "N")
-        verify(imageRepository).saveAll(org.mockito.ArgumentMatchers.anyList())
+        verify(imageRepository).saveAll(anyList())
     }
 
     @Test

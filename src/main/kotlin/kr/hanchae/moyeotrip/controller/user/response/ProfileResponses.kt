@@ -49,7 +49,7 @@ data class TravelStyleResponse(
 
 @Schema(description = "관심 경북 지역 선택 항목")
 data class InterestedRegionResponse(
-    @field:Schema(description = "관심 지역 ID", example = "47111")
+    @field:Schema(description = "관심 지역 ID", example = "1")
     val id: Long,
     @field:Schema(description = "법정동 코드의 시군구명", example = "포항시 남구")
     val signguName: String,

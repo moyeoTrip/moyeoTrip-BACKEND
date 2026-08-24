@@ -36,6 +36,7 @@ class TourismContentService(
     @Transactional(readOnly = true)
     fun getContents(
         contentTypeId: Int?,
+        keyword: String?,
         page: Int,
         size: Int,
     ): TourismContentPageResponse {
@@ -43,9 +44,13 @@ class TourismContentService(
             throw BaseException(ErrorCode.TOURISM_COURSE_CONTENT_NOT_LISTED)
         }
         val pageable = PageRequest.of(page, size, Sort.by("title").ascending())
-        val contents =
-            contentTypeId?.let { repository.findAllByContentTypeCode(it, pageable) }
-                ?: repository.findAllByContentTypeCodeNot(COURSE_CONTENT_TYPE_ID, pageable)
+        val keywordPattern =
+            keyword
+                ?.trim()
+                ?.lowercase()
+                ?.takeIf(String::isNotEmpty)
+                ?.let { "%$it%" }
+        val contents = repository.searchListableContents(COURSE_CONTENT_TYPE_ID, contentTypeId, keywordPattern, pageable)
         return TourismContentPageResponse(
             items = contents.content.map(TourismContent::toSummaryResponse),
             page = contents.number,
