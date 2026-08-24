@@ -23,6 +23,7 @@ import kr.hanchae.moyeotrip.repository.ObjectStorageRepository
 import kr.hanchae.moyeotrip.repository.TravelStyleRepository
 import kr.hanchae.moyeotrip.repository.UserProfileImageRepository
 import kr.hanchae.moyeotrip.repository.UserRepository
+import kr.hanchae.moyeotrip.repository.UserWithdrawalDataRepository
 import kr.hanchae.moyeotrip.utils.ProfileImageOptimizer
 import kr.hanchae.moyeotrip.utils.jwt.JwtUtil
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -40,6 +41,7 @@ import org.mockito.Mockito.`when`
 import org.springframework.transaction.support.TransactionSynchronization
 import org.springframework.transaction.support.TransactionSynchronizationManager
 import java.time.LocalDate
+import java.time.LocalDateTime
 import java.util.Optional
 
 class UserServiceTest {
@@ -53,6 +55,7 @@ class UserServiceTest {
     private val profileImageOptimizer = mock(ProfileImageOptimizer::class.java)
     private val promptFactory = ProfileImagePromptFactory()
     private val jwtUtil = mock(JwtUtil::class.java)
+    private val userWithdrawalDataRepository = mock(UserWithdrawalDataRepository::class.java)
     private val service =
         UserService(
             userRepository,
@@ -65,6 +68,7 @@ class UserServiceTest {
             notificationSettingRepository,
             profileImageOptimizer,
             jwtUtil,
+            userWithdrawalDataRepository,
         )
 
     @Test
@@ -199,26 +203,34 @@ class UserServiceTest {
     }
 
     @Test
-    fun `회원 탈퇴는 사용자를 삭제하고 커밋 후 이미지와 Refresh Token을 정리한다`() {
+    fun `회원 탈퇴는 활동 데이터를 삭제하고 계정을 30일 복구 상태로 전환한다`() {
         val user = profileImageRequiredUser()
-        val firstImageKey = "user/profile/image/first.png"
-        val secondImageKey = "user/profile/image/second.png"
+        val feedImageKey = "feed/image/first.png"
+        val chatImageKey = "chat/image/second.png"
+        val withdrawnAt = LocalDateTime.of(2026, 8, 24, 12, 0)
         `when`(userRepository.findByIdForUpdate(7L)).thenReturn(user)
-        `when`(userProfileImageRepository.findFileNamesByUserIdOrderByCreatedDateTimeAsc(7L))
-            .thenReturn(listOf(firstImageKey, secondImageKey))
+        `when`(
+            userWithdrawalDataRepository.removePersonalActivity(
+                7L,
+                "따스한 사슴 2347",
+                withdrawnAt,
+            ),
+        ).thenReturn(UserWithdrawalDataRepository.StoredObjectKeys(listOf(feedImageKey), listOf(chatImageKey)))
         TransactionSynchronizationManager.initSynchronization()
 
         try {
-            service.withdraw(7L)
+            service.withdraw(7L, withdrawnAt)
 
-            verify(userRepository).delete(user)
-            verify(objectStorageRepository, never()).delete(firstImageKey)
+            assertTrue(user.isWithdrawn())
+            assertNull(user.fcmToken)
+            verify(userRepository, never()).delete(user)
+            verify(objectStorageRepository, never()).delete(feedImageKey)
             verify(jwtUtil, never()).deleteCachedRefreshTokenRotateId(7L)
 
             TransactionSynchronizationManager.getSynchronizations().single().afterCommit()
 
-            verify(objectStorageRepository).delete(firstImageKey)
-            verify(objectStorageRepository).delete(secondImageKey)
+            verify(objectStorageRepository).delete(feedImageKey)
+            verify(objectStorageRepository).delete(chatImageKey)
             verify(jwtUtil).deleteCachedRefreshTokenRotateId(7L)
         } finally {
             TransactionSynchronizationManager.clearSynchronization()
@@ -232,8 +244,61 @@ class UserServiceTest {
         assertThrows(UserNotFoundException::class.java) { service.withdraw(404L) }
 
         verify(userRepository, never()).delete(any(User::class.java))
+        verifyNoInteractions(userWithdrawalDataRepository)
         verifyNoInteractions(objectStorageRepository)
         verifyNoInteractions(jwtUtil)
+    }
+
+    @Test
+    fun `탈퇴 후 30일 이내 로그인하면 계정을 복구한다`() {
+        val user = profileImageRequiredUser()
+        val withdrawnAt = LocalDateTime.of(2026, 8, 1, 12, 0)
+        user.withdraw(withdrawnAt)
+
+        val result = service.handleWithdrawnLogin(user, withdrawnAt.plusDays(29).plusHours(23))
+
+        assertEquals(WithdrawnLoginResult.RESTORED, result)
+        assertFalse(user.isWithdrawn())
+        verify(userRepository, never()).delete(user)
+        verifyNoInteractions(userWithdrawalDataRepository)
+    }
+
+    @Test
+    fun `탈퇴 후 30일이 지나 로그인하면 계정을 영구 삭제한다`() {
+        val user = profileImageRequiredUser()
+        val withdrawnAt = LocalDateTime.of(2026, 8, 1, 12, 0)
+        val expiredAt = withdrawnAt.plusDays(User.WITHDRAWAL_GRACE_PERIOD_DAYS)
+        val profileImageKey = "user/profile/image/profile.webp"
+        val feedImageKey = "feed/image/feed.webp"
+        val roomImageKey = "chat/image/room.webp"
+        user.withdraw(withdrawnAt)
+        `when`(userProfileImageRepository.findFileNamesByUserIdOrderByCreatedDateTimeAsc(7L))
+            .thenReturn(listOf(profileImageKey))
+        `when`(userWithdrawalDataRepository.removePersonalActivity(7L, "따스한 사슴 2347", expiredAt))
+            .thenReturn(UserWithdrawalDataRepository.StoredObjectKeys(listOf(feedImageKey), emptyList()))
+        `when`(userWithdrawalDataRepository.preparePermanentDeletion(7L, "따스한 사슴 2347"))
+            .thenReturn(UserWithdrawalDataRepository.StoredObjectKeys(emptyList(), listOf(roomImageKey)))
+
+        val result = service.handleWithdrawnLogin(user, expiredAt)
+
+        assertEquals(WithdrawnLoginResult.EXPIRED_DELETED, result)
+        verify(userRepository).delete(user)
+        verify(objectStorageRepository).delete(profileImageKey)
+        verify(objectStorageRepository).delete(feedImageKey)
+        verify(objectStorageRepository).delete(roomImageKey)
+        verify(jwtUtil).deleteCachedRefreshTokenRotateId(7L)
+    }
+
+    @Test
+    fun `스케줄러용 영구 삭제는 탈퇴 후 30일이 지난 사용자만 조회한다`() {
+        val now = LocalDateTime.of(2026, 8, 31, 12, 0)
+        val cutoff = now.minusDays(User.WITHDRAWAL_GRACE_PERIOD_DAYS)
+        `when`(userRepository.findAllByWithdrawnDateTimeLessThanEqual(cutoff)).thenReturn(emptyList())
+
+        val deletedCount = service.deleteExpiredWithdrawnUsers(now)
+
+        assertEquals(0, deletedCount)
+        verify(userRepository).findAllByWithdrawnDateTimeLessThanEqual(cutoff)
     }
 
     @Test

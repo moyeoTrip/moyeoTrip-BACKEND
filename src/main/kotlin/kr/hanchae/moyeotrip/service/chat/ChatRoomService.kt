@@ -18,6 +18,8 @@ import kr.hanchae.moyeotrip.controller.chat.response.ChatMessageResponse
 import kr.hanchae.moyeotrip.controller.chat.response.ChatParticipantResponse
 import kr.hanchae.moyeotrip.controller.chat.response.ChatPollOptionResponse
 import kr.hanchae.moyeotrip.controller.chat.response.ChatPollResponse
+import kr.hanchae.moyeotrip.controller.chat.response.ChatPollUpdatedOptionResponse
+import kr.hanchae.moyeotrip.controller.chat.response.ChatPollUpdatedResponse
 import kr.hanchae.moyeotrip.controller.chat.response.ChatRoomDetailResponse
 import kr.hanchae.moyeotrip.controller.chat.response.ChatRoomFavoriteResponse
 import kr.hanchae.moyeotrip.controller.chat.response.ChatRoomKickHistoryResponse
@@ -400,7 +402,12 @@ class ChatRoomService(
             courseId = course.id,
             title = course.title,
             description = course.description,
-            creatorNickname = creator?.information?.nickname,
+            creatorNickname =
+                if (course.showCreatorNickname) {
+                    creator?.information?.nickname ?: course.creatorNickname
+                } else {
+                    null
+                },
             creatorTravelStartDate = creatorTravelRoom?.startDate,
             creatorTravelEndDate = creatorTravelRoom?.endDate,
             chatRoomCount = roomRepository.countByCourseIdAndStatusNot(courseId, ChatRoomStatus.CANCELLED),
@@ -918,16 +925,24 @@ class ChatRoomService(
         messageId: Long,
         optionId: Long,
     ): ChatMessageResponse {
+        findRoomForUpdate(roomId)
         val participant = findParticipant(roomId, userId)
         requireChatEnabled(participant.chatRoom)
         val message = findPollMessage(roomId, messageId)
         val option = pollOptionRepository.findByIdAndMessageId(optionId, messageId) ?: throw BaseException(ErrorCode.RESOURCE_NOT_FOUND)
-        pollVoteRepository.findByMessageIdAndUserId(messageId, userId)?.let {
-            pollVoteRepository.delete(it)
-            pollVoteRepository.flush()
+        val existingVote = pollVoteRepository.findByMessageIdAndUserId(messageId, userId)
+        when {
+            existingVote == null ->
+                pollVoteRepository.saveAndFlush(ChatPollVote(message = message, option = option, user = participant.user))
+
+            existingVote.option.id != option.id -> {
+                existingVote.changeOption(option)
+                pollVoteRepository.flush()
+            }
         }
-        pollVoteRepository.saveAndFlush(ChatPollVote(message = message, option = option, user = participant.user))
-        return message.toResponse(userId)
+        return message.toResponse(userId).also {
+            realtimeMessagingService.sendChatPollUpdated(roomId, message.toPollUpdatedResponse())
+        }
     }
 
     @Transactional
@@ -936,11 +951,17 @@ class ChatRoomService(
         roomId: Long,
         messageId: Long,
     ): ChatMessageResponse {
+        findRoomForUpdate(roomId)
         val participant = findParticipant(roomId, userId)
         requireChatEnabled(participant.chatRoom)
         val message = findPollMessage(roomId, messageId)
-        pollVoteRepository.findByMessageIdAndUserId(messageId, userId)?.let(pollVoteRepository::delete)
-        return message.toResponse(userId)
+        pollVoteRepository.findByMessageIdAndUserId(messageId, userId)?.let {
+            pollVoteRepository.delete(it)
+            pollVoteRepository.flush()
+        }
+        return message.toResponse(userId).also {
+            realtimeMessagingService.sendChatPollUpdated(roomId, message.toPollUpdatedResponse())
+        }
     }
 
     @Transactional
@@ -1438,6 +1459,22 @@ class ChatRoomService(
                     )
                 },
             mentions = mentionedUsers.sortedBy { it.id }.map { MentionedChatUserResponse(it.id, it.nickname()) },
+        )
+    }
+
+    private fun ChatMessage.toPollUpdatedResponse(): ChatPollUpdatedResponse {
+        val poll = toResponse().poll ?: throw BaseException(ErrorCode.RESOURCE_NOT_FOUND)
+        return ChatPollUpdatedResponse(
+            messageId = id,
+            totalVoteCount = poll.totalVoteCount,
+            options =
+                poll.options.map {
+                    ChatPollUpdatedOptionResponse(
+                        optionId = it.optionId,
+                        voteCount = it.voteCount,
+                        voterNicknames = it.voterNicknames,
+                    )
+                },
         )
     }
 

@@ -40,6 +40,7 @@ class TravelCourse(
     publicationStatus: CoursePublicationStatus =
         if (type == TravelCourseType.PUBLIC) CoursePublicationStatus.PUBLISHED else CoursePublicationStatus.NOT_REQUESTED,
     showCreatorNickname: Boolean = true,
+    creatorNickname: String? = null,
 ) : BaseModifiableEntity() {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
@@ -61,6 +62,10 @@ class TravelCourse(
 
     @Column(name = "show_creator_nickname", nullable = false, columnDefinition = "NUMBER(1)")
     var showCreatorNickname: Boolean = showCreatorNickname
+        protected set
+
+    @Column(name = "creator_nickname", length = 24)
+    var creatorNickname: String? = creatorNickname
         protected set
 
     @OneToMany(mappedBy = "course", fetch = FetchType.LAZY)
@@ -106,11 +111,13 @@ class TravelCourse(
         title: String = this.title,
         description: String? = this.description,
         showCreatorNickname: Boolean = true,
+        creatorNickname: String? = owner?.information?.nickname,
     ) {
         check(type == TravelCourseType.CUSTOM) { "커스텀 코스만 공개할 수 있습니다." }
         this.title = title
         this.description = description
         this.showCreatorNickname = showCreatorNickname
+        this.creatorNickname = creatorNickname
         type = TravelCourseType.PUBLIC
         publicationStatus = CoursePublicationStatus.PUBLISHED
     }

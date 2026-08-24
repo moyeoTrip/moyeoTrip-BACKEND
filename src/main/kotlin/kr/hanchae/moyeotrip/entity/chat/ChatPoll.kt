@@ -38,10 +38,17 @@ class ChatPollVote(
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "message_id", nullable = false, updatable = false)
     val message: ChatMessage,
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "option_id", nullable = false, updatable = false)
-    val option: ChatPollOption,
+    option: ChatPollOption,
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "user_id", nullable = false, updatable = false)
     val user: User,
-) : BaseTimeEntity()
+) : BaseTimeEntity() {
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "option_id", nullable = false)
+    var option: ChatPollOption = option
+        protected set
+
+    fun changeOption(option: ChatPollOption) {
+        this.option = option
+    }
+}

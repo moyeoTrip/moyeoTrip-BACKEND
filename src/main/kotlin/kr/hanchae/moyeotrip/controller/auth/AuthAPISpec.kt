@@ -216,6 +216,8 @@ interface AuthAPISpec {
             Custom Token 자체를 이 API에 보내면 안 됩니다. Firebase ID Token의 서명·만료·폐기 여부를 검증한 뒤,
             미가입 인증 수단이면 isNewUser=true와 USER_INFO_REQUIRED를 반환합니다.
             가입된 사용자는 서비스 JWT와 현재 회원가입 진행 상태를 반환합니다.
+            탈퇴 후 30일 이내인 계정은 로그인과 동시에 복구하고 reactivated=true를 반환합니다.
+            탈퇴 시 삭제된 피드·친구·친구 도감·여행 기록은 계정 복구 후에도 돌아오지 않습니다.
         """,
     )
     @SecurityRequirements
@@ -232,6 +234,7 @@ interface AuthAPISpec {
                                 name = "기존 회원",
                                 value = AuthSwaggerExamples.LOGIN_EXISTING,
                             ),
+                            ExampleObject(name = "탈퇴 계정 복구", value = AuthSwaggerExamples.LOGIN_REACTIVATED),
                             ExampleObject(name = "프로필 선택 필요", value = AuthSwaggerExamples.LOGIN_PROFILE_REQUIRED),
                             ExampleObject(name = "신규 회원", value = AuthSwaggerExamples.LOGIN_NEW),
                         ],
@@ -526,13 +529,16 @@ private object AuthSwaggerExamples {
             """"signupState":"PROFILE_IMAGE_REQUIRED"}"""
     const val LOGIN_EXISTING =
         """{"accessToken":"access-token","refreshToken":"refresh-token","isNewUser":false,""" +
-            """"signupState":"SIGNUP_COMPLETE","providerType":"EMAIL"}"""
+            """"signupState":"SIGNUP_COMPLETE","providerType":"EMAIL","reactivated":false}"""
+    const val LOGIN_REACTIVATED =
+        """{"accessToken":"access-token","refreshToken":"refresh-token","isNewUser":false,""" +
+            """"signupState":"SIGNUP_COMPLETE","providerType":"KAKAO","reactivated":true}"""
     const val LOGIN_PROFILE_REQUIRED =
         """{"accessToken":"access-token","refreshToken":"refresh-token","isNewUser":false,""" +
-            """"signupState":"PROFILE_IMAGE_REQUIRED","providerType":"EMAIL"}"""
+            """"signupState":"PROFILE_IMAGE_REQUIRED","providerType":"EMAIL","reactivated":false}"""
     const val LOGIN_NEW =
         """{"accessToken":null,"refreshToken":null,"isNewUser":true,""" +
-            """"signupState":"USER_INFO_REQUIRED","providerType":"APPLE"}"""
+            """"signupState":"USER_INFO_REQUIRED","providerType":"APPLE","reactivated":false}"""
     const val LINKED_PROVIDERS = """{"providers":["EMAIL","APPLE","KAKAO","GOOGLE"]}"""
     const val BAD_REQUEST = """{"code":40000,"errorMessage":"잘못된 요청입니다."}"""
     const val INVALID_REFRESH_TOKEN = """{"code":40001,"errorMessage":"유효하지 않은 RefreshToken 입니다."}"""

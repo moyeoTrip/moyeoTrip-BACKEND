@@ -60,6 +60,7 @@ class AuthServiceTest {
     private lateinit var notificationSettingRepository: NotificationSettingRepository
     private lateinit var agreementTermRepository: AgreementTermRepository
     private lateinit var userTermsAgreementRepository: UserTermsAgreementRepository
+    private lateinit var userService: UserService
     private lateinit var authService: AuthService
 
     @BeforeEach
@@ -73,6 +74,7 @@ class AuthServiceTest {
         notificationSettingRepository = mock(NotificationSettingRepository::class.java)
         agreementTermRepository = mock(AgreementTermRepository::class.java)
         userTermsAgreementRepository = mock(UserTermsAgreementRepository::class.java)
+        userService = mock(UserService::class.java)
         authService =
             AuthService(
                 userRepository,
@@ -90,6 +92,7 @@ class AuthServiceTest {
                 notificationSettingRepository,
                 agreementTermRepository,
                 userTermsAgreementRepository,
+                userService,
             )
     }
 
@@ -390,6 +393,60 @@ class AuthServiceTest {
     }
 
     @Test
+    fun `탈퇴 후 30일 이내 로그인으로 복구되면 복구 여부와 새 토큰을 반환한다`() {
+        val user =
+            User.createFirebaseUser(
+                email = "restored@example.com",
+                nickname = "돌아온 여행자",
+                nicknameColor = NicknameColor.MINT,
+                userRole = UserRole.ROLE_USER,
+            )
+        user.selectProfileImage("profile.webp")
+        val identity = UserAuthIdentity(user = user, providerType = ProviderType.EMAIL, providerUserId = "restored-uid")
+        `when`(firebaseAuthenticationClient.verifyIdToken("restore-token"))
+            .thenReturn(FirebaseIdentity("restored-uid", "restored@example.com", ProviderType.EMAIL))
+        `when`(userAuthIdentityRepository.findByProviderTypeAndProviderUserId(ProviderType.EMAIL, "restored-uid"))
+            .thenReturn(identity)
+        `when`(userService.handleWithdrawnLogin(user)).thenReturn(WithdrawnLoginResult.RESTORED)
+        `when`(jwtUtil.generateAccessToken(0L, "돌아온 여행자")).thenReturn("restored-access")
+        `when`(jwtUtil.generateRotateId()).thenReturn("restored-rotate")
+        `when`(jwtUtil.generateRefreshToken(0L, "restored-rotate")).thenReturn("restored-refresh")
+
+        val response = authService.loginWithFirebase(FirebaseLoginRequest("restore-token"))
+
+        assertTrue(response.reactivated)
+        assertFalse(response.isNewUser)
+        assertEquals("restored-access", response.accessToken)
+        assertEquals("restored-refresh", response.refreshToken)
+    }
+
+    @Test
+    fun `복구 기간이 지난 탈퇴 계정은 영구 삭제하고 신규 가입 대상으로 응답한다`() {
+        val user =
+            User.createFirebaseUser(
+                email = "expired@example.com",
+                nickname = "만료된 여행자",
+                nicknameColor = NicknameColor.NAVY,
+                userRole = UserRole.ROLE_USER,
+            )
+        val identity = UserAuthIdentity(user = user, providerType = ProviderType.EMAIL, providerUserId = "expired-uid")
+        `when`(firebaseAuthenticationClient.verifyIdToken("expired-token"))
+            .thenReturn(FirebaseIdentity("expired-uid", "expired@example.com", ProviderType.EMAIL))
+        `when`(userAuthIdentityRepository.findByProviderTypeAndProviderUserId(ProviderType.EMAIL, "expired-uid"))
+            .thenReturn(identity)
+        `when`(userService.handleWithdrawnLogin(user)).thenReturn(WithdrawnLoginResult.EXPIRED_DELETED)
+
+        val response = authService.loginWithFirebase(FirebaseLoginRequest("expired-token"))
+
+        assertTrue(response.isNewUser)
+        assertFalse(response.reactivated)
+        assertEquals(SignupState.USER_INFO_REQUIRED, response.signupState)
+        assertEquals(null, response.accessToken)
+        assertEquals(null, response.refreshToken)
+        verifyNoInteractions(jwtUtil)
+    }
+
+    @Test
     fun `프로필 이미지를 선택하지 않은 사용자는 재로그인 시 토큰과 진행 상태를 받는다`() {
         val user =
             User.createFirebaseUser(
@@ -448,6 +505,7 @@ class AuthServiceTest {
                 notificationSettingRepository,
                 agreementTermRepository,
                 userTermsAgreementRepository,
+                userService,
             )
 
         val exception =

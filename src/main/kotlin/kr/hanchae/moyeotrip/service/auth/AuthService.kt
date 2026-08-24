@@ -58,6 +58,7 @@ class AuthService(
     private val notificationSettingRepository: NotificationSettingRepository,
     private val agreementTermRepository: AgreementTermRepository,
     private val userTermsAgreementRepository: UserTermsAgreementRepository,
+    private val userService: UserService,
 ) {
     fun createKakaoCustomToken(request: KakaoCustomTokenRequest): FirebaseCustomTokenResponse = createKakaoCustomToken(request.accessToken)
 
@@ -130,6 +131,15 @@ class AuthService(
                 providerType = identity.providerType,
             )
 
+        val withdrawnLoginResult = userService.handleWithdrawnLogin(user)
+        if (withdrawnLoginResult == WithdrawnLoginResult.EXPIRED_DELETED) {
+            return FirebaseLoginResponse(
+                isNewUser = true,
+                signupState = SignupState.USER_INFO_REQUIRED,
+                providerType = identity.providerType,
+            )
+        }
+
         request.fcmToken
             ?.takeIf { it != user.fcmToken }
             ?.let(user::changeFcmToken)
@@ -149,6 +159,7 @@ class AuthService(
             isNewUser = false,
             signupState = user.signupState,
             providerType = identity.providerType,
+            reactivated = withdrawnLoginResult == WithdrawnLoginResult.RESTORED,
         )
     }
 
@@ -340,6 +351,9 @@ class AuthService(
     }
 
     private fun makeTokens(user: User): ServiceTokensResponse {
+        if (user.isWithdrawn()) {
+            throw UserNotFoundException(user.id)
+        }
         if (user.signupState == SignupState.USER_INFO_REQUIRED || user.information == null) {
             throw BaseException(ErrorCode.USER_INFO_REQUIRED, ErrorCode.USER_INFO_REQUIRED.errorMessage)
         }

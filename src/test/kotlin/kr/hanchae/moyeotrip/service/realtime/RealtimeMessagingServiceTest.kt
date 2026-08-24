@@ -3,6 +3,8 @@ package kr.hanchae.moyeotrip.service.realtime
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import kr.hanchae.moyeotrip.controller.chat.response.ChatMessageResponse
+import kr.hanchae.moyeotrip.controller.chat.response.ChatPollUpdatedOptionResponse
+import kr.hanchae.moyeotrip.controller.chat.response.ChatPollUpdatedResponse
 import kr.hanchae.moyeotrip.controller.notification.response.NotificationResponse
 import kr.hanchae.moyeotrip.entity.chat.ChatMessageType
 import kr.hanchae.moyeotrip.entity.notification.NotificationType
@@ -62,6 +64,22 @@ class RealtimeMessagingServiceTest {
         listener.onMessage("moyeotrip:realtime-events", publishedJson())
 
         verify(messagingTemplate).convertAndSendToUser(eq("2"), eq("/queue/notifications"), any(JsonNode::class.java))
+    }
+
+    @Test
+    fun `Redis 투표 갱신 이벤트를 채팅방 투표 웹소켓 구독자에게 전달한다`() {
+        val listener = subscribe()
+        val poll =
+            ChatPollUpdatedResponse(
+                messageId = 501L,
+                totalVoteCount = 1,
+                options = listOf(ChatPollUpdatedOptionResponse(23L, 1, null)),
+            )
+        service.sendChatPollUpdated(10L, poll)
+
+        listener.onMessage("moyeotrip:realtime-events", publishedJson())
+
+        verify(messagingTemplate).convertAndSend(eq("/topic/chat-rooms/10/polls"), any(JsonNode::class.java))
     }
 
     @Test

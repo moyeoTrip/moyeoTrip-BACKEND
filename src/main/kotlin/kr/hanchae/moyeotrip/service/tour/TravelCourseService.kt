@@ -2,14 +2,19 @@ package kr.hanchae.moyeotrip.service.tour
 
 import kr.hanchae.moyeotrip.controller.tour.request.PublishTravelCourseRequest
 import kr.hanchae.moyeotrip.controller.tour.response.CoursePublicationResponse
+import kr.hanchae.moyeotrip.controller.tour.response.TravelCourseLikeResponse
 import kr.hanchae.moyeotrip.controller.tour.response.TravelCourseTagResponse
 import kr.hanchae.moyeotrip.entity.chat.ChatRoomStatus
+import kr.hanchae.moyeotrip.entity.tour.TravelCourseLike
 import kr.hanchae.moyeotrip.entity.tour.TravelCourseType
 import kr.hanchae.moyeotrip.exception.BaseException
 import kr.hanchae.moyeotrip.exception.ErrorCode
+import kr.hanchae.moyeotrip.exception.UserNotFoundException
 import kr.hanchae.moyeotrip.repository.ChatRoomRepository
+import kr.hanchae.moyeotrip.repository.TravelCourseLikeRepository
 import kr.hanchae.moyeotrip.repository.TravelCourseRepository
 import kr.hanchae.moyeotrip.repository.TravelCourseTagRepository
+import kr.hanchae.moyeotrip.repository.UserRepository
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.LocalDate
@@ -19,6 +24,8 @@ class TravelCourseService(
     private val courseTagRepository: TravelCourseTagRepository,
     private val roomRepository: ChatRoomRepository,
     private val courseRepository: TravelCourseRepository,
+    private val courseLikeRepository: TravelCourseLikeRepository,
+    private val userRepository: UserRepository,
 ) {
     @Transactional(readOnly = true)
     fun getCourseTags(): List<TravelCourseTagResponse> =
@@ -39,8 +46,34 @@ class TravelCourseService(
             title = request.title.trim(),
             description = request.description.trim(),
             showCreatorNickname = request.showCreatorNickname,
+            creatorNickname = checkNotNull(course.owner?.information).nickname,
         )
         return CoursePublicationResponse(course.id, course.publicationStatus)
+    }
+
+    @Transactional
+    fun toggleLike(
+        userId: Long,
+        courseId: Long,
+    ): TravelCourseLikeResponse {
+        val course =
+            courseRepository.findByIdAndType(courseId, TravelCourseType.PUBLIC)
+                ?: throw BaseException(ErrorCode.TRAVEL_COURSE_NOT_FOUND)
+        val likeCount = courseLikeRepository.countByCourseId(courseId)
+        val existing = courseLikeRepository.findByCourseIdAndUserId(courseId, userId)
+        if (existing != null) {
+            courseLikeRepository.delete(existing)
+            return TravelCourseLikeResponse(
+                liked = false,
+                likeCount = (likeCount - 1L).coerceAtLeast(0L),
+            )
+        }
+        val user = userRepository.findById(userId).orElseThrow { UserNotFoundException(userId) }
+        courseLikeRepository.save(TravelCourseLike(course = course, user = user))
+        return TravelCourseLikeResponse(
+            liked = true,
+            likeCount = likeCount + 1L,
+        )
     }
 
     private fun hasCompletedHostedTrip(

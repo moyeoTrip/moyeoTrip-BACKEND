@@ -15,6 +15,7 @@ import kr.hanchae.moyeotrip.controller.tour.request.PublishTravelCourseRequest
 import kr.hanchae.moyeotrip.controller.tour.request.RateTravelCourseRequest
 import kr.hanchae.moyeotrip.controller.tour.request.UpdateTravelCourseRequest
 import kr.hanchae.moyeotrip.controller.tour.response.CoursePublicationResponse
+import kr.hanchae.moyeotrip.controller.tour.response.TravelCourseLikeResponse
 import kr.hanchae.moyeotrip.controller.tour.response.TravelCourseTagResponse
 import kr.hanchae.moyeotrip.exception.ErrorResponse
 import org.springframework.http.ResponseEntity
@@ -221,6 +222,27 @@ interface TravelCourseAPISpec {
         @Parameter(description = "상세 조회할 공개 여행 코스 ID", example = "77")
         courseId: Long,
     ): PublicTravelCourseDetailResponse
+
+    @Operation(summary = "공개 여행 코스 좋아요 토글", description = "호출할 때마다 로그인 사용자의 좋아요 상태를 반전합니다.")
+    @ApiResponses(
+        value = [
+            ApiResponse(
+                responseCode = "200",
+                description = "여행 코스 좋아요 상태 변경 성공",
+                content = [Content(schema = Schema(implementation = TravelCourseLikeResponse::class))],
+            ),
+            ApiResponse(
+                responseCode = "404",
+                description = "공개 여행 코스 또는 로그인 사용자를 찾을 수 없음",
+                content = [Content(schema = Schema(implementation = ErrorResponse::class))],
+            ),
+        ],
+    )
+    fun toggleCourseLike(
+        @Parameter(hidden = true) userId: Long,
+        @Parameter(description = "좋아요 상태를 바꿀 공개 여행 코스 ID", example = "77")
+        courseId: Long,
+    ): TravelCourseLikeResponse
 
     @Operation(summary = "완료한 여행 코스 평가", description = "확정된 여행이 끝난 채팅방 참가자만 1~5점으로 평가할 수 있습니다.")
     @ApiResponses(

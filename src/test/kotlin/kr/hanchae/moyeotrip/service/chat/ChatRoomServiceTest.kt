@@ -10,6 +10,8 @@ import kr.hanchae.moyeotrip.controller.chat.request.MyChatRoomFilter
 import kr.hanchae.moyeotrip.controller.chat.request.SendChatMessageRequest
 import kr.hanchae.moyeotrip.controller.chat.request.ShareTourismContentRequest
 import kr.hanchae.moyeotrip.controller.chat.request.UpdateMeetingInfoRequest
+import kr.hanchae.moyeotrip.controller.chat.response.ChatPollUpdatedOptionResponse
+import kr.hanchae.moyeotrip.controller.chat.response.ChatPollUpdatedResponse
 import kr.hanchae.moyeotrip.controller.chat.response.TravelRoadmapProgress
 import kr.hanchae.moyeotrip.controller.tour.request.UpdateTravelCourseRequest
 import kr.hanchae.moyeotrip.entity.chat.ChatMessage
@@ -66,6 +68,7 @@ import org.junit.jupiter.api.Test
 import org.mockito.ArgumentCaptor
 import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito.mock
+import org.mockito.Mockito.never
 import org.mockito.Mockito.verify
 import org.mockito.Mockito.verifyNoInteractions
 import org.mockito.Mockito.`when`
@@ -419,7 +422,7 @@ class ChatRoomServiceTest {
     }
 
     @Test
-    fun `투표 선택을 바꾸면 기존 표를 지우고 새 선택지를 저장한다`() {
+    fun `투표 선택을 바꾸면 기존 투표 행의 선택지만 변경한다`() {
         val voter = profiledUser(2L, Gender.F, LocalDate.now().minusYears(30))
         val room = room(user(1L))
         val participant = ChatRoomParticipant(chatRoom = room, user = voter, role = ChatParticipantRole.MEMBER)
@@ -428,22 +431,85 @@ class ChatRoomServiceTest {
         val oldOption = ChatPollOption(id = 40L, message = pollMessage, text = "서울역", sequence = 1)
         val newOption = ChatPollOption(id = 41L, message = pollMessage, text = "용산역", sequence = 2)
         val oldVote = ChatPollVote(id = 50L, message = pollMessage, option = oldOption, user = voter)
+        `when`(roomRepository.findByIdForUpdate(10L)).thenReturn(room)
         `when`(participantRepository.findByChatRoomIdAndUserId(10L, 2L)).thenReturn(participant)
         `when`(messageRepository.findByIdAndChatRoomId(30L, 10L)).thenReturn(pollMessage)
         `when`(pollOptionRepository.findByIdAndMessageId(41L, 30L)).thenReturn(newOption)
         `when`(pollVoteRepository.findByMessageIdAndUserId(30L, 2L)).thenReturn(oldVote)
-        `when`(pollVoteRepository.saveAndFlush(any(ChatPollVote::class.java))).thenAnswer { it.arguments[0] }
         `when`(pollOptionRepository.findAllByMessageIdOrderBySequenceAsc(30L)).thenReturn(listOf(oldOption, newOption))
         `when`(pollVoteRepository.findAllByMessageId(30L)).thenReturn(emptyList())
 
         service.votePoll(2L, 10L, 30L, 41L)
 
-        verify(pollVoteRepository).delete(oldVote)
         verify(pollVoteRepository).flush()
+        verify(pollVoteRepository, never()).delete(oldVote)
+        verify(pollVoteRepository, never()).saveAndFlush(any(ChatPollVote::class.java))
+        assertEquals(41L, oldVote.option.id)
+        verify(realtimeMessagingService).sendChatPollUpdated(
+            10L,
+            ChatPollUpdatedResponse(
+                30L,
+                0,
+                listOf(
+                    ChatPollUpdatedOptionResponse(40L, 0, null),
+                    ChatPollUpdatedOptionResponse(41L, 0, null),
+                ),
+            ),
+        )
+    }
+
+    @Test
+    fun `처음 투표하면 한 사람당 하나의 투표를 저장한다`() {
+        val voter = profiledUser(2L, Gender.F, LocalDate.now().minusYears(30))
+        val room = room(user(1L))
+        val participant = ChatRoomParticipant(chatRoom = room, user = voter, role = ChatParticipantRole.MEMBER)
+        val pollMessage = message(30L, room, user(1L), ChatMessageType.POLL, "어디서 만날까요?")
+        `when`(pollMessage.pollAnonymous).thenReturn(true)
+        val option = ChatPollOption(id = 40L, message = pollMessage, text = "서울역", sequence = 1)
+        `when`(roomRepository.findByIdForUpdate(10L)).thenReturn(room)
+        `when`(participantRepository.findByChatRoomIdAndUserId(10L, 2L)).thenReturn(participant)
+        `when`(messageRepository.findByIdAndChatRoomId(30L, 10L)).thenReturn(pollMessage)
+        `when`(pollOptionRepository.findByIdAndMessageId(40L, 30L)).thenReturn(option)
+        `when`(pollOptionRepository.findAllByMessageIdOrderBySequenceAsc(30L)).thenReturn(listOf(option))
+        `when`(pollVoteRepository.findAllByMessageId(30L)).thenReturn(emptyList())
+
+        service.votePoll(2L, 10L, 30L, 40L)
+
         val captor = ArgumentCaptor.forClass(ChatPollVote::class.java)
         verify(pollVoteRepository).saveAndFlush(captor.capture())
-        assertEquals(41L, captor.value.option.id)
+        assertEquals(40L, captor.value.option.id)
         assertEquals(2L, captor.value.user.id)
+    }
+
+    @Test
+    fun `같은 선택지에 다시 투표하면 저장소를 변경하지 않는다`() {
+        val voter = profiledUser(2L, Gender.F, LocalDate.now().minusYears(30))
+        val room = room(user(1L))
+        val participant = ChatRoomParticipant(chatRoom = room, user = voter, role = ChatParticipantRole.MEMBER)
+        val pollMessage = message(30L, room, user(1L), ChatMessageType.POLL, "어디서 만날까요?")
+        `when`(pollMessage.pollAnonymous).thenReturn(true)
+        val option = ChatPollOption(id = 40L, message = pollMessage, text = "서울역", sequence = 1)
+        val vote = ChatPollVote(id = 50L, message = pollMessage, option = option, user = voter)
+        `when`(roomRepository.findByIdForUpdate(10L)).thenReturn(room)
+        `when`(participantRepository.findByChatRoomIdAndUserId(10L, 2L)).thenReturn(participant)
+        `when`(messageRepository.findByIdAndChatRoomId(30L, 10L)).thenReturn(pollMessage)
+        `when`(pollOptionRepository.findByIdAndMessageId(40L, 30L)).thenReturn(option)
+        `when`(pollVoteRepository.findByMessageIdAndUserId(30L, 2L)).thenReturn(vote)
+        `when`(pollOptionRepository.findAllByMessageIdOrderBySequenceAsc(30L)).thenReturn(listOf(option))
+        `when`(pollVoteRepository.findAllByMessageId(30L)).thenReturn(listOf(vote))
+
+        val response = service.votePoll(2L, 10L, 30L, 40L)
+
+        verify(pollVoteRepository, never()).flush()
+        verify(pollVoteRepository, never()).saveAndFlush(any(ChatPollVote::class.java))
+        assertEquals(
+            true,
+            response.poll
+                ?.options
+                ?.single()
+                ?.votedByMe,
+        )
+        assertEquals(1, response.poll?.totalVoteCount)
     }
 
     @Test
@@ -455,6 +521,7 @@ class ChatRoomServiceTest {
         `when`(pollMessage.pollAnonymous).thenReturn(true)
         val option = ChatPollOption(id = 40L, message = pollMessage, text = "서울역", sequence = 1)
         val vote = ChatPollVote(id = 50L, message = pollMessage, option = option, user = voter)
+        `when`(roomRepository.findByIdForUpdate(10L)).thenReturn(room)
         `when`(participantRepository.findByChatRoomIdAndUserId(10L, 2L)).thenReturn(participant)
         `when`(messageRepository.findByIdAndChatRoomId(30L, 10L)).thenReturn(pollMessage)
         `when`(pollVoteRepository.findByMessageIdAndUserId(30L, 2L)).thenReturn(vote)
@@ -464,7 +531,12 @@ class ChatRoomServiceTest {
         val response = service.cancelPollVote(2L, 10L, 30L)
 
         verify(pollVoteRepository).delete(vote)
+        verify(pollVoteRepository).flush()
         assertEquals(0, response.poll?.totalVoteCount)
+        verify(realtimeMessagingService).sendChatPollUpdated(
+            10L,
+            ChatPollUpdatedResponse(30L, 0, listOf(ChatPollUpdatedOptionResponse(40L, 0, null))),
+        )
     }
 
     @Test
@@ -1189,6 +1261,27 @@ class ChatRoomServiceTest {
         assertEquals(null, response.averageRating)
         assertEquals(null, response.thumbnail)
         assertEquals(emptyList<Any>(), response.places)
+    }
+
+    @Test
+    fun `탈퇴 작성자의 공개 코스는 저장된 작성자 닉네임을 반환한다`() {
+        val course =
+            TravelCourse(
+                id = 5L,
+                type = TravelCourseType.PUBLIC,
+                title = "보존된 공개 코스",
+                creatorNickname = "탈퇴한 여행자",
+            )
+        `when`(courseRepository.findByIdAndType(5L, TravelCourseType.PUBLIC)).thenReturn(course)
+        `when`(roomRepository.countByCourseIdAndStatusNot(5L, ChatRoomStatus.CANCELLED)).thenReturn(0L)
+        `when`(ratingRepository.findAverageByCourseId(5L)).thenReturn(null)
+        `when`(ratingRepository.countByCourseId(5L)).thenReturn(0L)
+
+        val response = service.getCourse(5L)
+
+        assertEquals("탈퇴한 여행자", response.creatorNickname)
+        assertEquals(null, response.creatorTravelStartDate)
+        assertEquals(null, response.creatorTravelEndDate)
     }
 
     @Test

@@ -75,6 +75,10 @@ class User(
     var lastLoginDateTime: LocalDateTime? = null
         protected set
 
+    @Column(name = "withdrawn_datetime")
+    var withdrawnDateTime: LocalDateTime? = null
+        protected set
+
     @Column(nullable = false)
     var profileImageGenerationCount: Int = 0
         protected set
@@ -105,6 +109,22 @@ class User(
     fun recordLogin(at: LocalDateTime = LocalDateTime.now()) {
         lastLoginDateTime = at
     }
+
+    fun withdraw(at: LocalDateTime = LocalDateTime.now()) {
+        check(withdrawnDateTime == null) { "이미 탈퇴 처리된 사용자입니다." }
+        withdrawnDateTime = at
+        clearFcmToken()
+    }
+
+    fun restore() {
+        check(withdrawnDateTime != null) { "탈퇴한 사용자만 복구할 수 있습니다." }
+        withdrawnDateTime = null
+    }
+
+    fun isWithdrawn(): Boolean = withdrawnDateTime != null
+
+    fun canRestore(at: LocalDateTime = LocalDateTime.now()): Boolean =
+        withdrawnDateTime?.plusDays(WITHDRAWAL_GRACE_PERIOD_DAYS)?.isAfter(at) == true
 
     fun addAuthIdentity(
         providerType: ProviderType,
@@ -157,6 +177,7 @@ class User(
 
     companion object {
         const val MAX_PROFILE_IMAGE_GENERATION_COUNT = 3
+        const val WITHDRAWAL_GRACE_PERIOD_DAYS = 30L
 
         fun createFirebaseUser(
             email: String?,
