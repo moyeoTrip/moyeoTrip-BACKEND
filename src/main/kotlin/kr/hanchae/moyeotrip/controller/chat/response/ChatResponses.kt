@@ -15,6 +15,12 @@ import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
 
+@Schema(description = "채팅방 생성 결과")
+data class CreateChatRoomResponse(
+    @field:Schema(description = "생성된 채팅방 ID", example = "101")
+    val roomId: Long,
+)
+
 @Schema(description = "채팅방 상세 정보")
 data class ChatRoomDetailResponse(
     @field:Schema(description = "채팅방 ID", example = "101")

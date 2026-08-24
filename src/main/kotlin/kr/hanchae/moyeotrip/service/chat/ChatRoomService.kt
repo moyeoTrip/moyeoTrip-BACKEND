@@ -25,6 +25,7 @@ import kr.hanchae.moyeotrip.controller.chat.response.ChatRoomMemberListResponse
 import kr.hanchae.moyeotrip.controller.chat.response.ChatRoomMemberResponse
 import kr.hanchae.moyeotrip.controller.chat.response.ChatRoomNoticeHistoryResponse
 import kr.hanchae.moyeotrip.controller.chat.response.ChatRoomNoticeResponse
+import kr.hanchae.moyeotrip.controller.chat.response.CreateChatRoomResponse
 import kr.hanchae.moyeotrip.controller.chat.response.CurrentTravelRoadmapResponse
 import kr.hanchae.moyeotrip.controller.chat.response.JoinApplicationResponse
 import kr.hanchae.moyeotrip.controller.chat.response.JoinChatRoomResponse
@@ -138,7 +139,7 @@ class ChatRoomService(
         userId: Long,
         request: CreateChatRoomRequest,
         thumbnail: MultipartFile? = null,
-    ) {
+    ): CreateChatRoomResponse {
         validateTripSchedule(request)
         validateAgeRestriction(request)
         val host = findUser(userId)
@@ -177,6 +178,7 @@ class ChatRoomService(
         val openingMessage = saveSystemMessage(room, "${host.nickname()}님이 모임을 개설했어요.")
         hostParticipant.readThrough(openingMessage.id)
         notificationService.notifyRoomCreated(room)
+        return CreateChatRoomResponse(roomId = room.id)
     }
 
     @Transactional(readOnly = true)

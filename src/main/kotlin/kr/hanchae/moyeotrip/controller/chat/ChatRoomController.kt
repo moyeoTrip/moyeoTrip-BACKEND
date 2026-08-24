@@ -21,6 +21,7 @@ import kr.hanchae.moyeotrip.controller.chat.response.ChatRoomFavoriteResponse
 import kr.hanchae.moyeotrip.controller.chat.response.ChatRoomKickHistoryResponse
 import kr.hanchae.moyeotrip.controller.chat.response.ChatRoomMemberListResponse
 import kr.hanchae.moyeotrip.controller.chat.response.ChatRoomNoticeHistoryResponse
+import kr.hanchae.moyeotrip.controller.chat.response.CreateChatRoomResponse
 import kr.hanchae.moyeotrip.controller.chat.response.CurrentTravelRoadmapResponse
 import kr.hanchae.moyeotrip.controller.chat.response.JoinApplicationResponse
 import kr.hanchae.moyeotrip.controller.chat.response.JoinChatRoomResponse
@@ -56,7 +57,8 @@ class ChatRoomController(
         @LoginUserId userId: Long,
         @Valid @RequestPart("request") request: CreateChatRoomRequest,
         @RequestPart("thumbnail", required = false) thumbnail: MultipartFile?,
-    ): ResponseEntity<Unit> = ResponseEntity.status(HttpStatus.CREATED).body(chatRoomService.createRoom(userId, request, thumbnail))
+    ): ResponseEntity<CreateChatRoomResponse> =
+        ResponseEntity.status(HttpStatus.CREATED).body(chatRoomService.createRoom(userId, request, thumbnail))
 
     @GetMapping("/my")
     override fun getMyRooms(
