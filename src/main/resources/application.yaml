@@ -58,6 +58,9 @@ sentry:
   logging:
     # Trace 로그의 request/response 본문을 Sentry 로그 이벤트로 중복 전송하지 않는다.
     enabled: false
+  metrics:
+    # SDK 기본값이 false 라 켜지 않으면 Sentry.metrics() 호출이 전부 no-op 이 된다.
+    enabled: true
   in-app-includes:
     - kr.hanchae.moyeotrip
 
