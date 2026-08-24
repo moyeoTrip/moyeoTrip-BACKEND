@@ -30,6 +30,7 @@ import kr.hanchae.moyeotrip.controller.chat.response.ChatRoomFavoriteResponse
 import kr.hanchae.moyeotrip.controller.chat.response.ChatRoomKickHistoryResponse
 import kr.hanchae.moyeotrip.controller.chat.response.ChatRoomMemberListResponse
 import kr.hanchae.moyeotrip.controller.chat.response.ChatRoomNoticeHistoryResponse
+import kr.hanchae.moyeotrip.controller.chat.response.CreateChatRoomResponse
 import kr.hanchae.moyeotrip.controller.chat.response.CurrentTravelRoadmapResponse
 import kr.hanchae.moyeotrip.controller.chat.response.JoinApplicationResponse
 import kr.hanchae.moyeotrip.controller.chat.response.JoinChatRoomResponse
@@ -55,7 +56,11 @@ interface ChatRoomAPISpec {
     )
     @ApiResponses(
         value = [
-            ApiResponse(responseCode = "201", description = "채팅방 생성 성공"),
+            ApiResponse(
+                responseCode = "201",
+                description = "채팅방 생성 성공",
+                content = [Content(schema = Schema(implementation = CreateChatRoomResponse::class))],
+            ),
             ApiResponse(
                 responseCode = "400",
                 description = "요청 본문·일정·나이 또는 커스텀 코스 구성 검증 실패",
@@ -126,7 +131,7 @@ interface ChatRoomAPISpec {
         request: CreateChatRoomRequest,
         @Parameter(description = "선택 썸네일 이미지 파일")
         thumbnail: MultipartFile?,
-    ): ResponseEntity<Unit>
+    ): ResponseEntity<CreateChatRoomResponse>
 
     @Operation(summary = "내 채팅방 목록", description = "모집중·확정·종료 상태로 필터링하며 인원, 마감 D-day, 안 읽은 수와 최근 메시지를 반환합니다.")
     @ApiResponses(
