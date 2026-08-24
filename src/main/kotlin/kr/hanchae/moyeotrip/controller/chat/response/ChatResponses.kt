@@ -21,6 +21,12 @@ data class CreateChatRoomResponse(
     val roomId: Long,
 )
 
+@Schema(description = "채팅방 공지 생성 결과")
+data class CreateChatRoomNoticeResponse(
+    @field:Schema(description = "생성된 공지 ID", example = "44")
+    val noticeId: Long,
+)
+
 @Schema(description = "채팅방 상세 정보")
 data class ChatRoomDetailResponse(
     @field:Schema(description = "채팅방 ID", example = "101")
@@ -257,6 +263,10 @@ data class JoinChatRoomResponse(
     val roomId: Long,
     @field:Schema(description = "즉시 참가, 대기열 이동 또는 호스트 승인 대기 결과", example = "PENDING_APPROVAL")
     val result: JoinResult,
+    @field:Schema(description = "생성된 참가 신청 ID. 즉시 참가한 경우 null", example = "30", nullable = true)
+    val applicationId: Long? = null,
+    @field:Schema(description = "생성된 참가 신청 상태. 즉시 참가한 경우 null", example = "PENDING", nullable = true)
+    val applicationStatus: JoinApplicationStatus? = null,
 )
 
 @Schema(

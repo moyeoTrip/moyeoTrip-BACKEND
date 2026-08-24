@@ -30,6 +30,7 @@ import kr.hanchae.moyeotrip.controller.chat.response.ChatRoomFavoriteResponse
 import kr.hanchae.moyeotrip.controller.chat.response.ChatRoomKickHistoryResponse
 import kr.hanchae.moyeotrip.controller.chat.response.ChatRoomMemberListResponse
 import kr.hanchae.moyeotrip.controller.chat.response.ChatRoomNoticeHistoryResponse
+import kr.hanchae.moyeotrip.controller.chat.response.CreateChatRoomNoticeResponse
 import kr.hanchae.moyeotrip.controller.chat.response.CreateChatRoomResponse
 import kr.hanchae.moyeotrip.controller.chat.response.CurrentTravelRoadmapResponse
 import kr.hanchae.moyeotrip.controller.chat.response.JoinApplicationResponse
@@ -594,7 +595,10 @@ interface ChatRoomAPISpec {
         @Parameter(hidden = true) userId: Long,
     ): List<ChatRoomKickHistoryResponse>
 
-    @Operation(summary = "멤버 강퇴", description = "필수 사유를 비공개 이력으로 저장하고 빈자리에 승인된 대기자를 승격합니다.")
+    @Operation(
+        summary = "멤버 강퇴",
+        description = "필수 사유를 강퇴 이력으로 저장하고 빈자리에 승인된 대기자를 승격합니다. 사유는 강퇴된 당사자만 조회할 수 있습니다.",
+    )
     @ApiResponses(
         value = [
             ApiResponse(responseCode = "204", description = "멤버 강퇴 성공. 응답 본문 없음"),
@@ -680,7 +684,11 @@ interface ChatRoomAPISpec {
     @Operation(summary = "채팅방 공지 등록", description = "호스트가 공지를 등록하며 pinned를 true로 지정하면 상단 고정 공지로 표시합니다.")
     @ApiResponses(
         value = [
-            ApiResponse(responseCode = "201", description = "채팅방 공지 등록 성공"),
+            ApiResponse(
+                responseCode = "201",
+                description = "채팅방 공지 등록 성공",
+                content = [Content(schema = Schema(implementation = CreateChatRoomNoticeResponse::class))],
+            ),
             ApiResponse(
                 responseCode = "400",
                 description = "공지 내용이 비어 있음",
@@ -729,7 +737,7 @@ interface ChatRoomAPISpec {
         roomId: Long,
         @RequestBody(description = "공지 내용과 상단 고정 여부", required = true)
         request: CreateChatRoomNoticeRequest,
-    ): ResponseEntity<Void>
+    ): ResponseEntity<CreateChatRoomNoticeResponse>
 
     @Operation(summary = "채팅방 공지 변경·삭제", description = "내용과 고정 상태를 변경합니다. notice와 pinned가 모두 null이면 공지를 삭제합니다.")
     @ApiResponses(

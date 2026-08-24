@@ -21,6 +21,7 @@ import kr.hanchae.moyeotrip.controller.chat.response.ChatRoomFavoriteResponse
 import kr.hanchae.moyeotrip.controller.chat.response.ChatRoomKickHistoryResponse
 import kr.hanchae.moyeotrip.controller.chat.response.ChatRoomMemberListResponse
 import kr.hanchae.moyeotrip.controller.chat.response.ChatRoomNoticeHistoryResponse
+import kr.hanchae.moyeotrip.controller.chat.response.CreateChatRoomNoticeResponse
 import kr.hanchae.moyeotrip.controller.chat.response.CreateChatRoomResponse
 import kr.hanchae.moyeotrip.controller.chat.response.CurrentTravelRoadmapResponse
 import kr.hanchae.moyeotrip.controller.chat.response.JoinApplicationResponse
@@ -188,10 +189,10 @@ class ChatRoomController(
         @LoginUserId userId: Long,
         @PathVariable roomId: Long,
         @Valid @RequestBody request: CreateChatRoomNoticeRequest,
-    ): ResponseEntity<Void> {
-        chatRoomService.createNotice(userId, roomId, request.notice, request.pinned)
-        return ResponseEntity.status(HttpStatus.CREATED).build()
-    }
+    ): ResponseEntity<CreateChatRoomNoticeResponse> =
+        ResponseEntity
+            .status(HttpStatus.CREATED)
+            .body(CreateChatRoomNoticeResponse(chatRoomService.createNotice(userId, roomId, request.notice, request.pinned)))
 
     @PutMapping("/{roomId}/notices/{noticeId}")
     override fun updateNotice(

@@ -37,7 +37,7 @@ interface TourismContentAPISpec {
     )
     fun getContentTypes(): List<TourismContentTypeResponse>
 
-    @Operation(summary = "여행지 목록 조회", description = "contentTypeId를 생략하면 전체 여행지를 페이지 단위로 조회합니다. size는 1~100 범위로 적용됩니다.")
+    @Operation(summary = "여행지 목록 조회", description = "유형과 검색어로 여행지를 검색합니다. contentTypeId와 keyword를 모두 생략하면 전체 여행지를 조회합니다.")
     @ApiResponses(
         value = [
             ApiResponse(
@@ -60,6 +60,8 @@ interface TourismContentAPISpec {
     fun getContents(
         @Parameter(description = "관광 콘텐츠 유형 ID. 생략하면 모든 일반 여행지를 조회합니다. 코스 유형은 허용하지 않습니다.", example = "12")
         contentTypeId: Int?,
+        @Parameter(description = "여행지 제목 또는 주소에 포함되는 검색어. 앞뒤 공백을 제거하며 빈 문자열은 전체 조회로 처리합니다.", example = "주왕산")
+        keyword: String?,
         @Parameter(description = "1부터 시작하는 페이지 번호. 기본값은 1입니다.", example = "1")
         page: Int,
         @Parameter(description = "페이지당 항목 수. 1~100으로 보정되며 기본값은 20입니다.", example = "20")

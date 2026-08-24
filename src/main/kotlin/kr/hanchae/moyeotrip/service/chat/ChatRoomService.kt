@@ -483,27 +483,29 @@ class ChatRoomService(
                     ?.trim()
                     ?.takeIf(String::isNotEmpty)
                     ?: throw BaseException(ErrorCode.CHAT_JOIN_APPLICATION_MESSAGE_REQUIRED)
-            applicationRepository.save(
-                ChatRoomJoinApplication(
-                    chatRoom = room,
-                    user = user,
-                    applicationMessage = applicationMessage,
-                ),
-            )
-            return JoinChatRoomResponse(roomId, JoinResult.PENDING_APPROVAL)
+            val application =
+                applicationRepository.saveAndFlush(
+                    ChatRoomJoinApplication(
+                        chatRoom = room,
+                        user = user,
+                        applicationMessage = applicationMessage,
+                    ),
+                )
+            return JoinChatRoomResponse(roomId, JoinResult.PENDING_APPROVAL, application.id, application.status)
         }
 
         val participantCount = participantRepository.countByChatRoomId(roomId).toInt()
         if (participantCount >= room.maxParticipants) {
-            applicationRepository.save(
-                ChatRoomJoinApplication(
-                    chatRoom = room,
-                    user = user,
-                    applicationMessage = request.applicationMessage?.trim().orEmpty(),
-                    status = JoinApplicationStatus.WAITLISTED,
-                ),
-            )
-            return JoinChatRoomResponse(roomId, JoinResult.WAITLISTED)
+            val application =
+                applicationRepository.saveAndFlush(
+                    ChatRoomJoinApplication(
+                        chatRoom = room,
+                        user = user,
+                        applicationMessage = request.applicationMessage?.trim().orEmpty(),
+                        status = JoinApplicationStatus.WAITLISTED,
+                    ),
+                )
+            return JoinChatRoomResponse(roomId, JoinResult.WAITLISTED, application.id, application.status)
         }
 
         val participant =
@@ -753,13 +755,14 @@ class ChatRoomService(
         roomId: Long,
         notice: String,
         pinned: Boolean,
-    ) {
+    ): Long {
         val room = findRoomForUpdate(roomId)
         requireHost(room, hostId)
         requireChatEnabled(room)
         val content = notice.trim().takeIf(String::isNotEmpty) ?: throw BaseException(ErrorCode.BAD_REQUEST)
-        noticeRepository.save(ChatRoomNotice(chatRoom = room, author = room.host, content = content, pinned = pinned))
+        val savedNotice = noticeRepository.save(ChatRoomNotice(chatRoom = room, author = room.host, content = content, pinned = pinned))
         saveSystemMessage(room, "공지가 등록되었어요.\n$content")
+        return savedNotice.id
     }
 
     @Transactional

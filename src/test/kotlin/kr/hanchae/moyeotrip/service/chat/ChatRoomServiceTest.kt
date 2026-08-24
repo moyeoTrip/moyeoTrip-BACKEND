@@ -322,11 +322,14 @@ class ChatRoomServiceTest {
     @Test
     fun `고정 공지는 개수 제한 없이 추가할 수 있다`() {
         val room = room(user(1L))
+        val savedNotice = ChatRoomNotice(id = 7L, chatRoom = room, author = room.host, content = "준비물 공지", pinned = true)
         `when`(roomRepository.findByIdForUpdate(10L)).thenReturn(room)
+        `when`(noticeRepository.save(any(ChatRoomNotice::class.java))).thenReturn(savedNotice)
         `when`(messageRepository.saveAndFlush(any(ChatMessage::class.java))).thenAnswer { it.arguments[0] }
 
-        service.createNotice(1L, 10L, "준비물 공지", pinned = true)
+        val noticeId = service.createNotice(1L, 10L, "준비물 공지", pinned = true)
 
+        assertEquals(7L, noticeId)
         verify(noticeRepository).save(any(ChatRoomNotice::class.java))
     }
 
@@ -889,12 +892,23 @@ class ChatRoomServiceTest {
         val room = room(host)
         `when`(roomRepository.findByIdForUpdate(10L)).thenReturn(room)
         `when`(userRepository.findById(2L)).thenReturn(Optional.of(applicant))
+        `when`(applicationRepository.saveAndFlush(any(ChatRoomJoinApplication::class.java)))
+            .thenReturn(
+                ChatRoomJoinApplication(
+                    id = 30L,
+                    chatRoom = room,
+                    user = applicant,
+                    applicationMessage = "함께 가고 싶어요",
+                ),
+            )
 
         val response = service.applyToJoin(2L, 10L, JoinChatRoomRequest("함께 가고 싶어요"))
 
         assertEquals("PENDING_APPROVAL", response.result.name)
+        assertEquals(30L, response.applicationId)
+        assertEquals(JoinApplicationStatus.PENDING, response.applicationStatus)
         val savedApplication = ArgumentCaptor.forClass(ChatRoomJoinApplication::class.java)
-        verify(applicationRepository).save(savedApplication.capture())
+        verify(applicationRepository).saveAndFlush(savedApplication.capture())
         assertEquals(JoinApplicationStatus.PENDING, savedApplication.value.status)
     }
 
@@ -906,12 +920,24 @@ class ChatRoomServiceTest {
         `when`(roomRepository.findByIdForUpdate(10L)).thenReturn(room)
         `when`(userRepository.findById(2L)).thenReturn(Optional.of(applicant))
         `when`(participantRepository.countByChatRoomId(10L)).thenReturn(3L)
+        `when`(applicationRepository.saveAndFlush(any(ChatRoomJoinApplication::class.java)))
+            .thenReturn(
+                ChatRoomJoinApplication(
+                    id = 31L,
+                    chatRoom = room,
+                    user = applicant,
+                    applicationMessage = "함께 가고 싶어요",
+                    status = JoinApplicationStatus.WAITLISTED,
+                ),
+            )
 
         val response = service.applyToJoin(2L, 10L, JoinChatRoomRequest("함께 가고 싶어요"))
 
         assertEquals("WAITLISTED", response.result.name)
+        assertEquals(31L, response.applicationId)
+        assertEquals(JoinApplicationStatus.WAITLISTED, response.applicationStatus)
         val savedApplication = ArgumentCaptor.forClass(ChatRoomJoinApplication::class.java)
-        verify(applicationRepository).save(savedApplication.capture())
+        verify(applicationRepository).saveAndFlush(savedApplication.capture())
         assertEquals(JoinApplicationStatus.WAITLISTED, savedApplication.value.status)
     }
 

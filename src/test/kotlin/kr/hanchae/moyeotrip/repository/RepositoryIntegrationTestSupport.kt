@@ -12,12 +12,14 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase
 import org.springframework.context.annotation.Import
+import org.springframework.test.context.TestPropertySource
 import java.time.LocalDate
 import java.time.LocalTime
 
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import(KotlinJdslAutoConfiguration::class)
+@TestPropertySource(properties = ["spring.cloud.aws.parameterstore.enabled=false"])
 abstract class RepositoryIntegrationTestSupport : ContainerIntegrationTestSupport() {
     @Autowired
     protected lateinit var userRepository: UserRepository

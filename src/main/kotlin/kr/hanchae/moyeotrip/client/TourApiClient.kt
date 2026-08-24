@@ -3,6 +3,7 @@ package kr.hanchae.moyeotrip.client
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import com.fasterxml.jackson.annotation.JsonProperty
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.databind.node.ObjectNode
 import kr.hanchae.moyeotrip.config.properties.TourApiProperties
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Autowired
@@ -111,7 +112,7 @@ class TourApiClient
             check(rawResponse.statusCode in 200..299) {
                 "한국관광공사 상세정보 HTTP 요청에 실패했습니다: status=${rawResponse.statusCode}, body=${rawResponse.body}"
             }
-            val response = objectMapper.readValue(rawResponse.body, TourCommonDetailApiResponse::class.java)
+            val response = readTourApiResponse(rawResponse.body, TourCommonDetailApiResponse::class.java)
 
             val tourResponse =
                 response.response
@@ -171,13 +172,14 @@ class TourApiClient
             contentId: Long,
             imageYn: String,
         ): List<TourImageItem> {
-            val response =
+            val rawResponse =
                 restClient
                     .get()
                     .uri(createImageDetailUri(contentId, imageYn))
                     .retrieve()
-                    .body(TourImageApiResponse::class.java)
+                    .body(String::class.java)
                     ?: throw IllegalStateException("한국관광공사 이미지정보 응답이 비어 있습니다.")
+            val response = readTourApiResponse(rawResponse, TourImageApiResponse::class.java)
 
             val tourResponse =
                 response.response
@@ -188,6 +190,19 @@ class TourApiClient
             return tourResponse.body.items
                 ?.item
                 .orEmpty()
+        }
+
+        private fun <T> readTourApiResponse(
+            rawResponse: String,
+            responseType: Class<T>,
+        ): T {
+            val root = objectMapper.readTree(rawResponse)
+            val body = root.path("response").path("body")
+            val items = body.path("items")
+            if (body is ObjectNode && items.isTextual && items.asText().isBlank()) {
+                body.putNull("items")
+            }
+            return objectMapper.treeToValue(root, responseType)
         }
 
         private fun createLegalDongCodeUri(

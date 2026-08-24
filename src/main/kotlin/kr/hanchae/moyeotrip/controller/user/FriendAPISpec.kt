@@ -240,7 +240,7 @@ interface FriendAPISpec {
     fun deleteFriend(
         @Parameter(hidden = true) userId: Long,
         @Parameter(description = "친구 관계를 삭제할 상대 사용자 ID", example = "202")
-        friendId: Long,
+        friendUserId: Long,
     )
 }
 

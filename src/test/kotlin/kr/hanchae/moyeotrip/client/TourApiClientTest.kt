@@ -56,10 +56,45 @@ class TourApiClientTest {
         server.verify()
     }
 
+    @Test
+    fun `공통 상세정보의 items가 빈 문자열이면 상세정보가 없는 것으로 처리한다`() {
+        val builder = RestClient.builder()
+        val server = MockRestServiceServer.bindTo(builder).build()
+        val client = TourApiClient(builder, jacksonObjectMapper(), TourApiProperties(tourApiKey = "test-key"))
+        server
+            .expect { request -> assertTrue(request.uri.rawQuery.contains("contentId=2599344")) }
+            .andRespond(withSuccess(EMPTY_ITEMS_RESPONSE, MediaType.APPLICATION_JSON))
+
+        val result = client.getCommonDetail(2599344L)
+
+        assertEquals(null, result)
+        server.verify()
+    }
+
+    @Test
+    fun `이미지정보의 items가 빈 문자열이면 빈 목록으로 처리한다`() {
+        val builder = RestClient.builder()
+        val server = MockRestServiceServer.bindTo(builder).build()
+        val client = TourApiClient(builder, jacksonObjectMapper(), TourApiProperties(tourApiKey = "test-key"))
+        server
+            .expect { request ->
+                assertTrue(request.uri.path.endsWith("/detailImage2"))
+                assertTrue(request.uri.rawQuery.contains("contentId=2599344"))
+                assertTrue(request.uri.rawQuery.contains("imageYN=Y"))
+            }.andRespond(withSuccess(EMPTY_ITEMS_RESPONSE, MediaType.APPLICATION_JSON))
+
+        val result = client.getImages(2599344L, "Y")
+
+        assertTrue(result.isEmpty())
+        server.verify()
+    }
+
     companion object {
         private const val SUCCESS_RESPONSE =
             """{"response":{"header":{"resultCode":"0000","resultMsg":"OK"},"body":{"items":{"item":[{"contentid":"547853"}]},"numOfRows":1,"pageNo":1,"totalCount":1}}}"""
         private const val ERROR_RESPONSE =
             """{"OpenAPI_ServiceResponse":{"cmmMsgHeader":{"errMsg":"INVALID_REQUEST_PARAMETER_ERROR","returnReasonCode":"10"}}}"""
+        private const val EMPTY_ITEMS_RESPONSE =
+            """{"response":{"header":{"resultCode":"0000","resultMsg":"OK"},"body":{"items":"","numOfRows":1,"pageNo":1,"totalCount":0}}}"""
     }
 }

@@ -62,10 +62,10 @@ class FriendController(
         @LoginUserId userId: Long,
     ): FriendListResponse = friendService.getFriends(userId)
 
-    @DeleteMapping("/friends/{friendId}")
+    @DeleteMapping("/friends/{friendUserId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     override fun deleteFriend(
         @LoginUserId userId: Long,
-        @PathVariable friendId: Long,
-    ) = friendService.deleteFriend(userId, friendId)
+        @PathVariable friendUserId: Long,
+    ) = friendService.deleteFriend(userId, friendUserId)
 }
