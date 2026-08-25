@@ -50,7 +50,8 @@ class ChatRoomControllerValidationTest {
             listOf(
                 validCreateRoomJson.replace("테스트 여행", "가".repeat(101)),
                 validCreateRoomJson.addAfterTitle("\"description\":\"${"가".repeat(501)}\","),
-                validCreateRoomJson.replace("\"maxParticipants\":4", "\"maxParticipants\":13"),
+                validCreateRoomJson.replace("\"maxParticipants\":4", "\"maxParticipants\":21"),
+                validCreateRoomJson.replace("\"minimumParticipants\":3", "\"minimumParticipants\":2"),
                 validCreateRoomJson.addAfterTitle("\"meetingLatitude\":-91,"),
                 validCreateRoomJson.addAfterTitle("\"meetingLongitude\":181,"),
                 validCreateRoomJson.addAfterTitle("\"meetingDetails\":\"${"가".repeat(501)}\","),
@@ -266,6 +267,7 @@ class ChatRoomControllerValidationTest {
             """
             {
               "title":"테스트 여행",
+              "minimumParticipants":3,
               "maxParticipants":4,
               "tripType":"DAY_TRIP",
               "startDate":"2026-09-12",

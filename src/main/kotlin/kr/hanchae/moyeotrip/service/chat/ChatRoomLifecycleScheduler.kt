@@ -47,11 +47,11 @@ class ChatRoomLifecycleScheduler(
         roomRepository
             .findAllExpiredRecruitingRoomsForUpdate(ChatRoomStatus.RECRUITING, LocalDate.now())
             .forEach { room ->
-                if (participantRepository.countByChatRoomId(room.id) >= MINIMUM_TRIP_PARTICIPANTS) {
+                if (participantRepository.countByChatRoomId(room.id) >= room.minimumParticipants) {
                     room.confirm()
                     saveSystemMessage(room, "모집이 마감되어 여행이 확정되었어요.")
                 } else {
-                    saveSystemMessage(room, "모집 마감까지 3명이 모이지 않아 여행이 불발되었어요.")
+                    saveSystemMessage(room, "모집 마감까지 최소 ${room.minimumParticipants}명이 모이지 않아 여행이 불발되었어요.")
                     room.cancel(now)
                 }
             }
@@ -130,7 +130,6 @@ class ChatRoomLifecycleScheduler(
     }
 
     companion object {
-        const val MINIMUM_TRIP_PARTICIPANTS = 3L
         private const val CHAT_ROOM_RETENTION_DAYS = 14L
         private const val TRIP_STARTED_EVENT_KEY = "TRIP_STARTED"
     }

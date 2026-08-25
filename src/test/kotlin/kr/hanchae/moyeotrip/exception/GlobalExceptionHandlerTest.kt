@@ -1,5 +1,7 @@
 package kr.hanchae.moyeotrip.exception
 
+import com.fasterxml.jackson.core.JsonLocation
+import com.fasterxml.jackson.databind.exc.UnrecognizedPropertyException
 import kr.hanchae.moyeotrip.logging.SentryExceptionReporter
 import kr.hanchae.moyeotrip.logging.TraceManager
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -8,6 +10,8 @@ import org.mockito.Mockito.mock
 import org.mockito.Mockito.verify
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
+import org.springframework.http.converter.HttpMessageNotReadableException
+import org.springframework.mock.http.MockHttpInputMessage
 import org.springframework.web.servlet.resource.NoResourceFoundException
 
 class GlobalExceptionHandlerTest {
@@ -68,5 +72,21 @@ class GlobalExceptionHandlerTest {
             ErrorCode.PROFILE_IMAGE_GENERATION_FAILED.code,
         )
         verify(traceManager).doErrorLog(exception)
+    }
+
+    @Test
+    fun `알 수 없는 JSON 필드는 필드명을 포함한 400 메시지를 반환한다`() {
+        val exception =
+            HttpMessageNotReadableException(
+                "unknown field",
+                UnrecognizedPropertyException(null, "unknown field", JsonLocation.NA, Any::class.java, "content", emptyList()),
+                MockHttpInputMessage(byteArrayOf()),
+            )
+
+        val response = handler.handleUnreadableRequest(exception)
+
+        assertEquals(HttpStatus.BAD_REQUEST, response.statusCode)
+        assertEquals(ErrorCode.MALFORMED_REQUEST_BODY.code, response.body?.code)
+        assertEquals("content 필드는 이 요청에서 사용할 수 없습니다.", response.body?.errorMessage)
     }
 }

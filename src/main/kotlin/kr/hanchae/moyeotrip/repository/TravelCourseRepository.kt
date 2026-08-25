@@ -31,6 +31,8 @@ interface TravelCourseCustomRepository {
     ): List<TravelCourse>
 
     fun findPopularPublicCourses(pageable: Pageable): List<TravelCourse>
+
+    fun searchPublicCourses(keyword: String?): List<TravelCourse>
 }
 
 class TravelCourseCustomRepositoryImpl(
@@ -71,5 +73,27 @@ class TravelCourseCustomRepositoryImpl(
                         count(room).desc(),
                         course.path(TravelCourse::id).desc(),
                     )
+            }.filterNotNull()
+
+    override fun searchPublicCourses(keyword: String?): List<TravelCourse> =
+        kotlinJdslJpqlExecutor
+            .findAll {
+                val course = entity(TravelCourse::class)
+                val tag = entity(TravelCourseTag::class)
+
+                selectDistinct(course)
+                    .from(
+                        course,
+                        leftJoin(course.path(TravelCourse::courseTags)).`as`(tag),
+                    ).whereAnd(
+                        course.path(TravelCourse::type).eq(TravelCourseType.PUBLIC),
+                        keyword?.let {
+                            val pattern = "%${it.lowercase()}%"
+                            or(
+                                lower(course.path(TravelCourse::title)).like(pattern),
+                                lower(tag.path(TravelCourseTag::name)).eq(it.lowercase()),
+                            )
+                        },
+                    ).orderBy(course.path(TravelCourse::createdDateTime).desc())
             }.filterNotNull()
 }

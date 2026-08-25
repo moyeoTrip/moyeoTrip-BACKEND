@@ -2,6 +2,7 @@ package kr.hanchae.moyeotrip.controller.feed
 
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.Parameter
+import io.swagger.v3.oas.annotations.media.ArraySchema
 import io.swagger.v3.oas.annotations.media.Content
 import io.swagger.v3.oas.annotations.media.ExampleObject
 import io.swagger.v3.oas.annotations.media.Schema
@@ -202,7 +203,7 @@ interface FeedAPISpec {
             ApiResponse(
                 responseCode = "200",
                 description = "댓글 목록 조회 성공",
-                content = [Content(schema = Schema(implementation = FeedCommentResponse::class))],
+                content = [Content(array = ArraySchema(schema = Schema(implementation = FeedCommentResponse::class)))],
             ),
             ApiResponse(
                 responseCode = "403",

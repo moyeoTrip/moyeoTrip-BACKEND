@@ -4,6 +4,10 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import kr.hanchae.moyeotrip.config.properties.TourApiProperties
 import org.springframework.stereotype.Component
 import org.springframework.web.client.RestClient
+import org.springframework.web.client.support.RestClientAdapter
+import org.springframework.web.service.annotation.GetExchange
+import org.springframework.web.service.annotation.HttpExchange
+import org.springframework.web.service.invoker.HttpServiceProxyFactory
 import java.net.URI
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
@@ -24,14 +28,16 @@ class AirKoreaApiClient(
     private val tourApiProperties: TourApiProperties,
 ) : AirQualityClient {
     private val restClient = restClientBuilder.clone().build()
+    private val airKoreaHttpExchange: AirKoreaHttpExchange =
+        HttpServiceProxyFactory
+            .builderFor(RestClientAdapter.create(restClient))
+            .build()
+            .createClient(AirKoreaHttpExchange::class.java)
 
     override fun getGyeongbukAirQuality(): AirQuality? {
         val response =
-            restClient
-                .get()
-                .uri(createGyeongbukAirQualityUri())
-                .retrieve()
-                .body(AirKoreaApiResponse::class.java)
+            airKoreaHttpExchange
+                .getGyeongbukAirQuality(createGyeongbukAirQualityUri())
                 ?: return null
         if (response.response.header.resultCode != SUCCESS_RESULT_CODE) return null
         val items =
@@ -40,6 +46,12 @@ class AirKoreaApiClient(
                 .orEmpty()
         val item = items.firstOrNull() ?: return null
         return AirQuality(item.stationName, item.pm10Value.toDustConcentration(), item.pm25Value.toDustConcentration())
+    }
+
+    @HttpExchange
+    private interface AirKoreaHttpExchange {
+        @GetExchange
+        fun getGyeongbukAirQuality(uri: URI): AirKoreaApiResponse?
     }
 
     private fun String?.toDustConcentration(): Int? =

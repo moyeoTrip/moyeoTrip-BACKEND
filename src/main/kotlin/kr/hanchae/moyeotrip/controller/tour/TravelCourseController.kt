@@ -2,6 +2,7 @@ package kr.hanchae.moyeotrip.controller.tour
 
 import jakarta.validation.Valid
 import kr.hanchae.moyeotrip.controller.chat.response.PublicTravelCourseDetailResponse
+import kr.hanchae.moyeotrip.controller.chat.response.SearchChatRoomResponse
 import kr.hanchae.moyeotrip.controller.chat.response.TravelCourseDetailResponse
 import kr.hanchae.moyeotrip.controller.chat.response.TravelCourseInformationResponse
 import kr.hanchae.moyeotrip.controller.tour.request.PublishTravelCourseRequest
@@ -35,6 +36,11 @@ class TravelCourseController(
         @RequestParam(required = false) tagId: Long?,
     ): List<TravelCourseInformationResponse> = chatRoomService.getPublicCourses(tagId)
 
+    @GetMapping("/search")
+    override fun searchPublicCourses(
+        @RequestParam(required = false) keyword: String?,
+    ): List<TravelCourseInformationResponse> = chatRoomService.searchPublicCourses(keyword)
+
     @GetMapping("/public/popular")
     override fun getPopularPublicCourses(): List<TravelCourseInformationResponse> = chatRoomService.getPopularPublicCourses()
 
@@ -64,6 +70,13 @@ class TravelCourseController(
     override fun getCourse(
         @PathVariable courseId: Long,
     ): PublicTravelCourseDetailResponse = chatRoomService.getCourse(courseId)
+
+    @GetMapping("/{courseId}/chat-rooms")
+    override fun getPublicCourseChatRooms(
+        @LoginUserId userId: Long,
+        @PathVariable courseId: Long,
+        @RequestParam(defaultValue = "20") limit: Int,
+    ): List<SearchChatRoomResponse> = chatRoomService.getPublicCourseChatRooms(userId, courseId, limit)
 
     @PostMapping("/{courseId}/favorite")
     override fun toggleCourseFavorite(

@@ -31,7 +31,6 @@ import kr.hanchae.moyeotrip.controller.chat.response.CreateChatRoomResponse
 import kr.hanchae.moyeotrip.controller.chat.response.CurrentTravelRoadmapResponse
 import kr.hanchae.moyeotrip.controller.chat.response.JoinApplicationResponse
 import kr.hanchae.moyeotrip.controller.chat.response.JoinChatRoomResponse
-import kr.hanchae.moyeotrip.controller.chat.response.JoinEligibilityResponse
 import kr.hanchae.moyeotrip.controller.chat.response.JoinResult
 import kr.hanchae.moyeotrip.controller.chat.response.LatestChatMessageResponse
 import kr.hanchae.moyeotrip.controller.chat.response.LeaveChatRoomResponse
@@ -143,6 +142,8 @@ class ChatRoomService(
         thumbnail: MultipartFile? = null,
     ): CreateChatRoomResponse {
         validateTripSchedule(request)
+        validateRoomDates(request)
+        validateMinimumParticipants(request)
         validateAgeRestriction(request)
         val host = findUser(userId)
         val course = resolveCourse(host, request)
@@ -159,6 +160,7 @@ class ChatRoomService(
                     description = request.description?.trim()?.takeIf(String::isNotEmpty),
                     thumbnail = thumbnailUrl,
                     maxParticipants = request.maxParticipants,
+                    minimumParticipants = requireNotNull(request.minimumParticipants),
                     startDate = request.startDate,
                     endDate = request.endDate,
                     recruitmentDeadlineDate = request.recruitmentDeadlineDate,
@@ -187,10 +189,14 @@ class ChatRoomService(
     fun getRoom(
         userId: Long,
         roomId: Long,
-    ): ChatRoomDetailResponse =
-        findRoom(roomId).toDetail(
+    ): ChatRoomDetailResponse {
+        val room = findRoom(roomId)
+        val user = findUser(userId)
+        return room.toDetail(
             favorite = roomFavoriteRepository.existsByUserIdAndChatRoomId(userId, roomId),
+            canApply = canApply(room, user),
         )
+    }
 
     @Transactional
     fun toggleRoomFavorite(
@@ -232,17 +238,79 @@ class ChatRoomService(
         userId: Long,
         keyword: String?,
         limit: Int,
+    ): List<SearchChatRoomResponse> =
+        searchRooms(userId, limit) { blockedUserIds, today, pageable ->
+            roomRepository.searchRooms(
+                userId = userId,
+                blockedUserIds = blockedUserIds,
+                keyword = keyword?.trim()?.takeIf(String::isNotEmpty),
+                today = today,
+                pageable = pageable,
+            )
+        }
+
+    @Transactional(readOnly = true)
+    fun searchRoomsByTitle(
+        userId: Long,
+        keyword: String?,
+        limit: Int,
+    ): List<SearchChatRoomResponse> =
+        searchRooms(userId, limit) { blockedUserIds, today, pageable ->
+            roomRepository.searchRoomsByTitle(
+                userId = userId,
+                blockedUserIds = blockedUserIds,
+                keyword = keyword?.trim()?.takeIf(String::isNotEmpty),
+                today = today,
+                pageable = pageable,
+            )
+        }
+
+    @Transactional(readOnly = true)
+    fun searchRoomsByCourseTag(
+        userId: Long,
+        tagId: Long,
+        limit: Int,
+    ): List<SearchChatRoomResponse> =
+        searchRooms(userId, limit) { blockedUserIds, today, pageable ->
+            roomRepository.searchRoomsByCourseTag(
+                userId = userId,
+                blockedUserIds = blockedUserIds,
+                tagId = tagId,
+                today = today,
+                pageable = pageable,
+            )
+        }
+
+    @Transactional(readOnly = true)
+    fun getPublicCourseChatRooms(
+        userId: Long,
+        courseId: Long,
+        limit: Int,
+    ): List<SearchChatRoomResponse> {
+        findPublicCourse(courseId)
+        return searchRooms(userId, limit) { blockedUserIds, today, pageable ->
+            roomRepository.findRecruitingRoomsByPublicCourseId(
+                userId = userId,
+                blockedUserIds = blockedUserIds,
+                courseId = courseId,
+                today = today,
+                pageable = pageable,
+            )
+        }
+    }
+
+    private fun searchRooms(
+        userId: Long,
+        limit: Int,
+        findRooms: (Collection<Long>, LocalDate, PageRequest) -> List<ChatRoom>,
     ): List<SearchChatRoomResponse> {
         val blockedUserIds = userBlockRepository.findRelatedUserIds(userId).ifEmpty { listOf(NO_USER_ID) }
         val rooms =
-            roomRepository
-                .searchRooms(
-                    userId = userId,
-                    blockedUserIds = blockedUserIds,
-                    keyword = keyword?.trim()?.takeIf(String::isNotEmpty),
-                    today = LocalDate.now(),
-                    pageable = PageRequest.of(0, limit.coerceIn(1, MAX_DISCOVER_ROOM_LIMIT)),
-                )
+            findRooms(
+                blockedUserIds,
+                LocalDate.now(),
+                PageRequest.of(0, limit.coerceIn(1, MAX_DISCOVER_ROOM_LIMIT)),
+            )
         val favoriteRoomIds =
             rooms
                 .map(ChatRoom::id)
@@ -303,6 +371,12 @@ class ChatRoomService(
             }
         return courses.map { it.toInformationResponse(travelTime = it.travelTimeText()) }
     }
+
+    @Transactional(readOnly = true)
+    fun searchPublicCourses(keyword: String?): List<TravelCourseInformationResponse> =
+        courseRepository
+            .searchPublicCourses(keyword?.trim()?.takeIf(String::isNotEmpty))
+            .map { it.toInformationResponse(travelTime = it.travelTimeText()) }
 
     @Transactional(readOnly = true)
     fun getPopularPublicCourses(): List<TravelCourseInformationResponse> =
@@ -503,23 +577,6 @@ class ChatRoomService(
     }
 
     @Transactional(readOnly = true)
-    fun getJoinEligibility(
-        userId: Long,
-        roomId: Long,
-    ): JoinEligibilityResponse {
-        val room = findRoom(roomId)
-        if (!room.canAcceptJoinApplication()) {
-            return JoinEligibilityResponse(false)
-        }
-        if (participantRepository.existsByChatRoomIdAndUserId(roomId, userId) ||
-            applicationRepository.existsByChatRoomIdAndUserIdAndStatusIn(roomId, userId, ACTIVE_APPLICATION_STATUSES)
-        ) {
-            return JoinEligibilityResponse(false)
-        }
-        return JoinEligibilityResponse(canApply = meetsJoinConditions(room, findUser(userId)))
-    }
-
-    @Transactional(readOnly = true)
     fun getPendingApplications(
         hostId: Long,
         roomId: Long,
@@ -644,6 +701,7 @@ class ChatRoomService(
         val participants = participantRepository.findAllByChatRoomIdOrderByCreatedDateTimeAsc(roomId)
         return ChatRoomMemberListResponse(
             participantCount = participants.size,
+            minimumParticipants = room.minimumParticipants,
             maxParticipants = room.maxParticipants,
             waitlistCount =
                 applicationRepository
@@ -1322,12 +1380,16 @@ class ChatRoomService(
             meetingDateTime = meetingDateTime,
             hostId = host.id,
             participantCount = participantRepository.countByChatRoomId(id).toInt(),
+            minimumParticipants = minimumParticipants,
             maxParticipants = maxParticipants,
             courseTitle = course.title,
             tags = course.tags.sortedBy { it.id }.map { TravelCourseTagResponse(it.id, it.name) },
         )
 
-    private fun ChatRoom.toDetail(favorite: Boolean): ChatRoomDetailResponse {
+    private fun ChatRoom.toDetail(
+        favorite: Boolean,
+        canApply: Boolean,
+    ): ChatRoomDetailResponse {
         val participants = participantRepository.findAllByChatRoomIdOrderByCreatedDateTimeAsc(id)
         return ChatRoomDetailResponse(
             roomId = id,
@@ -1352,15 +1414,19 @@ class ChatRoomService(
             maximumAge = maximumAge,
             joinApprovalMode = joinApprovalMode,
             recruitmentDDay = recruitmentDDay(),
+            courseTitle = course.title,
+            tags = course.tags.sortedBy { it.id }.map { TravelCourseTagResponse(it.id, it.name) },
             hostId = host.id,
             hostProfileImageUrl =
                 host.information
                     ?.profileFileName
                     ?.let(objectStorageRepository::getDownloadUrl),
             participantCount = participants.size,
+            minimumParticipants = minimumParticipants,
             maxParticipants = maxParticipants,
             status = status,
             favorite = favorite,
+            canApply = canApply,
             latestPinnedNotice =
                 noticeRepository
                     .findFirstByChatRoomIdAndPinnedTrueAndContentIsNotNullOrderByCreatedDateTimeDescIdDesc(id)
@@ -1393,6 +1459,19 @@ class ChatRoomService(
 
     private fun ChatRoom.hasEnded(today: LocalDate = LocalDate.now()): Boolean =
         status == ChatRoomStatus.CANCELLED || (endDate ?: startDate).isBefore(today)
+
+    private fun canApply(
+        room: ChatRoom,
+        user: User,
+    ): Boolean {
+        if (!room.canAcceptJoinApplication()) return false
+        if (participantRepository.existsByChatRoomIdAndUserId(room.id, user.id) ||
+            applicationRepository.existsByChatRoomIdAndUserIdAndStatusIn(room.id, user.id, ACTIVE_APPLICATION_STATUSES)
+        ) {
+            return false
+        }
+        return meetsJoinConditions(room, user)
+    }
 
     private fun TravelCourse.toResponse(editable: Boolean) =
         TravelCourseResponse(
@@ -1717,6 +1796,27 @@ private fun validateTripSchedule(request: CreateChatRoomRequest) {
                     request.dayTripEndTime == null
         }
     if (!valid) throw BaseException(ErrorCode.INVALID_TRIP_SCHEDULE)
+}
+
+private fun validateRoomDates(
+    request: CreateChatRoomRequest,
+    today: LocalDate = LocalDate.now(),
+) {
+    if (request.startDate.isBefore(today)) throw BaseException(ErrorCode.PAST_CHAT_ROOM_START_DATE)
+    if (request.recruitmentDeadlineDate.isBefore(today)) throw BaseException(ErrorCode.PAST_RECRUITMENT_DEADLINE_DATE)
+    if (request.recruitmentDeadlineDate.isAfter(request.startDate)) {
+        throw BaseException(ErrorCode.INVALID_RECRUITMENT_DEADLINE)
+    }
+    if (request.meetingDateTime.toLocalDate().isAfter(request.startDate)) {
+        throw BaseException(ErrorCode.INVALID_MEETING_INFORMATION)
+    }
+}
+
+private fun validateMinimumParticipants(request: CreateChatRoomRequest) {
+    val minimumParticipants = request.minimumParticipants
+    if (minimumParticipants == null || minimumParticipants !in ChatRoom.MINIMUM_PARTICIPANTS..request.maxParticipants) {
+        throw BaseException(ErrorCode.INVALID_MINIMUM_PARTICIPANTS)
+    }
 }
 
 private fun validateAgeRestriction(request: CreateChatRoomRequest) {

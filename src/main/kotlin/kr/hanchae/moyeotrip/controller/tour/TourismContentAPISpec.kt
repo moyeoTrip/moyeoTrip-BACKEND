@@ -12,6 +12,7 @@ import kr.hanchae.moyeotrip.controller.tour.response.TourismContentDetailRespons
 import kr.hanchae.moyeotrip.controller.tour.response.TourismContentPageResponse
 import kr.hanchae.moyeotrip.controller.tour.response.TourismContentTypeResponse
 import kr.hanchae.moyeotrip.exception.ErrorResponse
+import org.springframework.http.ResponseEntity
 
 @Tag(name = "여행지", description = "한국관광공사 여행지 목록 및 상세 API")
 interface TourismContentAPISpec {
@@ -102,10 +103,49 @@ interface TourismContentAPISpec {
         @Parameter(description = "조회할 TourismContent ID", example = "126508")
         contentId: Long,
     ): TourismContentDetailResponse
+
+    @Operation(
+        summary = "관광 이미지 프록시 조회",
+        description = "브라우저 CORS 제한을 피하기 위해 공식 VisitKorea HTTPS 이미지 주소만 서버가 대신 조회해 반환합니다. 최대 20MB 이미지 파일만 허용합니다.",
+    )
+    @ApiResponses(
+        value = [
+            ApiResponse(responseCode = "200", description = "관광 이미지 조회 성공", content = [Content(mediaType = "image/jpeg")]),
+            ApiResponse(
+                responseCode = "400",
+                description = "허용되지 않은 이미지 URL",
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [ExampleObject(value = TourismContentSwaggerExamples.INVALID_TOURISM_IMAGE_URL)],
+                    ),
+                ],
+            ),
+            ApiResponse(
+                responseCode = "502",
+                description = "관광 이미지 원본 조회 실패",
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [ExampleObject(value = TourismContentSwaggerExamples.TOURISM_IMAGE_FETCH_FAILED)],
+                    ),
+                ],
+            ),
+        ],
+    )
+    fun getImage(
+        @Parameter(
+            description = "TourismContent 응답의 thumbnail 또는 originalImageUrl. visitkorea.or.kr 하위 HTTPS 주소만 허용합니다.",
+            example = "https://tong.visitkorea.or.kr/cms/resource/00/000000_image.jpg",
+        )
+        imageUrl: String,
+    ): ResponseEntity<ByteArray>
 }
 
 private object TourismContentSwaggerExamples {
     const val TOURISM_COURSE_CONTENT_NOT_LISTED = """{"code":40005,"errorMessage":"코스 관광 콘텐츠는 여행지 목록에서 조회할 수 없습니다."}"""
     const val TOURISM_CONTENT_NOT_FOUND = """{"code":40408,"errorMessage":"관광 콘텐츠를 찾을 수 없습니다."}"""
+    const val INVALID_TOURISM_IMAGE_URL = """{"code":40037,"errorMessage":"관광 이미지 URL은 공식 VisitKorea HTTPS 이미지 주소여야 합니다."}"""
+    const val TOURISM_IMAGE_FETCH_FAILED = """{"code":50204,"errorMessage":"관광 이미지 원본을 현재 불러올 수 없습니다."}"""
     const val INTERNAL_SERVER_ERROR = """{"code":50000,"errorMessage":"서버에러입니다."}"""
 }

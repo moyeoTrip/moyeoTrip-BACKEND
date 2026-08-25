@@ -30,6 +30,18 @@ abstract class RepositoryIntegrationTestSupport : ContainerIntegrationTestSuppor
     @Autowired
     protected lateinit var travelCourseRepository: TravelCourseRepository
 
+    @Autowired
+    protected lateinit var tourismContentRepository: TourismContentRepository
+
+    @Autowired
+    protected lateinit var tourismContentTypeRepository: TourismContentTypeRepository
+
+    @Autowired
+    protected lateinit var travelCoursePlaceRepository: TravelCoursePlaceRepository
+
+    @Autowired
+    protected lateinit var travelCourseTagRepository: TravelCourseTagRepository
+
     protected fun savedUser(): User = userRepository.saveAndFlush(User(userRole = UserRole.ROLE_USER))
 
     protected fun savedCourse(
@@ -41,6 +53,7 @@ abstract class RepositoryIntegrationTestSupport : ContainerIntegrationTestSuppor
         host: User,
         course: TravelCourse,
         title: String = "테스트 채팅방 ${System.nanoTime()}",
+        description: String? = null,
         startDate: LocalDate = LocalDate.now().plusDays(1),
         recruitmentDeadlineDate: LocalDate = startDate,
         status: ChatRoomStatus = ChatRoomStatus.RECRUITING,
@@ -50,6 +63,7 @@ abstract class RepositoryIntegrationTestSupport : ContainerIntegrationTestSuppor
                 host = host,
                 course = course,
                 roomTitle = title,
+                description = description,
                 maxParticipants = 3,
                 startDate = startDate,
                 recruitmentDeadlineDate = recruitmentDeadlineDate,

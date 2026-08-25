@@ -151,6 +151,23 @@ class TourismContentServiceTest {
         verifyNoInteractions(tourApiClient)
     }
 
+    @Test
+    fun `기존 상세 정보가 있어도 전화 안내명이 비어 있으면 공공데이터 상세를 다시 보완한다`() {
+        val content = content(300L, 12, "주왕산", telephoneName = null).apply { updateCommonDetail(null, "기존 홈페이지", "기존 소개") }
+        `when`(repository.findByContentId(300L)).thenReturn(content)
+        `when`(tourApiClient.getCommonDetail(300L))
+            .thenReturn(TourCommonDetailItem(contentid = "300", telname = "관광안내소"))
+        `when`(imageRepository.findAllByTourismContentIdAndTypeOrderByIdAsc(1L, TourismContentImageType.CONTENT))
+            .thenReturn(listOf(image(content, TourismContentImageType.CONTENT, "https://content")))
+
+        val response = service.getContent(300L)
+
+        assertEquals("관광안내소", response.telephoneName)
+        assertEquals("기존 홈페이지", response.homepage)
+        assertEquals("기존 소개", response.overview)
+        verify(tourApiClient).getCommonDetail(300L)
+    }
+
     private fun content(
         contentId: Long,
         contentTypeId: Int,

@@ -12,7 +12,7 @@ import kr.hanchae.moyeotrip.controller.auth.response.TestAccessTokenResponse
 import kr.hanchae.moyeotrip.controller.test.response.TestCompletedChatRoomResponse
 import kr.hanchae.moyeotrip.exception.ErrorResponse
 
-@Tag(name = "테스트 지원", description = "로컬·개발 환경에서만 사용하는 프론트엔드 QA 임시 API")
+@Tag(name = "테스트 지원", description = "프론트엔드 QA 임시 API입니다. 현재 운영 프로필에도 임시로 등록되므로 QA 종료 후 반드시 비활성화해야 합니다.")
 interface TestSupportAPISpec {
     @Operation(summary = "테스트 access token 발급", description = "DB에 존재하는 사용자 ID로 서비스 JWT를 발급합니다.")
     @ApiResponses(
@@ -40,7 +40,11 @@ interface TestSupportAPISpec {
 
     @Operation(
         summary = "QA용 여행 완료 처리",
-        description = "채팅방을 확정 상태로 바꾸고 여행 날짜를 과거로 조정합니다. 완료 상태 enum은 없으며, 완료 여부는 확정 상태와 종료일로 판정합니다.",
+        description = """
+            요청 본문이나 현재 채팅방 상태와 관계없이 채팅방을 확정 상태로 바꿉니다.
+            여행 시작일과 모집 마감일을 과거로 옮기고, 숙박 여행이면 종료일도 과거로 옮깁니다.
+            완료 상태 enum은 없으며, 완료 여부는 확정 상태와 종료일로 판정합니다.
+        """,
     )
     @ApiResponses(
         value = [

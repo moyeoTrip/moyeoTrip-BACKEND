@@ -5,6 +5,7 @@ import jakarta.validation.Valid
 import jakarta.validation.constraints.Max
 import jakarta.validation.constraints.Min
 import jakarta.validation.constraints.NotBlank
+import jakarta.validation.constraints.NotNull
 import jakarta.validation.constraints.Size
 import kr.hanchae.moyeotrip.entity.chat.GenderRestriction
 import kr.hanchae.moyeotrip.entity.chat.JoinApprovalMode
@@ -15,7 +16,7 @@ import java.time.LocalDateTime
 import java.time.LocalTime
 
 private const val CREATE_OVERNIGHT_CUSTOM_CHAT_ROOM_REQUEST_EXAMPLE =
-    """{"title":"주왕산 & 주산지 힐링 트레킹","description":"가을 단풍을 함께 즐길 동행자를 구해요.","maxParticipants":5,"tripType":"OVERNIGHT","startDate":"2026-09-12","endDate":"2026-09-13","recruitmentDeadlineDate":"2026-09-09","meetingLatitude":36.576,"meetingLongitude":128.97,"meetingDetails":"안동역 1번 출구 앞","meetingDateTime":"2026-09-12T08:30:00","participationFee":15000,"genderRestriction":"NONE","minimumAge":20,"maximumAge":39,"joinApprovalMode":"MANUAL","courseType":"CUSTOM","customCourse":{"title":"주왕산 단풍길 코스","description":"천천히 걷는 단풍 트레킹 코스","places":[{"contentId":126508,"dayNumber":1,"sequence":1,"visitTime":"09:00"},{"contentId":126508,"dayNumber":1,"sequence":2,"visitTime":"14:00"},{"contentId":126508,"dayNumber":2,"sequence":1,"visitTime":"09:00"},{"contentId":126508,"dayNumber":2,"sequence":2,"visitTime":"14:00"}],"tagIds":[1,4]}}"""
+    """{"title":"주왕산 & 주산지 힐링 트레킹","description":"가을 단풍을 함께 즐길 동행자를 구해요.","minimumParticipants":3,"maxParticipants":5,"tripType":"OVERNIGHT","startDate":"2026-09-12","endDate":"2026-09-13","recruitmentDeadlineDate":"2026-09-09","meetingLatitude":36.576,"meetingLongitude":128.97,"meetingDetails":"안동역 1번 출구 앞","meetingDateTime":"2026-09-12T08:30:00","participationFee":15000,"genderRestriction":"NONE","minimumAge":20,"maximumAge":39,"joinApprovalMode":"MANUAL","courseType":"CUSTOM","customCourse":{"title":"주왕산 단풍길 코스","description":"천천히 걷는 단풍 트레킹 코스","places":[{"contentId":126508,"dayNumber":1,"sequence":1,"visitTime":"09:00"},{"contentId":126508,"dayNumber":1,"sequence":2,"visitTime":"14:00"},{"contentId":126508,"dayNumber":2,"sequence":1,"visitTime":"09:00"},{"contentId":126508,"dayNumber":2,"sequence":2,"visitTime":"14:00"}],"tagIds":[1,4]}}"""
 
 @Schema(
     description = "여행 채팅방 생성 요청. 썸네일은 multipart thumbnail 파트로 선택해 전송합니다.",
@@ -29,9 +30,13 @@ data class CreateChatRoomRequest(
     @field:Schema(description = "모임 소개", example = "가을 단풍을 함께 즐길 동행자를 구해요.", nullable = true)
     @field:Size(max = 500)
     val description: String? = null,
-    @field:Schema(description = "호스트를 포함한 최대 참가 인원", example = "5", minimum = "3", maximum = "12")
+    @field:Schema(description = "여행을 확정하기 위해 필요한 호스트 포함 최소 출발 인원", example = "3", minimum = "3")
+    @field:NotNull(message = "minimumParticipants 필드는 필수입니다.")
+    @field:Min(value = 3, message = "최소 출발 인원은 3명 이상이어야 합니다.")
+    val minimumParticipants: Int? = null,
+    @field:Schema(description = "호스트를 포함한 최대 참가 인원", example = "5", minimum = "3", maximum = "20")
     @field:Min(3)
-    @field:Max(12)
+    @field:Max(20)
     val maxParticipants: Int,
     @field:Schema(description = "당일 또는 숙박 여행 유형", example = "OVERNIGHT")
     val tripType: TripType,

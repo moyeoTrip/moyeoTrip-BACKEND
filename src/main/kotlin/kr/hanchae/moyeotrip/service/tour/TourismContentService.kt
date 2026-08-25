@@ -65,12 +65,12 @@ class TourismContentService(
         val content =
             repository.findByContentId(contentId)
                 ?: throw BaseException(ErrorCode.TOURISM_CONTENT_NOT_FOUND)
-        if (!content.hasCommonDetail()) {
+        if (content.telephoneName.isNullOrBlank()) {
             tourApiClient.getCommonDetail(contentId)?.let { detail ->
                 content.updateCommonDetail(
-                    telephoneName = detail.telname.nullIfBlank(),
-                    homepage = detail.homepage.nullIfBlank(),
-                    overview = detail.overview.nullIfBlank(),
+                    telephoneName = detail.telname.nullIfBlank() ?: content.telephoneName,
+                    homepage = detail.homepage.nullIfBlank() ?: content.homepage,
+                    overview = detail.overview.nullIfBlank() ?: content.overview,
                 )
             }
         }
@@ -105,8 +105,6 @@ class TourismContentService(
     }
 
     private fun String.nullIfBlank(): String? = trim().takeIf(String::isNotEmpty)
-
-    private fun TourismContent.hasCommonDetail(): Boolean = telephoneName != null || homepage != null || overview != null
 
     private fun TourismContent.isRestaurant(): Boolean = contentType.code == RESTAURANT_CONTENT_TYPE_ID
 

@@ -3,12 +3,10 @@ package kr.hanchae.moyeotrip.controller.test
 import kr.hanchae.moyeotrip.controller.auth.response.TestAccessTokenResponse
 import kr.hanchae.moyeotrip.controller.test.response.TestCompletedChatRoomResponse
 import kr.hanchae.moyeotrip.service.test.TestSupportService
-import org.springframework.context.annotation.Profile
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RestController
 
-@Profile("default", "local", "dev")
 @RestController
 class TestSupportController(
     private val testSupportService: TestSupportService,

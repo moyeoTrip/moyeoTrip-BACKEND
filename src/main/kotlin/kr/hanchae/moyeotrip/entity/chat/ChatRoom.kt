@@ -40,6 +40,8 @@ class ChatRoom(
     val thumbnail: String? = null,
     @Column(name = "max_participants", nullable = false)
     val maxParticipants: Int,
+    @Column(name = "minimum_participants", nullable = false)
+    val minimumParticipants: Int = MINIMUM_PARTICIPANTS,
     @Column(name = "start_date", nullable = false)
     val startDate: LocalDate,
     @Column(name = "end_date")
@@ -110,7 +112,8 @@ class ChatRoom(
         require(recruitmentDeadlineDate <= startDate)
         endDate?.let { require(it.isAfter(startDate)) }
         require(tripDays <= 30)
-        require(maxParticipants in 3..12)
+        require(maxParticipants in MINIMUM_PARTICIPANTS..MAXIMUM_PARTICIPANTS)
+        require(minimumParticipants in MINIMUM_PARTICIPANTS..maxParticipants)
         participationFee?.let { require(it >= 0) }
         val minimumAgeValue = minimumAge
         val maximumAgeValue = maximumAge
@@ -179,7 +182,15 @@ class ChatRoom(
 
     fun isChatArchived(): Boolean = status == ChatRoomStatus.CONFIRMED && chatClosedDateTime != null
 
-    fun recruitmentDDay(today: LocalDate = LocalDate.now()): Long = ChronoUnit.DAYS.between(today, recruitmentDeadlineDate)
+    fun recruitmentDDay(today: LocalDate = LocalDate.now()): Long? =
+        ChronoUnit.DAYS
+            .between(today, recruitmentDeadlineDate)
+            .takeIf { it >= 0 }
+
+    companion object {
+        const val MINIMUM_PARTICIPANTS = 3
+        const val MAXIMUM_PARTICIPANTS = 20
+    }
 }
 
 @Schema(
