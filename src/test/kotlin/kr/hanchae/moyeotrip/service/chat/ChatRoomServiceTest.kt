@@ -229,7 +229,7 @@ class ChatRoomServiceTest {
                 service.shareImage(2L, 10L, image, null)
             }
 
-        assertEquals(ErrorCode.BAD_REQUEST, exception.errorCode)
+        assertEquals(ErrorCode.INVALID_CHAT_IMAGE, exception.errorCode)
         verifyNoInteractions(messageRepository)
     }
 
@@ -240,7 +240,7 @@ class ChatRoomServiceTest {
 
         val exception = assertThrows(BaseException::class.java) { service.shareImage(2L, 10L, image, null) }
 
-        assertEquals(ErrorCode.BAD_REQUEST, exception.errorCode)
+        assertEquals(ErrorCode.INVALID_CHAT_IMAGE, exception.errorCode)
         verifyNoInteractions(participantRepository, messageRepository)
     }
 
@@ -253,7 +253,7 @@ class ChatRoomServiceTest {
 
         val exception = assertThrows(BaseException::class.java) { service.shareImage(2L, 10L, image, null) }
 
-        assertEquals(ErrorCode.BAD_REQUEST, exception.errorCode)
+        assertEquals(ErrorCode.INVALID_CHAT_IMAGE, exception.errorCode)
         verifyNoInteractions(participantRepository, messageRepository)
     }
 
@@ -270,7 +270,7 @@ class ChatRoomServiceTest {
                 service.sendMessage(2L, 10L, SendChatMessageRequest("안녕하세요", mentionedUserIds = setOf(99L)))
             }
 
-        assertEquals(ErrorCode.BAD_REQUEST, exception.errorCode)
+        assertEquals(ErrorCode.MENTIONED_USER_NOT_PARTICIPANT, exception.errorCode)
         verify(messageRepository, org.mockito.Mockito.never()).saveAndFlush(any(ChatMessage::class.java))
     }
 
@@ -412,7 +412,7 @@ class ChatRoomServiceTest {
                 service.sendMessage(2L, 10L, SendChatMessageRequest("답글", replyToMessageId = 999L))
             }
 
-        assertEquals(ErrorCode.RESOURCE_NOT_FOUND, exception.errorCode)
+        assertEquals(ErrorCode.CHAT_REPLY_MESSAGE_NOT_FOUND, exception.errorCode)
         verify(messageRepository, org.mockito.Mockito.never()).saveAndFlush(any(ChatMessage::class.java))
     }
 
@@ -457,7 +457,7 @@ class ChatRoomServiceTest {
                 )
             }
 
-        assertEquals(ErrorCode.BAD_REQUEST, exception.errorCode)
+        assertEquals(ErrorCode.DUPLICATE_CHAT_POLL_OPTION, exception.errorCode)
         verifyNoInteractions(participantRepository, messageRepository, pollOptionRepository)
     }
 
@@ -591,7 +591,7 @@ class ChatRoomServiceTest {
 
         val exception = assertThrows(BaseException::class.java) { service.shareLocation(2L, 10L) }
 
-        assertEquals(ErrorCode.BAD_REQUEST, exception.errorCode)
+        assertEquals(ErrorCode.CHAT_ROOM_MEETING_LOCATION_NOT_SET, exception.errorCode)
         verifyNoInteractions(messageRepository)
     }
 
@@ -607,7 +607,7 @@ class ChatRoomServiceTest {
 
         val exception = assertThrows(BaseException::class.java) { service.shareLocation(2L, 10L) }
 
-        assertEquals(ErrorCode.BAD_REQUEST, exception.errorCode)
+        assertEquals(ErrorCode.CHAT_ROOM_MEETING_LOCATION_NOT_SET, exception.errorCode)
         verifyNoInteractions(messageRepository)
     }
 
@@ -819,8 +819,8 @@ class ChatRoomServiceTest {
                 service.updateNotice(1L, 10L, 7L, "   ", pinned = null)
             }
 
-        assertEquals(ErrorCode.BAD_REQUEST, createException.errorCode)
-        assertEquals(ErrorCode.BAD_REQUEST, updateException.errorCode)
+        assertEquals(ErrorCode.NOTICE_CONTENT_BLANK, createException.errorCode)
+        assertEquals(ErrorCode.NOTICE_CONTENT_BLANK, updateException.errorCode)
         verifyNoInteractions(noticeRepository)
     }
 
@@ -1010,7 +1010,7 @@ class ChatRoomServiceTest {
 
         val exception = assertThrows(BaseException::class.java) { service.kickMember(1L, 10L, 2L, "   ") }
 
-        assertEquals(ErrorCode.BAD_REQUEST, exception.errorCode)
+        assertEquals(ErrorCode.KICK_REASON_BLANK, exception.errorCode)
         verify(participantRepository, org.mockito.Mockito.never()).delete(participant)
         verifyNoInteractions(kickHistoryRepository, notificationService, messageRepository)
     }
@@ -1022,7 +1022,7 @@ class ChatRoomServiceTest {
 
         val exception = assertThrows(BaseException::class.java) { service.kickMember(2L, 10L, 3L, "사유") }
 
-        assertEquals(ErrorCode.FORBIDDEN, exception.errorCode)
+        assertEquals(ErrorCode.CHAT_ROOM_HOST_REQUIRED, exception.errorCode)
         verifyNoInteractions(participantRepository, kickHistoryRepository, notificationService, messageRepository)
     }
 
@@ -1423,6 +1423,18 @@ class ChatRoomServiceTest {
     }
 
     @Test
+    fun `내 채팅방 찜 목록은 찜 저장소의 최신순 결과만 반환한다`() {
+        val first = room(user(1L), startDate = LocalDate.of(2026, 9, 2))
+        val second = room(user(1L), startDate = LocalDate.of(2026, 9, 1))
+        `when`(favoriteRepository.findChatRoomsByUserIdOrderByFavoritedAtDesc(2L)).thenReturn(listOf(first, second))
+
+        val response = service.getFavoriteRooms(2L)
+
+        assertEquals(listOf(LocalDate.of(2026, 9, 2), LocalDate.of(2026, 9, 1)), response.map { it.startDate })
+        assertEquals(listOf(true, true), response.map { it.favorite })
+    }
+
+    @Test
     fun `코스 평점은 채팅방과 사용자 기준으로 갱신한다`() {
         val user = user(2L)
         val room = room(user(1L))
@@ -1684,7 +1696,7 @@ class ChatRoomServiceTest {
 
         val exception = assertThrows(BaseException::class.java) { service.updateMeetingInfo(1L, 10L, request) }
 
-        assertEquals(ErrorCode.BAD_REQUEST, exception.errorCode)
+        assertEquals(ErrorCode.INVALID_MEETING_INFORMATION, exception.errorCode)
         verifyNoInteractions(messageRepository)
     }
 
@@ -1696,7 +1708,7 @@ class ChatRoomServiceTest {
 
         val exception = assertThrows(BaseException::class.java) { service.updateMeetingInfo(1L, 10L, request) }
 
-        assertEquals(ErrorCode.BAD_REQUEST, exception.errorCode)
+        assertEquals(ErrorCode.INVALID_MEETING_INFORMATION, exception.errorCode)
         verifyNoInteractions(messageRepository)
     }
 

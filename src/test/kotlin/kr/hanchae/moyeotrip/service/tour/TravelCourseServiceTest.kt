@@ -71,7 +71,7 @@ class TravelCourseServiceTest {
                 service.publishCourse(999L, course.id, PublishTravelCourseRequest("코스", "소개", true))
             }
 
-        assertEquals(ErrorCode.FORBIDDEN, exception.errorCode)
+        assertEquals(ErrorCode.TRAVEL_COURSE_OWNER_REQUIRED, exception.errorCode)
     }
 
     @Test
@@ -142,10 +142,10 @@ class TravelCourseServiceTest {
         `when`(courseLikeRepository.findByCourseIdAndUserId(2L, 3L)).thenReturn(null)
         `when`(userRepository.findById(3L)).thenReturn(Optional.of(user))
 
-        val response = service.toggleLike(3L, 2L)
+        val response = service.toggleFavorite(3L, 2L)
 
-        assertTrue(response.liked)
-        assertEquals(5L, response.likeCount)
+        assertTrue(response.favorite)
+        assertEquals(5L, response.favoriteCount)
         verify(courseLikeRepository).save(org.mockito.ArgumentMatchers.any(TravelCourseLike::class.java))
     }
 
@@ -158,11 +158,23 @@ class TravelCourseServiceTest {
         `when`(courseLikeRepository.countByCourseId(2L)).thenReturn(1L)
         `when`(courseLikeRepository.findByCourseIdAndUserId(2L, 3L)).thenReturn(like)
 
-        val response = service.toggleLike(3L, 2L)
+        val response = service.toggleFavorite(3L, 2L)
 
-        assertFalse(response.liked)
-        assertEquals(0L, response.likeCount)
+        assertFalse(response.favorite)
+        assertEquals(0L, response.favoriteCount)
         verify(courseLikeRepository).delete(like)
+    }
+
+    @Test
+    fun `내가 찜한 공개 코스 목록을 찜한 순서대로 응답한다`() {
+        val first = TravelCourse(id = 8L, type = TravelCourseType.PUBLIC, title = "첫 코스", description = "첫 소개")
+        val second = TravelCourse(id = 7L, type = TravelCourseType.PUBLIC, title = "둘째 코스")
+        `when`(courseLikeRepository.findCoursesByUserIdOrderByLikedAtDesc(3L)).thenReturn(listOf(first, second))
+
+        val response = service.getLikedCourses(3L)
+
+        assertEquals(listOf(8L, 7L), response.map { it.courseId })
+        assertEquals("첫 소개", response.first().description)
     }
 
     private fun customCourse(): TravelCourse {

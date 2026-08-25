@@ -20,9 +20,12 @@ import kr.hanchae.moyeotrip.controller.test.TestSupportAPISpec
 import kr.hanchae.moyeotrip.controller.tour.TourismContentAPISpec
 import kr.hanchae.moyeotrip.controller.tour.TravelCourseAPISpec
 import kr.hanchae.moyeotrip.controller.user.FriendAPISpec
+import kr.hanchae.moyeotrip.controller.user.PublicUserAPISpec
 import kr.hanchae.moyeotrip.controller.user.TravelCompanionAPISpec
 import kr.hanchae.moyeotrip.controller.user.UserAPISpec
 import kr.hanchae.moyeotrip.controller.user.UserBlockAPISpec
+import kr.hanchae.moyeotrip.controller.weather.WeatherAPISpec
+import kr.hanchae.moyeotrip.controller.weather.response.GyeongbukWeatherCondition
 import kr.hanchae.moyeotrip.entity.chat.ChatMessageType
 import kr.hanchae.moyeotrip.entity.chat.ChatParticipantRole
 import kr.hanchae.moyeotrip.entity.chat.ChatRoomStatus
@@ -126,7 +129,7 @@ class SwaggerErrorExamplesTest {
         @Test
         fun `피드 작성과 댓글 작성의 400과 404를 원인별로 구분한다`() {
             assertEquals(
-                setOf("사진 또는 요청 본문 검증 실패", "동일 여행 피드 중복"),
+                setOf("사진 개수 오류", "사진 파일 오류"),
                 examples(FeedAPISpec::class.java, "createFeed", "400"),
             )
             assertEquals(
@@ -145,7 +148,7 @@ class SwaggerErrorExamplesTest {
         @Test
         fun `프로필과 사용자 관계 API의 다중 오류 예시를 구분한다`() {
             assertEquals(
-                setOf("요청 본문 또는 선택 ID 오류", "최소 가입 연령 미달"),
+                setOf("관심 지역 ID 오류", "여행 스타일 ID 오류", "요청 JSON 형식 오류", "최소 가입 연령 미달"),
                 examples(UserAPISpec::class.java, "updateProfile", "400"),
             )
             assertEquals(
@@ -211,7 +214,7 @@ class SwaggerErrorExamplesTest {
         }
 
         @Test
-        fun `내부 관광지 동기화 오류를 제외한 ErrorCode는 Swagger 오류 예시로 노출한다`() {
+        fun `공개 API에서 발생하는 구체 ErrorCode는 Swagger 오류 예시로 노출한다`() {
             val documentedCodes =
                 apiSpecs
                     .flatMap { spec ->
@@ -229,7 +232,7 @@ class SwaggerErrorExamplesTest {
 
             val expectedCodes =
                 ErrorCode.entries
-                    .filterNot { it == ErrorCode.TOURISM_CONTENT_TYPE_NOT_FOUND }
+                    .filterNot { it in setOf(ErrorCode.RESOURCE_NOT_FOUND, ErrorCode.TOURISM_CONTENT_TYPE_NOT_FOUND) }
                     .map { it.code }
                     .toSet()
 
@@ -298,6 +301,8 @@ class SwaggerErrorExamplesTest {
                 TravelCompanionAPISpec::class.java,
                 UserAPISpec::class.java,
                 UserBlockAPISpec::class.java,
+                PublicUserAPISpec::class.java,
+                WeatherAPISpec::class.java,
             )
 
         val publicEnums =
@@ -313,6 +318,7 @@ class SwaggerErrorExamplesTest {
                 FeedVisibility::class.java,
                 Gender::class.java,
                 GenderRestriction::class.java,
+                GyeongbukWeatherCondition::class.java,
                 JoinApplicationStatus::class.java,
                 JoinApprovalMode::class.java,
                 JoinResult::class.java,

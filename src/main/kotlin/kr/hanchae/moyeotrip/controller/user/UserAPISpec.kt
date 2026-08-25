@@ -79,7 +79,9 @@ interface UserAPISpec {
                     Content(
                         schema = Schema(implementation = ErrorResponse::class),
                         examples = [
-                            ExampleObject(name = "요청 본문 또는 선택 ID 오류", value = UserSwaggerExamples.BAD_REQUEST),
+                            ExampleObject(name = "관심 지역 ID 오류", value = UserSwaggerExamples.INVALID_INTERESTED_REGION_SELECTION),
+                            ExampleObject(name = "여행 스타일 ID 오류", value = UserSwaggerExamples.INVALID_TRAVEL_STYLE_SELECTION),
+                            ExampleObject(name = "요청 JSON 형식 오류", value = UserSwaggerExamples.MALFORMED_REQUEST_BODY),
                             ExampleObject(name = "최소 가입 연령 미달", value = UserSwaggerExamples.MINIMUM_SIGNUP_AGE_NOT_MET),
                         ],
                     ),
@@ -406,6 +408,9 @@ private object UserSwaggerExamples {
     const val PROFILE_IMAGE_NOT_FOUND =
         """{"code":40401,"errorMessage":"선택할 수 있는 프로필 이미지를 찾을 수 없습니다."}"""
     const val MINIMUM_SIGNUP_AGE_NOT_MET = """{"code":40011,"errorMessage":"만 20세 이상만 가입할 수 있습니다."}"""
+    const val INVALID_INTERESTED_REGION_SELECTION = """{"code":40014,"errorMessage":"관심 지역으로 선택할 수 없는 지역 ID가 포함되어 있습니다."}"""
+    const val INVALID_TRAVEL_STYLE_SELECTION = """{"code":40015,"errorMessage":"선택할 수 없는 여행 스타일 ID가 포함되어 있습니다."}"""
+    const val MALFORMED_REQUEST_BODY = """{"code":40033,"errorMessage":"요청 본문의 JSON 형식이 올바르지 않습니다."}"""
     const val GENERATION_LIMIT =
         """{"code":42900,"errorMessage":"프로필 이미지는 사용자당 최대 3번까지 생성할 수 있습니다."}"""
     const val PROFILE_IMAGE_GENERATION_FAILED =

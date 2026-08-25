@@ -153,8 +153,8 @@ class TravelCompanionServiceTest {
                 service.reviewCompanion(1L, 10L, 2L, ReviewTravelCompanionRequest(5, null))
             }
 
-        assertEquals(ErrorCode.FORBIDDEN, selfException.errorCode)
-        assertEquals(ErrorCode.FORBIDDEN, outsiderException.errorCode)
+        assertEquals(ErrorCode.TRAVEL_COMPANION_REVIEW_TARGET_INVALID, selfException.errorCode)
+        assertEquals(ErrorCode.TRAVEL_COMPANION_REVIEW_TARGET_INVALID, outsiderException.errorCode)
     }
 
     @Test

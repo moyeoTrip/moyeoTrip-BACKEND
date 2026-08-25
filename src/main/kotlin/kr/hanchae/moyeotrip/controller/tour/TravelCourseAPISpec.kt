@@ -16,7 +16,8 @@ import kr.hanchae.moyeotrip.controller.tour.request.PublishTravelCourseRequest
 import kr.hanchae.moyeotrip.controller.tour.request.RateTravelCourseRequest
 import kr.hanchae.moyeotrip.controller.tour.request.UpdateTravelCourseRequest
 import kr.hanchae.moyeotrip.controller.tour.response.CoursePublicationResponse
-import kr.hanchae.moyeotrip.controller.tour.response.TravelCourseLikeResponse
+import kr.hanchae.moyeotrip.controller.tour.response.LikedTravelCourseResponse
+import kr.hanchae.moyeotrip.controller.tour.response.TravelCourseFavoriteResponse
 import kr.hanchae.moyeotrip.controller.tour.response.TravelCourseTagResponse
 import kr.hanchae.moyeotrip.exception.ErrorResponse
 import org.springframework.http.ResponseEntity
@@ -189,6 +190,16 @@ interface TravelCourseAPISpec {
                     ),
                 ],
             ),
+            ApiResponse(
+                responseCode = "403",
+                description = "완료한 커스텀 여행 코스를 공개할 호스트가 아님",
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [ExampleObject(value = TravelCourseSwaggerExamples.TRAVEL_COURSE_OWNER_REQUIRED)],
+                    ),
+                ],
+            ),
         ],
     )
     fun publishCourse(
@@ -224,13 +235,13 @@ interface TravelCourseAPISpec {
         courseId: Long,
     ): PublicTravelCourseDetailResponse
 
-    @Operation(summary = "공개 여행 코스 좋아요 토글", description = "호출할 때마다 로그인 사용자의 좋아요 상태를 반전합니다.")
+    @Operation(summary = "공개 여행 코스 찜 토글", description = "호출할 때마다 로그인 사용자의 코스 찜 상태를 반전합니다.")
     @ApiResponses(
         value = [
             ApiResponse(
                 responseCode = "200",
-                description = "여행 코스 좋아요 상태 변경 성공",
-                content = [Content(schema = Schema(implementation = TravelCourseLikeResponse::class))],
+                description = "여행 코스 찜 상태 변경 성공",
+                content = [Content(schema = Schema(implementation = TravelCourseFavoriteResponse::class))],
             ),
             ApiResponse(
                 responseCode = "404",
@@ -239,11 +250,35 @@ interface TravelCourseAPISpec {
             ),
         ],
     )
-    fun toggleCourseLike(
+    fun toggleCourseFavorite(
         @Parameter(hidden = true) userId: Long,
-        @Parameter(description = "좋아요 상태를 바꿀 공개 여행 코스 ID", example = "77")
+        @Parameter(description = "찜 상태를 바꿀 공개 여행 코스 ID", example = "77")
         courseId: Long,
-    ): TravelCourseLikeResponse
+    ): TravelCourseFavoriteResponse
+
+    @Operation(summary = "내가 찜한 여행 코스 목록", description = "로그인 사용자가 찜한 공개 여행 코스를 가장 최근에 찜한 순서로 반환합니다.")
+    @ApiResponses(
+        value = [
+            ApiResponse(
+                responseCode = "200",
+                description = "찜한 여행 코스 목록 조회 성공",
+                content = [Content(array = ArraySchema(schema = Schema(implementation = LikedTravelCourseResponse::class)))],
+            ),
+            ApiResponse(
+                responseCode = "401",
+                description = "서비스 Access Token이 없거나 유효하지 않음",
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [ExampleObject(value = TravelCourseSwaggerExamples.UNAUTHORIZED)],
+                    ),
+                ],
+            ),
+        ],
+    )
+    fun getLikedCourses(
+        @Parameter(hidden = true) userId: Long,
+    ): List<LikedTravelCourseResponse>
 
     @Operation(summary = "완료한 여행 코스 평가", description = "확정된 여행이 끝난 채팅방 참가자만 1~5점으로 평가할 수 있습니다.")
     @ApiResponses(
@@ -287,6 +322,7 @@ private object TravelCourseSwaggerExamples {
     const val BAD_REQUEST = """{"code":40000,"errorMessage":"잘못된 요청입니다."}"""
     const val INVALID_TRAVEL_COURSE_SCHEDULE = """{"code":40007,"errorMessage":"여행 일차마다 방문지를 최소 2개 편성해야 합니다."}"""
     const val USER_NOT_FOUND = """{"code":40400,"errorMessage":"해당 유저를 찾을 수 없습니다."}"""
+    const val UNAUTHORIZED = """{"code":40100,"errorMessage":"인증되지 않은 사용자입니다."}"""
     const val TRAVEL_COURSE_TAG_NOT_FOUND = """{"code":40412,"errorMessage":"여행 코스 태그를 찾을 수 없습니다."}"""
     const val TRAVEL_COURSE_NOT_FOUND = """{"code":40403,"errorMessage":"공개된 여행 코스를 찾을 수 없습니다."}"""
     const val CHAT_ROOM_NOT_FOUND = """{"code":40405,"errorMessage":"채팅방을 찾을 수 없습니다."}"""
@@ -295,4 +331,5 @@ private object TravelCourseSwaggerExamples {
     const val TRAVEL_COURSE_NOT_EDITABLE = """{"code":40912,"errorMessage":"여행 확정 전의 커스텀 코스만 호스트가 수정할 수 있습니다."}"""
     const val TRAVEL_COURSE_PUBLICATION_NOT_ALLOWED = """{"code":40914,"errorMessage":"공개 여부를 선택할 수 있는 완료 코스가 아닙니다."}"""
     const val TRAVEL_COURSE_RATING_NOT_ALLOWED = """{"code":40006,"errorMessage":"완료한 여행의 참가자만 코스를 평가할 수 있습니다."}"""
+    const val TRAVEL_COURSE_OWNER_REQUIRED = """{"code":40303,"errorMessage":"해당 여행 코스를 공개할 호스트가 아닙니다."}"""
 }

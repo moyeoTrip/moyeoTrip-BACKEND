@@ -31,13 +31,13 @@ interface FeedAPISpec {
             ),
             ApiResponse(
                 responseCode = "400",
-                description = "사진 또는 피드 입력값이 유효하지 않거나 같은 여행에 이미 피드를 작성함",
+                description = "사진 개수·형식 또는 피드 입력값이 유효하지 않음",
                 content = [
                     Content(
                         schema = Schema(implementation = ErrorResponse::class),
                         examples = [
-                            ExampleObject(name = "사진 또는 요청 본문 검증 실패", value = FeedSwaggerExamples.BAD_REQUEST),
-                            ExampleObject(name = "동일 여행 피드 중복", value = FeedSwaggerExamples.DUPLICATE_TRIP_FEED),
+                            ExampleObject(name = "사진 개수 오류", value = FeedSwaggerExamples.INVALID_IMAGE_COUNT),
+                            ExampleObject(name = "사진 파일 오류", value = FeedSwaggerExamples.INVALID_IMAGE),
                         ],
                     ),
                 ],
@@ -48,7 +48,7 @@ interface FeedAPISpec {
                 content = [
                     Content(
                         schema = Schema(implementation = ErrorResponse::class),
-                        examples = [ExampleObject(value = FeedSwaggerExamples.FORBIDDEN)],
+                        examples = [ExampleObject(value = FeedSwaggerExamples.COMPLETED_TRIP_FEED_REQUIRED)],
                     ),
                 ],
             ),
@@ -62,6 +62,16 @@ interface FeedAPISpec {
                             ExampleObject(name = "로그인 사용자 없음", value = FeedSwaggerExamples.USER_NOT_FOUND),
                             ExampleObject(name = "채팅방 없음", value = FeedSwaggerExamples.CHAT_ROOM_NOT_FOUND),
                         ],
+                    ),
+                ],
+            ),
+            ApiResponse(
+                responseCode = "409",
+                description = "같은 여행에 이미 피드를 작성함",
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [ExampleObject(value = FeedSwaggerExamples.DUPLICATE_TRIP_FEED)],
                     ),
                 ],
             ),
@@ -119,7 +129,10 @@ interface FeedAPISpec {
                 content = [
                     Content(
                         schema = Schema(implementation = ErrorResponse::class),
-                        examples = [ExampleObject(value = FeedSwaggerExamples.FORBIDDEN)],
+                        examples = [
+                            ExampleObject(name = "차단 관계", value = FeedSwaggerExamples.USER_BLOCK_RELATIONSHIP),
+                            ExampleObject(name = "공개 범위 제한", value = FeedSwaggerExamples.FEED_NOT_VISIBLE),
+                        ],
                     ),
                 ],
             ),
@@ -158,7 +171,10 @@ interface FeedAPISpec {
                 content = [
                     Content(
                         schema = Schema(implementation = ErrorResponse::class),
-                        examples = [ExampleObject(value = FeedSwaggerExamples.FORBIDDEN)],
+                        examples = [
+                            ExampleObject(name = "차단 관계", value = FeedSwaggerExamples.USER_BLOCK_RELATIONSHIP),
+                            ExampleObject(name = "공개 범위 제한", value = FeedSwaggerExamples.FEED_NOT_VISIBLE),
+                        ],
                     ),
                 ],
             ),
@@ -194,7 +210,10 @@ interface FeedAPISpec {
                 content = [
                     Content(
                         schema = Schema(implementation = ErrorResponse::class),
-                        examples = [ExampleObject(value = FeedSwaggerExamples.FORBIDDEN)],
+                        examples = [
+                            ExampleObject(name = "차단 관계", value = FeedSwaggerExamples.USER_BLOCK_RELATIONSHIP),
+                            ExampleObject(name = "공개 범위 제한", value = FeedSwaggerExamples.FEED_NOT_VISIBLE),
+                        ],
                     ),
                 ],
             ),
@@ -240,7 +259,10 @@ interface FeedAPISpec {
                 content = [
                     Content(
                         schema = Schema(implementation = ErrorResponse::class),
-                        examples = [ExampleObject(value = FeedSwaggerExamples.FORBIDDEN)],
+                        examples = [
+                            ExampleObject(name = "차단 관계", value = FeedSwaggerExamples.USER_BLOCK_RELATIONSHIP),
+                            ExampleObject(name = "공개 범위 제한", value = FeedSwaggerExamples.FEED_NOT_VISIBLE),
+                        ],
                     ),
                 ],
             ),
@@ -271,11 +293,15 @@ interface FeedAPISpec {
 
 private object FeedSwaggerExamples {
     const val BAD_REQUEST = """{"code":40000,"errorMessage":"잘못된 요청입니다."}"""
-    const val DUPLICATE_TRIP_FEED = """{"code":40000,"errorMessage":"같은 여행에는 피드를 한 번만 작성할 수 있습니다."}"""
+    const val INVALID_IMAGE_COUNT = """{"code":40026,"errorMessage":"피드 사진은 1장 이상 10장 이하로 등록해야 합니다."}"""
+    const val INVALID_IMAGE = """{"code":40027,"errorMessage":"피드 사진은 비어 있지 않은 20MB 이하 이미지 파일이어야 합니다."}"""
+    const val DUPLICATE_TRIP_FEED = """{"code":40916,"errorMessage":"같은 여행에는 피드를 한 번만 작성할 수 있습니다."}"""
     const val UNAUTHORIZED = """{"code":40100,"errorMessage":"인증되지 않은 사용자입니다."}"""
-    const val FORBIDDEN = """{"code":40300,"errorMessage":"접근 권한이 없습니다."}"""
-    const val FEED_NOT_FOUND = """{"code":40402,"errorMessage":"요청한 리소스를 찾을 수 없습니다."}"""
-    const val PARENT_COMMENT_NOT_FOUND = """{"code":40402,"errorMessage":"요청한 리소스를 찾을 수 없습니다."}"""
+    const val COMPLETED_TRIP_FEED_REQUIRED = """{"code":40304,"errorMessage":"여행이 완료되지 않아 피드를 작성할 수 없습니다."}"""
+    const val USER_BLOCK_RELATIONSHIP = """{"code":40305,"errorMessage":"차단 관계인 사용자와는 이 작업을 할 수 없습니다."}"""
+    const val FEED_NOT_VISIBLE = """{"code":40306,"errorMessage":"이 피드는 현재 사용자에게 공개되지 않았습니다."}"""
+    const val FEED_NOT_FOUND = """{"code":40417,"errorMessage":"피드를 찾을 수 없습니다."}"""
+    const val PARENT_COMMENT_NOT_FOUND = """{"code":40418,"errorMessage":"답글을 달 원본 댓글을 찾을 수 없습니다."}"""
     const val USER_NOT_FOUND = """{"code":40400,"errorMessage":"해당 유저를 찾을 수 없습니다."}"""
     const val CHAT_ROOM_NOT_FOUND = """{"code":40405,"errorMessage":"채팅방을 찾을 수 없습니다."}"""
 }

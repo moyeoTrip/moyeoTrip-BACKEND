@@ -365,7 +365,7 @@ class UserServiceTest {
                 )
             }
 
-        assertEquals(ErrorCode.BAD_REQUEST, exception.errorCode)
+        assertEquals(ErrorCode.INVALID_INTERESTED_REGION_SELECTION, exception.errorCode)
         verifyNoInteractions(travelStyleRepository)
     }
 
@@ -407,7 +407,7 @@ class UserServiceTest {
                 )
             }
 
-        assertEquals(ErrorCode.BAD_REQUEST, exception.errorCode)
+        assertEquals(ErrorCode.INVALID_INTERESTED_REGION_SELECTION, exception.errorCode)
         verifyNoInteractions(travelStyleRepository)
     }
 
@@ -430,7 +430,7 @@ class UserServiceTest {
                 )
             }
 
-        assertEquals(ErrorCode.BAD_REQUEST, exception.errorCode)
+        assertEquals(ErrorCode.INVALID_TRAVEL_STYLE_SELECTION, exception.errorCode)
     }
 
     @Test
@@ -454,6 +454,40 @@ class UserServiceTest {
 
         assertEquals(listOf("사진", "자연"), response.travelStyles.map { it.label })
         assertEquals(listOf("안동시"), response.interestedRegions.map { it.signguName })
+    }
+
+    @Test
+    fun `다른 사용자 프로필에서는 공개 프로필 항목만 반환한다`() {
+        val style = TravelStyle(id = 2L, label = "사진")
+        val region = LegalDongCode(id = 3L, regionCode = "47", signguCode = "47170", regionName = "경상북도", signguName = "안동시")
+        val user =
+            User(
+                id = 8L,
+                userRole = UserRole.ROLE_USER,
+                signupState = SignupState.SIGNUP_COMPLETE,
+                userInformation =
+                    UserInformation(
+                        nickname = "여행자",
+                        nicknameColor = NicknameColor.MINT,
+                        gender = Gender.F,
+                        birthDate = LocalDate.of(1998, 4, 12),
+                        profileFileName = "profile.webp",
+                        introduction = "함께 걸어요",
+                    ),
+            )
+        user.updateProfile("함께 걸어요", setOf(style), setOf(region), LocalDate.of(1998, 4, 12), Gender.F)
+        user.updateMannerRating(4.7)
+        `when`(userRepository.findById(8L)).thenReturn(Optional.of(user))
+        `when`(objectStorageRepository.getDownloadUrl("profile.webp")).thenReturn("https://cdn.example.com/profile.webp")
+
+        val response = service.getPublicProfile(8L)
+
+        assertEquals(8L, response.userId)
+        assertEquals("여행자", response.nickname)
+        assertEquals("함께 걸어요", response.introduction)
+        assertEquals(listOf("사진"), response.travelStyles.map { it.label })
+        assertEquals(listOf("안동시"), response.interestedRegions.map { it.signguName })
+        assertEquals(4.7, response.mannerRating)
     }
 
     @Test

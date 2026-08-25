@@ -59,12 +59,12 @@ class TravelCompanionService(
     ): TripCompanionResponse {
         val room = requireCompletedParticipant(userId, roomId)
         if (userId == companionId || !participantRepository.existsByChatRoomIdAndUserId(roomId, companionId)) {
-            throw BaseException(ErrorCode.FORBIDDEN)
+            throw BaseException(ErrorCode.TRAVEL_COMPANION_REVIEW_TARGET_INVALID)
         }
         collectCompletedTrip(room)
         val record =
             companionRepository.findByOwnerIdAndCompanionIdAndChatRoomId(userId, companionId, roomId)
-                ?: throw BaseException(ErrorCode.RESOURCE_NOT_FOUND)
+                ?: throw BaseException(ErrorCode.TRAVEL_COMPANION_NOT_FOUND)
         record.review(
             mannerScore = request.mannerScore,
             oneLineReview = request.oneLineReview?.trim()?.takeIf(String::isNotEmpty),

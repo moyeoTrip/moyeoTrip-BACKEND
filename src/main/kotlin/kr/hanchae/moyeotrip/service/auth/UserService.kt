@@ -10,6 +10,7 @@ import kr.hanchae.moyeotrip.controller.user.response.ProfileImageCandidatesRespo
 import kr.hanchae.moyeotrip.controller.user.response.ProfileImageGenerationResponse
 import kr.hanchae.moyeotrip.controller.user.response.ProfileImageSelectionResponse
 import kr.hanchae.moyeotrip.controller.user.response.ProfileOptionsResponse
+import kr.hanchae.moyeotrip.controller.user.response.PublicProfileResponse
 import kr.hanchae.moyeotrip.controller.user.response.TravelStyleResponse
 import kr.hanchae.moyeotrip.entity.notification.ChatNotificationMode
 import kr.hanchae.moyeotrip.entity.user.User
@@ -58,6 +59,22 @@ class UserService(
         return user.toProfileResponse()
     }
 
+    @Transactional(readOnly = true)
+    fun getPublicProfile(userId: Long): PublicProfileResponse {
+        val user = userRepository.findById(userId).orElseThrow { UserNotFoundException(userId) }
+        val information = user.information ?: throw UserNotFoundException(userId)
+        if (user.isWithdrawn()) throw UserNotFoundException(userId)
+        return PublicProfileResponse(
+            userId = user.id,
+            nickname = information.nickname,
+            profileImageUrl = information.profileFileName?.let(objectStorageRepository::getDownloadUrl),
+            introduction = information.introduction,
+            travelStyles = user.travelStyles.sortedBy { it.id }.map { TravelStyleResponse(it.id, it.label) },
+            interestedRegions = user.interestedRegions.sortedBy { it.id }.map { InterestedRegionResponse(it.id, it.signguName) },
+            mannerRating = user.mannerRating,
+        )
+    }
+
     @Transactional
     fun updateProfile(
         userId: Long,
@@ -73,11 +90,11 @@ class UserService(
             interestedRegions.map { it.id }.toSet() != request.interestedRegionIds ||
             interestedRegions.any { it.regionCode != GYEONGSANGBUKDO_REGION_CODE }
         ) {
-            throw BaseException(ErrorCode.BAD_REQUEST)
+            throw BaseException(ErrorCode.INVALID_INTERESTED_REGION_SELECTION)
         }
         val travelStyles = travelStyleRepository.findAllById(request.travelStyleIds)
         if (travelStyles.map { it.id }.toSet() != request.travelStyleIds) {
-            throw BaseException(ErrorCode.BAD_REQUEST)
+            throw BaseException(ErrorCode.INVALID_TRAVEL_STYLE_SELECTION)
         }
         user.updateProfile(
             introduction = request.introduction?.trim()?.takeIf(String::isNotEmpty),

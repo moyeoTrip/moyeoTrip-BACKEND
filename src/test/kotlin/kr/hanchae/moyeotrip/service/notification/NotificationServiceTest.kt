@@ -165,7 +165,7 @@ class NotificationServiceTest {
     fun `공백 FCM 토큰은 저장할 수 없다`() {
         val exception = assertThrows(BaseException::class.java) { service.updateFcmToken(2L, "   ") }
 
-        assertEquals(ErrorCode.BAD_REQUEST, exception.errorCode)
+        assertEquals(ErrorCode.FCM_TOKEN_BLANK, exception.errorCode)
         verifyNoInteractions(userRepository)
     }
 
@@ -178,7 +178,7 @@ class NotificationServiceTest {
 
         val exception = assertThrows(BaseException::class.java) { service.getKickHistory(2L, 1L) }
 
-        assertEquals(ErrorCode.BAD_REQUEST, exception.errorCode)
+        assertEquals(ErrorCode.NOT_CHAT_ROOM_KICK_NOTIFICATION, exception.errorCode)
         verifyNoInteractions(kickHistoryRepository)
     }
 
@@ -210,7 +210,7 @@ class NotificationServiceTest {
                 assertThrows(BaseException::class.java) {
                     service.updateSetting(2L, ChatNotificationMode.ALL, true, true, false, true, start, end, days)
                 }
-            assertEquals(ErrorCode.BAD_REQUEST, exception.errorCode)
+            assertEquals(ErrorCode.INVALID_DO_NOT_DISTURB_CONFIGURATION, exception.errorCode)
         }
         verifyNoInteractions(userRepository)
     }

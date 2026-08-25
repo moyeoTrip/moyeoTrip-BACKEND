@@ -208,6 +208,12 @@ class ChatRoomService(
     }
 
     @Transactional(readOnly = true)
+    fun getFavoriteRooms(userId: Long): List<SearchChatRoomResponse> =
+        roomFavoriteRepository
+            .findChatRoomsByUserIdOrderByFavoritedAtDesc(userId)
+            .map { it.toSearchResponse(favorite = true) }
+
+    @Transactional(readOnly = true)
     fun getMyRooms(
         userId: Long,
         filter: MyChatRoomFilter = MyChatRoomFilter.ALL,
@@ -243,35 +249,7 @@ class ChatRoomService(
                 .takeIf(List<Long>::isNotEmpty)
                 ?.let { roomFavoriteRepository.findChatRoomIdsByUserIdAndChatRoomIdIn(userId, it) }
                 .orEmpty()
-        return rooms.map { room ->
-            SearchChatRoomResponse(
-                roomId = room.id,
-                title = room.roomTitle,
-                description = room.description,
-                thumbnail = room.thumbnail,
-                tripType = room.tripType,
-                startDate = room.startDate,
-                endDate = room.endDate,
-                dayTripStartTime = room.dayTripStartTime,
-                dayTripEndTime = room.dayTripEndTime,
-                recruitmentDeadlineDate = room.recruitmentDeadlineDate,
-                recruitmentDDay = room.recruitmentDDay(),
-                status = room.status,
-                favorite = room.id in favoriteRoomIds,
-                meetingLatitude = room.meetingLatitude,
-                meetingLongitude = room.meetingLongitude,
-                meetingDetails = room.meetingDetails,
-                meetingDateTime = room.meetingDateTime,
-                hostId = room.host.id,
-                participantCount = participantRepository.countByChatRoomId(room.id).toInt(),
-                maxParticipants = room.maxParticipants,
-                courseTitle = room.course.title,
-                tags =
-                    room.course.tags
-                        .sortedBy { it.id }
-                        .map { TravelCourseTagResponse(it.id, it.name) },
-            )
-        }
+        return rooms.map { it.toSearchResponse(favorite = it.id in favoriteRoomIds) }
     }
 
     @Transactional(readOnly = true)
@@ -393,7 +371,7 @@ class ChatRoomService(
         if ((request.meetingLatitude == null) != (request.meetingLongitude == null) ||
             request.meetingDateTime.toLocalDate() > room.startDate
         ) {
-            throw BaseException(ErrorCode.BAD_REQUEST)
+            throw BaseException(ErrorCode.INVALID_MEETING_INFORMATION)
         }
         room.updateMeetingInfo(
             latitude = request.meetingLatitude,
@@ -718,7 +696,7 @@ class ChatRoomService(
                 .findByChatRoomIdAndUserId(roomId, memberId)
                 ?.takeIf { it.role == ChatParticipantRole.MEMBER }
                 ?: throw BaseException(ErrorCode.CHAT_ROOM_MEMBER_NOT_FOUND)
-        val normalizedReason = reason.trim().takeIf(String::isNotEmpty) ?: throw BaseException(ErrorCode.BAD_REQUEST)
+        val normalizedReason = reason.trim().takeIf(String::isNotEmpty) ?: throw BaseException(ErrorCode.KICK_REASON_BLANK)
         val kickHistory =
             kickHistoryRepository.save(
                 ChatRoomKickHistory(
@@ -766,7 +744,7 @@ class ChatRoomService(
         val room = findRoomForUpdate(roomId)
         requireHost(room, hostId)
         requireChatEnabled(room)
-        val content = notice.trim().takeIf(String::isNotEmpty) ?: throw BaseException(ErrorCode.BAD_REQUEST)
+        val content = notice.trim().takeIf(String::isNotEmpty) ?: throw BaseException(ErrorCode.NOTICE_CONTENT_BLANK)
         val savedNotice = noticeRepository.save(ChatRoomNotice(chatRoom = room, author = room.host, content = content, pinned = pinned))
         saveSystemMessage(room, "공지가 등록되었어요.\n$content")
         return savedNotice.id
@@ -784,7 +762,7 @@ class ChatRoomService(
         requireHost(room, hostId)
         requireChatEnabled(room)
         val normalizedNotice = notice?.trim()?.takeIf(String::isNotEmpty)
-        if (notice != null && normalizedNotice == null) throw BaseException(ErrorCode.BAD_REQUEST)
+        if (notice != null && normalizedNotice == null) throw BaseException(ErrorCode.NOTICE_CONTENT_BLANK)
         val target =
             noticeRepository.findByIdAndChatRoomId(noticeId, roomId)
                 ?: throw BaseException(ErrorCode.CHAT_ROOM_NOTICE_NOT_FOUND)
@@ -830,14 +808,14 @@ class ChatRoomService(
         val replyTo =
             request.replyToMessageId?.let { messageId ->
                 messageRepository.findByIdAndChatRoomId(messageId, roomId)
-                    ?: throw BaseException(ErrorCode.RESOURCE_NOT_FOUND)
+                    ?: throw BaseException(ErrorCode.CHAT_REPLY_MESSAGE_NOT_FOUND)
             }
         val participantsByUserId =
             participantRepository
                 .findAllByChatRoomIdOrderByCreatedDateTimeAsc(roomId)
                 .associateBy { it.user.id }
         if (!participantsByUserId.keys.containsAll(request.mentionedUserIds)) {
-            throw BaseException(ErrorCode.BAD_REQUEST)
+            throw BaseException(ErrorCode.MENTIONED_USER_NOT_PARTICIPANT)
         }
         val newMessage =
             ChatMessage(
@@ -863,7 +841,7 @@ class ChatRoomService(
         caption: String?,
     ): ChatMessageResponse {
         if (image.isEmpty || image.size > MAX_CHAT_IMAGE_BYTES || image.contentType?.startsWith("image/") != true) {
-            throw BaseException(ErrorCode.BAD_REQUEST)
+            throw BaseException(ErrorCode.INVALID_CHAT_IMAGE)
         }
         requireCanShareMessage(userId, roomId)
         val imageUrl = uploadChatImage(image)
@@ -902,8 +880,8 @@ class ChatRoomService(
     ): ChatMessageResponse {
         val room = findParticipant(roomId, userId).chatRoom
         requireChatEnabled(room)
-        val latitude = room.meetingLatitude ?: throw BaseException(ErrorCode.BAD_REQUEST)
-        val longitude = room.meetingLongitude ?: throw BaseException(ErrorCode.BAD_REQUEST)
+        val latitude = room.meetingLatitude ?: throw BaseException(ErrorCode.CHAT_ROOM_MEETING_LOCATION_NOT_SET)
+        val longitude = room.meetingLongitude ?: throw BaseException(ErrorCode.CHAT_ROOM_MEETING_LOCATION_NOT_SET)
         val locationName = room.meetingDetails?.trim()?.takeIf(String::isNotEmpty)
         return saveSharedMessage(
             userId,
@@ -923,7 +901,7 @@ class ChatRoomService(
         request: CreateChatPollRequest,
     ): ChatMessageResponse {
         val normalizedOptions = request.options.map(String::trim)
-        if (normalizedOptions.distinct().size != normalizedOptions.size) throw BaseException(ErrorCode.BAD_REQUEST)
+        if (normalizedOptions.distinct().size != normalizedOptions.size) throw BaseException(ErrorCode.DUPLICATE_CHAT_POLL_OPTION)
         val message =
             saveSharedMessageEntity(
                 userId,
@@ -951,7 +929,9 @@ class ChatRoomService(
         val participant = findParticipant(roomId, userId)
         requireChatEnabled(participant.chatRoom)
         val message = findPollMessage(roomId, messageId)
-        val option = pollOptionRepository.findByIdAndMessageId(optionId, messageId) ?: throw BaseException(ErrorCode.RESOURCE_NOT_FOUND)
+        val option =
+            pollOptionRepository.findByIdAndMessageId(optionId, messageId)
+                ?: throw BaseException(ErrorCode.CHAT_POLL_OPTION_NOT_FOUND)
         val existingVote = pollVoteRepository.findByMessageIdAndUserId(messageId, userId)
         when {
             existingVote == null ->
@@ -1142,7 +1122,7 @@ class ChatRoomService(
         messageRepository
             .findByIdAndChatRoomId(messageId, roomId)
             ?.takeIf { it.type == ChatMessageType.POLL }
-            ?: throw BaseException(ErrorCode.RESOURCE_NOT_FOUND)
+            ?: throw BaseException(ErrorCode.CHAT_POLL_NOT_FOUND)
 
     private fun requireCanShareMessage(
         userId: Long,
@@ -1321,6 +1301,32 @@ class ChatRoomService(
         )
     }
 
+    private fun ChatRoom.toSearchResponse(favorite: Boolean): SearchChatRoomResponse =
+        SearchChatRoomResponse(
+            roomId = id,
+            title = roomTitle,
+            description = description,
+            thumbnail = thumbnail,
+            tripType = tripType,
+            startDate = startDate,
+            endDate = endDate,
+            dayTripStartTime = dayTripStartTime,
+            dayTripEndTime = dayTripEndTime,
+            recruitmentDeadlineDate = recruitmentDeadlineDate,
+            recruitmentDDay = recruitmentDDay(),
+            status = status,
+            favorite = favorite,
+            meetingLatitude = meetingLatitude,
+            meetingLongitude = meetingLongitude,
+            meetingDetails = meetingDetails,
+            meetingDateTime = meetingDateTime,
+            hostId = host.id,
+            participantCount = participantRepository.countByChatRoomId(id).toInt(),
+            maxParticipants = maxParticipants,
+            courseTitle = course.title,
+            tags = course.tags.sortedBy { it.id }.map { TravelCourseTagResponse(it.id, it.name) },
+        )
+
     private fun ChatRoom.toDetail(favorite: Boolean): ChatRoomDetailResponse {
         val participants = participantRepository.findAllByChatRoomIdOrderByCreatedDateTimeAsc(id)
         return ChatRoomDetailResponse(
@@ -1485,7 +1491,7 @@ class ChatRoomService(
     }
 
     private fun ChatMessage.toPollUpdatedResponse(): ChatPollUpdatedResponse {
-        val poll = toResponse().poll ?: throw BaseException(ErrorCode.RESOURCE_NOT_FOUND)
+        val poll = toResponse().poll ?: throw BaseException(ErrorCode.CHAT_POLL_NOT_FOUND)
         return ChatPollUpdatedResponse(
             messageId = id,
             totalVoteCount = poll.totalVoteCount,
@@ -1611,7 +1617,7 @@ class ChatRoomService(
         room: ChatRoom,
         userId: Long,
     ) {
-        if (room.host.id != userId) throw BaseException(ErrorCode.FORBIDDEN)
+        if (room.host.id != userId) throw BaseException(ErrorCode.CHAT_ROOM_HOST_REQUIRED)
     }
 
     private fun findRoom(id: Long): ChatRoom {

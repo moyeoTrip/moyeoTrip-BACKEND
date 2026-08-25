@@ -91,6 +91,11 @@ class ChatRoomController(
         @PathVariable roomId: Long,
     ): ChatRoomFavoriteResponse = chatRoomService.toggleRoomFavorite(userId, roomId)
 
+    @GetMapping("/my/favorites")
+    override fun getFavoriteRooms(
+        @LoginUserId userId: Long,
+    ): List<SearchChatRoomResponse> = chatRoomService.getFavoriteRooms(userId)
+
     @PutMapping("/{roomId}/meeting-info")
     override fun updateMeetingInfo(
         @LoginUserId userId: Long,

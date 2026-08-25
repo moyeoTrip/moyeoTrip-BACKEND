@@ -27,7 +27,7 @@ class UserBlockService(
         blockerId: Long,
         blockedId: Long,
     ): UserBlockResponse {
-        if (blockerId == blockedId) throw BaseException(ErrorCode.BAD_REQUEST)
+        if (blockerId == blockedId) throw BaseException(ErrorCode.SELF_BLOCK_NOT_ALLOWED)
         val blocker = userRepository.findById(blockerId).orElseThrow { UserNotFoundException(blockerId) }
         val blocked = userRepository.findById(blockedId).orElseThrow { UserNotFoundException(blockedId) }
         if (blockRepository.findByBlockerIdAndBlockedId(blockerId, blockedId) == null) {

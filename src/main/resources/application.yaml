@@ -82,3 +82,5 @@ springdoc:
 client:
   tour:
     tour-api-key: ${TOUR_API_KEY}
+  weather:
+    service-key: ${KMA_WEATHER_SERVICE_KEY:}

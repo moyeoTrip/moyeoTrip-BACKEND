@@ -103,7 +103,7 @@ class FriendServiceTest {
 
         val exception = assertThrows(BaseException::class.java) { service.sendRequest(1L, 2L) }
 
-        assertEquals(ErrorCode.FORBIDDEN, exception.errorCode)
+        assertEquals(ErrorCode.USER_BLOCK_RELATIONSHIP, exception.errorCode)
         verifyNoInteractions(userRepository, friendshipRepository, requestRepository, notificationService)
     }
 
@@ -111,13 +111,13 @@ class FriendServiceTest {
     fun `이미 친구이거나 상대가 먼저 신청한 경우 친구 요청을 보낼 수 없다`() {
         `when`(friendshipRepository.existsBetween(1L, 2L)).thenReturn(true)
         val friendException = assertThrows(BaseException::class.java) { service.sendRequest(1L, 2L) }
-        assertEquals(ErrorCode.BAD_REQUEST, friendException.errorCode)
+        assertEquals(ErrorCode.ALREADY_FRIEND, friendException.errorCode)
 
         `when`(friendshipRepository.existsBetween(1L, 2L)).thenReturn(false)
         `when`(requestRepository.findByRequesterIdAndReceiverId(2L, 1L))
             .thenReturn(FriendRequest(requester = user(2L), receiver = user(1L)))
         val reverseException = assertThrows(BaseException::class.java) { service.sendRequest(1L, 2L) }
-        assertEquals(ErrorCode.BAD_REQUEST, reverseException.errorCode)
+        assertEquals(ErrorCode.REVERSE_FRIEND_REQUEST_EXISTS, reverseException.errorCode)
         verifyNoInteractions(userRepository)
     }
 
@@ -182,7 +182,7 @@ class FriendServiceTest {
         val exception = assertThrows(BaseException::class.java) { service.cancelRequest(2L, 3L) }
 
         verify(requestRepository).delete(request)
-        assertEquals(ErrorCode.RESOURCE_NOT_FOUND, exception.errorCode)
+        assertEquals(ErrorCode.FRIEND_REQUEST_NOT_FOUND, exception.errorCode)
     }
 
     @Test
@@ -192,7 +192,7 @@ class FriendServiceTest {
         service.deleteFriend(1L, 2L)
         val exception = assertThrows(BaseException::class.java) { service.deleteFriend(1L, 2L) }
 
-        assertEquals(ErrorCode.RESOURCE_NOT_FOUND, exception.errorCode)
+        assertEquals(ErrorCode.FRIENDSHIP_NOT_FOUND, exception.errorCode)
     }
 
     @Test

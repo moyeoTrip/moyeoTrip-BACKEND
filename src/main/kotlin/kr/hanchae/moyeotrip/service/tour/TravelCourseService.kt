@@ -2,7 +2,9 @@ package kr.hanchae.moyeotrip.service.tour
 
 import kr.hanchae.moyeotrip.controller.tour.request.PublishTravelCourseRequest
 import kr.hanchae.moyeotrip.controller.tour.response.CoursePublicationResponse
-import kr.hanchae.moyeotrip.controller.tour.response.TravelCourseLikeResponse
+import kr.hanchae.moyeotrip.controller.tour.response.LikedTravelCourseResponse
+import kr.hanchae.moyeotrip.controller.tour.response.LikedTravelCourseTagResponse
+import kr.hanchae.moyeotrip.controller.tour.response.TravelCourseFavoriteResponse
 import kr.hanchae.moyeotrip.controller.tour.response.TravelCourseTagResponse
 import kr.hanchae.moyeotrip.entity.chat.ChatRoomStatus
 import kr.hanchae.moyeotrip.entity.tour.TravelCourseLike
@@ -38,7 +40,7 @@ class TravelCourseService(
         request: PublishTravelCourseRequest,
     ): CoursePublicationResponse {
         val course = courseRepository.findById(courseId).orElseThrow { BaseException(ErrorCode.TRAVEL_COURSE_NOT_FOUND) }
-        if (course.owner?.id != hostId) throw BaseException(ErrorCode.FORBIDDEN)
+        if (course.owner?.id != hostId) throw BaseException(ErrorCode.TRAVEL_COURSE_OWNER_REQUIRED)
         if (course.type != TravelCourseType.CUSTOM || !hasCompletedHostedTrip(hostId, courseId)) {
             throw BaseException(ErrorCode.TRAVEL_COURSE_PUBLICATION_NOT_ALLOWED)
         }
@@ -52,10 +54,10 @@ class TravelCourseService(
     }
 
     @Transactional
-    fun toggleLike(
+    fun toggleFavorite(
         userId: Long,
         courseId: Long,
-    ): TravelCourseLikeResponse {
+    ): TravelCourseFavoriteResponse {
         val course =
             courseRepository.findByIdAndType(courseId, TravelCourseType.PUBLIC)
                 ?: throw BaseException(ErrorCode.TRAVEL_COURSE_NOT_FOUND)
@@ -63,18 +65,30 @@ class TravelCourseService(
         val existing = courseLikeRepository.findByCourseIdAndUserId(courseId, userId)
         if (existing != null) {
             courseLikeRepository.delete(existing)
-            return TravelCourseLikeResponse(
-                liked = false,
-                likeCount = (likeCount - 1L).coerceAtLeast(0L),
-            )
+            return TravelCourseFavoriteResponse(favorite = false, favoriteCount = (likeCount - 1L).coerceAtLeast(0L))
         }
         val user = userRepository.findById(userId).orElseThrow { UserNotFoundException(userId) }
         courseLikeRepository.save(TravelCourseLike(course = course, user = user))
-        return TravelCourseLikeResponse(
-            liked = true,
-            likeCount = likeCount + 1L,
-        )
+        return TravelCourseFavoriteResponse(favorite = true, favoriteCount = likeCount + 1L)
     }
+
+    @Transactional(readOnly = true)
+    fun getLikedCourses(userId: Long): List<LikedTravelCourseResponse> =
+        courseLikeRepository
+            .findCoursesByUserIdOrderByLikedAtDesc(userId)
+            .map { course ->
+                LikedTravelCourseResponse(
+                    courseId = course.id,
+                    title = course.title,
+                    description = course.description,
+                    thumbnail =
+                        course.places
+                            .firstOrNull()
+                            ?.tourismContent
+                            ?.thumbnail,
+                    tags = course.tags.sortedBy { it.id }.map { LikedTravelCourseTagResponse(it.id, it.name) },
+                )
+            }
 
     private fun hasCompletedHostedTrip(
         hostId: Long,

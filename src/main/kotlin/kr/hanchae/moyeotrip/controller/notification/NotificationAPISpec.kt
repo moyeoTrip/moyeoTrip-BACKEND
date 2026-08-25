@@ -69,7 +69,7 @@ interface NotificationAPISpec {
                 content = [
                     Content(
                         schema = Schema(implementation = ErrorResponse::class),
-                        examples = [ExampleObject(value = NotificationSwaggerExamples.BAD_REQUEST)],
+                        examples = [ExampleObject(value = NotificationSwaggerExamples.NOT_CHAT_ROOM_KICK_NOTIFICATION)],
                     ),
                 ],
             ),
@@ -148,7 +148,12 @@ interface NotificationAPISpec {
             ApiResponse(
                 responseCode = "400",
                 description = "FCM 토큰이 비어 있거나 허용 길이를 초과함",
-                content = [Content(schema = Schema(implementation = ErrorResponse::class))],
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [ExampleObject(value = NotificationSwaggerExamples.FCM_TOKEN_BLANK)],
+                    ),
+                ],
             ),
             ApiResponse(
                 responseCode = "404",
@@ -226,7 +231,7 @@ interface NotificationAPISpec {
                 content = [
                     Content(
                         schema = Schema(implementation = ErrorResponse::class),
-                        examples = [ExampleObject(value = NotificationSwaggerExamples.BAD_REQUEST)],
+                        examples = [ExampleObject(value = NotificationSwaggerExamples.INVALID_DO_NOT_DISTURB_CONFIGURATION)],
                     ),
                 ],
             ),
@@ -299,4 +304,7 @@ private object NotificationSwaggerExamples {
     const val CHAT_ROOM_NOT_PARTICIPANT = """{"code":40301,"errorMessage":"사용자가 채팅방에 참여하고 있지 않습니다."}"""
     const val NOTIFICATION_NOT_FOUND = """{"code":40410,"errorMessage":"알림을 찾을 수 없습니다."}"""
     const val USER_NOT_FOUND = """{"code":40400,"errorMessage":"해당 유저를 찾을 수 없습니다."}"""
+    const val FCM_TOKEN_BLANK = """{"code":40016,"errorMessage":"FCM 토큰은 공백일 수 없습니다."}"""
+    const val NOT_CHAT_ROOM_KICK_NOTIFICATION = """{"code":40017,"errorMessage":"강퇴 알림이 아니므로 강퇴 이력을 조회할 수 없습니다."}"""
+    const val INVALID_DO_NOT_DISTURB_CONFIGURATION = """{"code":40018,"errorMessage":"방해 금지 사용 시 시작·종료 시간과 요일을 모두 설정해야 합니다."}"""
 }

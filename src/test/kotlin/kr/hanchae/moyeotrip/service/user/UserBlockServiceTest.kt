@@ -51,7 +51,7 @@ class UserBlockServiceTest {
     fun `자기 자신은 차단할 수 없다`() {
         val exception = assertThrows(BaseException::class.java) { service.block(1L, 1L) }
 
-        assertEquals(ErrorCode.BAD_REQUEST, exception.errorCode)
+        assertEquals(ErrorCode.SELF_BLOCK_NOT_ALLOWED, exception.errorCode)
         verifyNoInteractions(userRepository, blockRepository, friendshipRepository, friendRequestRepository)
     }
 

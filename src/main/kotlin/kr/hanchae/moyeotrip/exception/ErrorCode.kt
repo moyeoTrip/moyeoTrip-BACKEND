@@ -22,6 +22,26 @@ enum class ErrorCode(
     MINIMUM_SIGNUP_AGE_NOT_MET(HttpStatus.BAD_REQUEST, 40011, "만 20세 이상만 가입할 수 있습니다."),
     REQUIRED_TERMS_NOT_AGREED(HttpStatus.BAD_REQUEST, 40012, "필수 약관에 모두 동의해야 회원가입할 수 있습니다."),
     INVALID_TERMS_AGREEMENT(HttpStatus.BAD_REQUEST, 40013, "현재 가입에 사용할 수 없는 약관이 포함되어 있습니다."),
+    INVALID_INTERESTED_REGION_SELECTION(HttpStatus.BAD_REQUEST, 40014, "관심 지역으로 선택할 수 없는 지역 ID가 포함되어 있습니다."),
+    INVALID_TRAVEL_STYLE_SELECTION(HttpStatus.BAD_REQUEST, 40015, "선택할 수 없는 여행 스타일 ID가 포함되어 있습니다."),
+    FCM_TOKEN_BLANK(HttpStatus.BAD_REQUEST, 40016, "FCM 토큰은 공백일 수 없습니다."),
+    NOT_CHAT_ROOM_KICK_NOTIFICATION(HttpStatus.BAD_REQUEST, 40017, "강퇴 알림이 아니므로 강퇴 이력을 조회할 수 없습니다."),
+    INVALID_DO_NOT_DISTURB_CONFIGURATION(HttpStatus.BAD_REQUEST, 40018, "방해 금지 사용 시 시작·종료 시간과 요일을 모두 설정해야 합니다."),
+    INVALID_MEETING_INFORMATION(HttpStatus.BAD_REQUEST, 40019, "집합 좌표는 위도와 경도를 함께 입력하고 집합일은 여행 시작일 이하여야 합니다."),
+    KICK_REASON_BLANK(HttpStatus.BAD_REQUEST, 40020, "강퇴 사유는 공백일 수 없습니다."),
+    NOTICE_CONTENT_BLANK(HttpStatus.BAD_REQUEST, 40021, "공지 내용은 공백일 수 없습니다."),
+    MENTIONED_USER_NOT_PARTICIPANT(HttpStatus.BAD_REQUEST, 40022, "멘션한 사용자 중 채팅방 참여자가 아닌 사용자가 있습니다."),
+    INVALID_CHAT_IMAGE(HttpStatus.BAD_REQUEST, 40023, "채팅 이미지는 비어 있지 않은 20MB 이하 이미지 파일만 공유할 수 있습니다."),
+    CHAT_ROOM_MEETING_LOCATION_NOT_SET(HttpStatus.BAD_REQUEST, 40024, "호스트가 채팅방 집합 위치 좌표를 등록하지 않았습니다."),
+    DUPLICATE_CHAT_POLL_OPTION(HttpStatus.BAD_REQUEST, 40025, "투표 선택지는 중복될 수 없습니다."),
+    INVALID_FEED_IMAGE_COUNT(HttpStatus.BAD_REQUEST, 40026, "피드 사진은 1장 이상 10장 이하로 등록해야 합니다."),
+    INVALID_FEED_IMAGE(HttpStatus.BAD_REQUEST, 40027, "피드 사진은 비어 있지 않은 20MB 이하 이미지 파일이어야 합니다."),
+    TRAVEL_COMPANION_REVIEW_TARGET_INVALID(HttpStatus.BAD_REQUEST, 40028, "자기 자신 또는 여행에 참여하지 않은 사용자는 동행자로 평가할 수 없습니다."),
+    SELF_FRIEND_REQUEST_NOT_ALLOWED(HttpStatus.BAD_REQUEST, 40029, "자기 자신에게 친구 요청을 보낼 수 없습니다."),
+    ALREADY_FRIEND(HttpStatus.BAD_REQUEST, 40030, "이미 친구인 사용자입니다."),
+    REVERSE_FRIEND_REQUEST_EXISTS(HttpStatus.BAD_REQUEST, 40031, "상대방이 보낸 친구 요청을 먼저 처리해 주세요."),
+    SELF_BLOCK_NOT_ALLOWED(HttpStatus.BAD_REQUEST, 40032, "자기 자신을 차단할 수 없습니다."),
+    MALFORMED_REQUEST_BODY(HttpStatus.BAD_REQUEST, 40033, "요청 본문의 JSON 형식이 올바르지 않습니다."),
 
     // UNAUTHORIZED는 40100부터 시작
     UNAUTHORIZED(HttpStatus.UNAUTHORIZED, 40100, "인증되지 않은 사용자입니다."),
@@ -34,6 +54,11 @@ enum class ErrorCode(
     FORBIDDEN(HttpStatus.FORBIDDEN, 40300, "접근 권한이 없습니다."),
     CHAT_ROOM_NOT_PARTICIPANT(HttpStatus.FORBIDDEN, 40301, "사용자가 채팅방에 참여하고 있지 않습니다."),
     CHAT_ROOM_JOIN_CONDITION_NOT_MET(HttpStatus.FORBIDDEN, 40302, "모임의 성별 또는 나이 조건을 충족하지 않습니다."),
+    TRAVEL_COURSE_OWNER_REQUIRED(HttpStatus.FORBIDDEN, 40303, "해당 여행 코스를 공개할 호스트가 아닙니다."),
+    COMPLETED_TRIP_FEED_REQUIRED(HttpStatus.FORBIDDEN, 40304, "여행이 완료되지 않아 피드를 작성할 수 없습니다."),
+    USER_BLOCK_RELATIONSHIP(HttpStatus.FORBIDDEN, 40305, "차단 관계인 사용자와는 이 작업을 할 수 없습니다."),
+    FEED_NOT_VISIBLE_TO_USER(HttpStatus.FORBIDDEN, 40306, "이 피드는 현재 사용자에게 공개되지 않았습니다."),
+    CHAT_ROOM_HOST_REQUIRED(HttpStatus.FORBIDDEN, 40307, "채팅방 호스트만 이 작업을 할 수 있습니다."),
 
     // 리소스 NOT FOUND는 40400부터 시작
     USER_NOT_FOUND(HttpStatus.NOT_FOUND, 40400, "해당 유저를 찾을 수 없습니다."),
@@ -50,6 +75,14 @@ enum class ErrorCode(
     CHAT_ROOM_NOTICE_NOT_FOUND(HttpStatus.NOT_FOUND, 40411, "채팅방 공지를 찾을 수 없습니다."),
     TRAVEL_COURSE_TAG_NOT_FOUND(HttpStatus.NOT_FOUND, 40412, "여행 코스 태그를 찾을 수 없습니다."),
     AGREEMENT_TERM_NOT_FOUND(HttpStatus.NOT_FOUND, 40413, "현재 활성 상태인 약관을 찾을 수 없습니다."),
+    CHAT_POLL_NOT_FOUND(HttpStatus.NOT_FOUND, 40414, "해당 채팅방의 투표 메시지를 찾을 수 없습니다."),
+    CHAT_POLL_OPTION_NOT_FOUND(HttpStatus.NOT_FOUND, 40415, "해당 투표의 선택지를 찾을 수 없습니다."),
+    CHAT_REPLY_MESSAGE_NOT_FOUND(HttpStatus.NOT_FOUND, 40416, "답글을 달 원본 채팅 메시지를 찾을 수 없습니다."),
+    FEED_NOT_FOUND(HttpStatus.NOT_FOUND, 40417, "피드를 찾을 수 없습니다."),
+    FEED_PARENT_COMMENT_NOT_FOUND(HttpStatus.NOT_FOUND, 40418, "답글을 달 원본 댓글을 찾을 수 없습니다."),
+    FRIEND_REQUEST_NOT_FOUND(HttpStatus.NOT_FOUND, 40419, "친구 요청을 찾을 수 없습니다."),
+    FRIENDSHIP_NOT_FOUND(HttpStatus.NOT_FOUND, 40420, "친구 관계를 찾을 수 없습니다."),
+    TRAVEL_COMPANION_NOT_FOUND(HttpStatus.NOT_FOUND, 40421, "해당 여행에서 평가할 동행자 기록을 찾을 수 없습니다."),
 
     // 리소스 충돌은 40900부터 시작
     ALREADY_EXIST_NICKNAME(HttpStatus.CONFLICT, 40900, "이미 사용중인 닉네임입니다."),
@@ -67,6 +100,7 @@ enum class ErrorCode(
     MEETING_INFO_NOT_EDITABLE(HttpStatus.CONFLICT, 40913, "여행 확정 전까지만 집합 정보를 수정할 수 있습니다."),
     TRAVEL_COURSE_PUBLICATION_NOT_ALLOWED(HttpStatus.CONFLICT, 40914, "공개 여부를 선택할 수 있는 완료 코스가 아닙니다."),
     TRIP_NOT_COMPLETED(HttpStatus.CONFLICT, 40915, "아직 완료되지 않은 여행입니다."),
+    FEED_ALREADY_CREATED_FOR_TRIP(HttpStatus.CONFLICT, 40916, "같은 여행에는 피드를 한 번만 작성할 수 있습니다."),
 
     // 요청 한도 초과는 42900부터 시작
     PROFILE_IMAGE_GENERATION_LIMIT(HttpStatus.TOO_MANY_REQUESTS, 42900, "프로필 이미지는 사용자당 최대 3번까지 생성할 수 있습니다."),
@@ -76,4 +110,5 @@ enum class ErrorCode(
     FIREBASE_AUTH_ERROR(HttpStatus.BAD_GATEWAY, 50200, "Firebase 인증 처리에 실패했습니다."),
     PROFILE_IMAGE_GENERATION_FAILED(HttpStatus.BAD_GATEWAY, 50201, "프로필 이미지 생성에 실패했습니다."),
     KAKAO_AUTH_UNAVAILABLE(HttpStatus.BAD_GATEWAY, 50202, "카카오 인증 서버와 통신하지 못했습니다."),
+    WEATHER_DATA_UNAVAILABLE(HttpStatus.BAD_GATEWAY, 50203, "기상청 날씨 데이터를 현재 조회할 수 없습니다."),
 }

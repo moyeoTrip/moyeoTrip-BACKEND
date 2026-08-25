@@ -74,7 +74,7 @@ class FeedServiceTest {
                 service.createFeed(1L, CreateFeedRequest(2L, "내용", FeedVisibility.PUBLIC), listOf(file))
             }
 
-        assertEquals(ErrorCode.BAD_REQUEST, exception.errorCode)
+        assertEquals(ErrorCode.INVALID_FEED_IMAGE, exception.errorCode)
         verifyNoInteractions(userRepository, roomRepository, storageRepository)
     }
 
@@ -90,7 +90,7 @@ class FeedServiceTest {
                 service.createFeed(1L, CreateFeedRequest(2L, "내용", FeedVisibility.PUBLIC), images)
             }
 
-        assertEquals(ErrorCode.BAD_REQUEST, exception.errorCode)
+        assertEquals(ErrorCode.INVALID_FEED_IMAGE_COUNT, exception.errorCode)
         verifyNoInteractions(userRepository, roomRepository, storageRepository)
     }
 
@@ -110,8 +110,8 @@ class FeedServiceTest {
                 service.createFeed(1L, CreateFeedRequest(2L, "내용", FeedVisibility.PUBLIC), listOf(oversized))
             }
 
-        assertEquals(ErrorCode.BAD_REQUEST, emptyException.errorCode)
-        assertEquals(ErrorCode.BAD_REQUEST, oversizedException.errorCode)
+        assertEquals(ErrorCode.INVALID_FEED_IMAGE_COUNT, emptyException.errorCode)
+        assertEquals(ErrorCode.INVALID_FEED_IMAGE, oversizedException.errorCode)
     }
 
     @Test
@@ -128,7 +128,7 @@ class FeedServiceTest {
                 service.createFeed(1L, CreateFeedRequest(2L, "내용", FeedVisibility.PUBLIC), listOf(image))
             }
 
-        assertEquals(ErrorCode.FORBIDDEN, exception.errorCode)
+        assertEquals(ErrorCode.COMPLETED_TRIP_FEED_REQUIRED, exception.errorCode)
         verifyNoInteractions(storageRepository)
     }
 
@@ -147,7 +147,7 @@ class FeedServiceTest {
                 service.createFeed(1L, CreateFeedRequest(2L, "내용", FeedVisibility.PUBLIC), listOf(image))
             }
 
-        assertEquals(ErrorCode.BAD_REQUEST, exception.errorCode)
+        assertEquals(ErrorCode.FEED_ALREADY_CREATED_FOR_TRIP, exception.errorCode)
         verifyNoInteractions(storageRepository)
     }
 
@@ -251,7 +251,7 @@ class FeedServiceTest {
 
         val exception = assertThrows(BaseException::class.java) { service.getFeed(1L, 3L) }
 
-        assertEquals(ErrorCode.FORBIDDEN, exception.errorCode)
+        assertEquals(ErrorCode.FEED_NOT_VISIBLE_TO_USER, exception.errorCode)
     }
 
     @Test
@@ -279,7 +279,7 @@ class FeedServiceTest {
 
         val exception = assertThrows(BaseException::class.java) { service.getFeed(1L, 3L) }
 
-        assertEquals(ErrorCode.FORBIDDEN, exception.errorCode)
+        assertEquals(ErrorCode.USER_BLOCK_RELATIONSHIP, exception.errorCode)
         verifyNoInteractions(friendshipRepository)
     }
 
@@ -296,7 +296,7 @@ class FeedServiceTest {
                 service.createComment(1L, 3L, CreateFeedCommentRequest("답글", parentCommentId = 5L))
             }
 
-        assertEquals(ErrorCode.RESOURCE_NOT_FOUND, exception.errorCode)
+        assertEquals(ErrorCode.FEED_PARENT_COMMENT_NOT_FOUND, exception.errorCode)
         verifyNoInteractions(userRepository)
     }
 

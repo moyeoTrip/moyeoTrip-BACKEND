@@ -28,7 +28,7 @@ interface UserBlockAPISpec {
                 content = [
                     Content(
                         schema = Schema(implementation = ErrorResponse::class),
-                        examples = [ExampleObject(value = UserBlockSwaggerExamples.BAD_REQUEST)],
+                        examples = [ExampleObject(value = UserBlockSwaggerExamples.SELF_BLOCK_NOT_ALLOWED)],
                     ),
                 ],
             ),
@@ -105,7 +105,7 @@ interface UserBlockAPISpec {
 }
 
 private object UserBlockSwaggerExamples {
-    const val BAD_REQUEST = """{"code":40000,"errorMessage":"잘못된 요청입니다."}"""
+    const val SELF_BLOCK_NOT_ALLOWED = """{"code":40032,"errorMessage":"자기 자신을 차단할 수 없습니다."}"""
     const val UNAUTHORIZED = """{"code":40100,"errorMessage":"인증되지 않은 사용자입니다."}"""
     const val USER_NOT_FOUND = """{"code":40400,"errorMessage":"해당 유저를 찾을 수 없습니다."}"""
 }

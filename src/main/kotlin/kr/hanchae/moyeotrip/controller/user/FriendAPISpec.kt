@@ -31,7 +31,7 @@ interface FriendAPISpec {
                     Content(
                         schema = Schema(implementation = ErrorResponse::class),
                         examples = [
-                            ExampleObject(name = "자기 자신에게 친구 요청", value = FriendSwaggerExamples.BAD_REQUEST),
+                            ExampleObject(name = "자기 자신에게 친구 요청", value = FriendSwaggerExamples.SELF_REQUEST_NOT_ALLOWED),
                             ExampleObject(name = "이미 친구인 사용자", value = FriendSwaggerExamples.ALREADY_FRIEND),
                             ExampleObject(name = "상대방이 보낸 요청이 이미 있음", value = FriendSwaggerExamples.REVERSE_REQUEST_EXISTS),
                         ],
@@ -44,7 +44,7 @@ interface FriendAPISpec {
                 content = [
                     Content(
                         schema = Schema(implementation = ErrorResponse::class),
-                        examples = [ExampleObject(value = FriendSwaggerExamples.FORBIDDEN)],
+                        examples = [ExampleObject(value = FriendSwaggerExamples.USER_BLOCK_RELATIONSHIP)],
                     ),
                 ],
             ),
@@ -83,7 +83,7 @@ interface FriendAPISpec {
                 content = [
                     Content(
                         schema = Schema(implementation = ErrorResponse::class),
-                        examples = [ExampleObject(value = FriendSwaggerExamples.FORBIDDEN)],
+                        examples = [ExampleObject(value = FriendSwaggerExamples.USER_BLOCK_RELATIONSHIP)],
                     ),
                 ],
             ),
@@ -246,11 +246,12 @@ interface FriendAPISpec {
 
 private object FriendSwaggerExamples {
     const val BAD_REQUEST = """{"code":40000,"errorMessage":"잘못된 요청입니다."}"""
-    const val ALREADY_FRIEND = """{"code":40000,"errorMessage":"이미 친구인 사용자입니다."}"""
-    const val REVERSE_REQUEST_EXISTS = """{"code":40000,"errorMessage":"상대방이 보낸 친구 요청을 먼저 처리해 주세요."}"""
+    const val SELF_REQUEST_NOT_ALLOWED = """{"code":40029,"errorMessage":"자기 자신에게 친구 요청을 보낼 수 없습니다."}"""
+    const val ALREADY_FRIEND = """{"code":40030,"errorMessage":"이미 친구인 사용자입니다."}"""
+    const val REVERSE_REQUEST_EXISTS = """{"code":40031,"errorMessage":"상대방이 보낸 친구 요청을 먼저 처리해 주세요."}"""
     const val UNAUTHORIZED = """{"code":40100,"errorMessage":"인증되지 않은 사용자입니다."}"""
-    const val FORBIDDEN = """{"code":40300,"errorMessage":"접근 권한이 없습니다."}"""
+    const val USER_BLOCK_RELATIONSHIP = """{"code":40305,"errorMessage":"차단 관계인 사용자와는 이 작업을 할 수 없습니다."}"""
     const val USER_NOT_FOUND = """{"code":40400,"errorMessage":"해당 유저를 찾을 수 없습니다."}"""
-    const val REQUEST_NOT_FOUND = """{"code":40402,"errorMessage":"요청한 리소스를 찾을 수 없습니다."}"""
-    const val FRIEND_NOT_FOUND = """{"code":40401,"errorMessage":"친구 관계를 찾을 수 없습니다."}"""
+    const val REQUEST_NOT_FOUND = """{"code":40419,"errorMessage":"친구 요청을 찾을 수 없습니다."}"""
+    const val FRIEND_NOT_FOUND = """{"code":40420,"errorMessage":"친구 관계를 찾을 수 없습니다."}"""
 }
