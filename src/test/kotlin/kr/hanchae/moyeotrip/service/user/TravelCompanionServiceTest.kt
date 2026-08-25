@@ -186,6 +186,25 @@ class TravelCompanionServiceTest {
         )
     }
 
+    @Test
+    fun `다른 사용자에게 남겨진 비어 있지 않은 한줄평 목록을 반환한다`() {
+        val reviewer = user(1L, "여행자")
+        val target = user(2L, "동행자")
+        val room = completedRoom(10L, "안동 여행", LocalDate.now().minusDays(2))
+        val review = TravelCompanion(id = 3L, owner = reviewer, companion = target, chatRoom = room, oneLineReview = "약속을 잘 지켜요")
+        val blankReview = TravelCompanion(id = 4L, owner = reviewer, companion = target, chatRoom = room, oneLineReview = "   ")
+        `when`(userRepository.findById(2L)).thenReturn(Optional.of(target))
+        `when`(companionRepository.findAllReviewedByCompanionId(2L)).thenReturn(listOf(review, blankReview))
+
+        val response = service.getReceivedTravelReviews(2L)
+
+        assertEquals(1, response.size)
+        assertEquals(1L, response.single().reviewerId)
+        assertEquals("여행자", response.single().reviewerNickname)
+        assertEquals(NicknameColor.GREEN, response.single().reviewerNicknameColor)
+        assertEquals("약속을 잘 지켜요", response.single().content)
+    }
+
     private fun completedRoom(
         id: Long,
         title: String,

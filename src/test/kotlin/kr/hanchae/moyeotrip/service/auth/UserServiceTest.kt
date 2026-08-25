@@ -484,6 +484,7 @@ class UserServiceTest {
 
         assertEquals(8L, response.userId)
         assertEquals("여행자", response.nickname)
+        assertEquals(NicknameColor.MINT, response.nicknameColor)
         assertEquals("함께 걸어요", response.introduction)
         assertEquals(listOf("사진"), response.travelStyles.map { it.label })
         assertEquals(listOf("안동시"), response.interestedRegions.map { it.signguName })

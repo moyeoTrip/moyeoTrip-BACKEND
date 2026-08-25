@@ -67,6 +67,7 @@ class UserService(
         return PublicProfileResponse(
             userId = user.id,
             nickname = information.nickname,
+            nicknameColor = information.nicknameColor,
             profileImageUrl = information.profileFileName?.let(objectStorageRepository::getDownloadUrl),
             introduction = information.introduction,
             travelStyles = user.travelStyles.sortedBy { it.id }.map { TravelStyleResponse(it.id, it.label) },

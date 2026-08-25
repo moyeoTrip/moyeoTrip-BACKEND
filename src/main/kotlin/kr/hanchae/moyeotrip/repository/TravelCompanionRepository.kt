@@ -30,6 +30,8 @@ interface TravelCompanionRepository :
 
 interface TravelCompanionCustomRepository {
     fun averageMannerScoreByCompanionId(userId: Long): Double?
+
+    fun findAllReviewedByCompanionId(companionId: Long): List<TravelCompanion>
 }
 
 class TravelCompanionCustomRepositoryImpl(
@@ -47,4 +49,20 @@ class TravelCompanionCustomRepositoryImpl(
                         companion.path(TravelCompanion::mannerScore).isNotNull(),
                     )
             }.singleOrNull()
+
+    override fun findAllReviewedByCompanionId(companionId: Long): List<TravelCompanion> =
+        kotlinJdslJpqlExecutor
+            .findAll {
+                val record = entity(TravelCompanion::class)
+
+                select(record)
+                    .from(record)
+                    .whereAnd(
+                        record.path(TravelCompanion::companion).path(User::id).eq(companionId),
+                        record.path(TravelCompanion::oneLineReview).isNotNull(),
+                    ).orderBy(
+                        record.path(TravelCompanion::createdDateTime).desc(),
+                        record.path(TravelCompanion::id).desc(),
+                    )
+            }.filterNotNull()
 }

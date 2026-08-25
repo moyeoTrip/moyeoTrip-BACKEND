@@ -1,6 +1,7 @@
 package kr.hanchae.moyeotrip.service.user
 
 import kr.hanchae.moyeotrip.controller.user.request.ReviewTravelCompanionRequest
+import kr.hanchae.moyeotrip.controller.user.response.ReceivedTravelReviewResponse
 import kr.hanchae.moyeotrip.controller.user.response.TravelDexCompanionResponse
 import kr.hanchae.moyeotrip.controller.user.response.TravelDexMemoryResponse
 import kr.hanchae.moyeotrip.controller.user.response.TravelDexResponse
@@ -88,6 +89,14 @@ class TravelCompanionService(
         return TravelDexResponse(totalCount = companions.size, companions = companions)
     }
 
+    @Transactional(readOnly = true)
+    fun getReceivedTravelReviews(userId: Long): List<ReceivedTravelReviewResponse> {
+        findPublicUser(userId)
+        return companionRepository
+            .findAllReviewedByCompanionId(userId)
+            .mapNotNull { it.toReceivedReviewResponse() }
+    }
+
     private fun requireCompletedParticipant(
         userId: Long,
         roomId: Long,
@@ -116,6 +125,18 @@ class TravelCompanionService(
         )
     }
 
+    private fun TravelCompanion.toReceivedReviewResponse(): ReceivedTravelReviewResponse? {
+        val content = oneLineReview?.takeIf(String::isNotBlank) ?: return null
+        val information = checkNotNull(owner.information)
+        return ReceivedTravelReviewResponse(
+            reviewerId = owner.id,
+            reviewerNickname = information.nickname,
+            reviewerNicknameColor = information.nicknameColor,
+            reviewerProfileImageUrl = information.profileFileName?.let(objectStorageRepository::getDownloadUrl),
+            content = content,
+        )
+    }
+
     private fun List<TravelCompanion>.toDexResponse(): TravelDexCompanionResponse {
         val latest = maxBy { it.chatRoom.endDate ?: it.chatRoom.startDate }
         val companion = latest.companion
@@ -141,4 +162,10 @@ class TravelCompanionService(
     }
 
     private fun findUser(userId: Long): User = userRepository.findById(userId).orElseThrow { UserNotFoundException(userId) }
+
+    private fun findPublicUser(userId: Long): User {
+        val user = findUser(userId)
+        if (user.isWithdrawn() || user.information == null) throw UserNotFoundException(userId)
+        return user
+    }
 }

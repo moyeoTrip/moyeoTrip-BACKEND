@@ -3,6 +3,7 @@ package kr.hanchae.moyeotrip.controller.user.response
 import io.swagger.v3.oas.annotations.media.Schema
 import kr.hanchae.moyeotrip.entity.notification.ChatNotificationMode
 import kr.hanchae.moyeotrip.entity.user.Gender
+import kr.hanchae.moyeotrip.entity.user.NicknameColor
 import java.time.LocalDate
 
 @Schema(description = "로그인 사용자의 프로필 정보")
@@ -37,6 +38,8 @@ data class PublicProfileResponse(
     val userId: Long,
     @field:Schema(description = "사용자 닉네임", example = "따스한 사슴 3492")
     val nickname: String,
+    @field:Schema(description = "닉네임 표시 색상", example = "MINT")
+    val nicknameColor: NicknameColor,
     @field:Schema(description = "현재 프로필 이미지 URL", nullable = true)
     val profileImageUrl: String?,
     @field:Schema(description = "자기소개", nullable = true)
