@@ -1,5 +1,7 @@
 package kr.hanchae.moyeotrip.exception
 
+import com.fasterxml.jackson.databind.JsonMappingException
+import com.fasterxml.jackson.databind.exc.UnrecognizedPropertyException
 import kr.hanchae.moyeotrip.logging.SentryExceptionReporter
 import kr.hanchae.moyeotrip.logging.TraceManager
 import org.springframework.http.HttpStatus
@@ -50,10 +52,29 @@ class GlobalExceptionHandler(
         return ResponseEntity
             .status(HttpStatus.BAD_REQUEST)
             .contentType(MediaType.APPLICATION_JSON)
-            .body(ErrorResponse.of(ErrorCode.MALFORMED_REQUEST_BODY, ErrorCode.MALFORMED_REQUEST_BODY.errorMessage))
+            .body(ErrorResponse.of(ErrorCode.MALFORMED_REQUEST_BODY, unreadableRequestMessage(exception)))
             .apply {
                 traceManager.doErrorLog(exception)
             }
+    }
+
+    private fun unreadableRequestMessage(exception: HttpMessageNotReadableException): String {
+        val unknownProperty =
+            generateSequence(exception as Throwable?) { it.cause }
+                .filterIsInstance<UnrecognizedPropertyException>()
+                .firstOrNull()
+                ?.propertyName
+        if (unknownProperty != null) {
+            return "$unknownProperty 필드는 이 요청에서 사용할 수 없습니다."
+        }
+        val fieldName =
+            generateSequence(exception as Throwable?) { it.cause }
+                .filterIsInstance<JsonMappingException>()
+                .flatMap { it.path.asSequence() }
+                .mapNotNull { it.fieldName }
+                .lastOrNull()
+        return fieldName?.let { "$it 필드의 형식 또는 필수 여부를 확인해 주세요." }
+            ?: ErrorCode.MALFORMED_REQUEST_BODY.errorMessage
     }
 
     @ExceptionHandler(NoResourceFoundException::class)

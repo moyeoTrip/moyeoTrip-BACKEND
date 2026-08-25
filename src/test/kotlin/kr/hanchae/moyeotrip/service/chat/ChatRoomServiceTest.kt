@@ -178,6 +178,35 @@ class ChatRoomServiceTest {
     }
 
     @Test
+    fun `공개 코스로 만든 모집 방 목록은 공개 코스를 검증하고 검색 조건을 적용한다`() {
+        val course = TravelCourse(id = 5L, type = TravelCourseType.PUBLIC, title = "주왕산 대표 코스")
+        val room = room(user(2L), course = course)
+        `when`(courseRepository.findByIdAndType(5L, TravelCourseType.PUBLIC)).thenReturn(course)
+        `when`(userBlockRepository.findRelatedUserIds(1L)).thenReturn(emptyList())
+        `when`(
+            roomRepository.findRecruitingRoomsByPublicCourseId(
+                1L,
+                listOf(-1L),
+                5L,
+                LocalDate.now(),
+                PageRequest.of(0, 20),
+            ),
+        ).thenReturn(listOf(room))
+        `when`(participantRepository.countByChatRoomId(10L)).thenReturn(1L)
+
+        val response = service.getPublicCourseChatRooms(1L, 5L, 100)
+
+        assertEquals(listOf(10L), response.map { it.roomId })
+        verify(roomRepository).findRecruitingRoomsByPublicCourseId(
+            1L,
+            listOf(-1L),
+            5L,
+            LocalDate.now(),
+            PageRequest.of(0, 20),
+        )
+    }
+
+    @Test
     fun `모임 찾기는 상태 마감 디데이 찜 여부와 집합 좌표를 반환한다`() {
         val startDate = LocalDate.now().plusDays(10)
         val room =
@@ -215,6 +244,13 @@ class ChatRoomServiceTest {
         assertEquals(129.3747, response.meetingLongitude)
         assertEquals("포항역 1번 출구", response.meetingDetails)
         assertEquals(startDate.atStartOfDay(), response.meetingDateTime)
+    }
+
+    @Test
+    fun `모집 마감일이 지난 채팅방의 D day는 null이다`() {
+        val room = room(user(1L), recruitmentDeadlineDate = LocalDate.now().minusDays(1))
+
+        assertEquals(null, room.recruitmentDDay())
     }
 
     @Test
@@ -726,6 +762,7 @@ class ChatRoomServiceTest {
         val room = room(user(1L))
         val latestPinnedNotice = notice(7L, true, LocalDateTime.now(), room.host)
         `when`(roomRepository.findById(room.id)).thenReturn(Optional.of(room))
+        `when`(userRepository.findById(2L)).thenReturn(Optional.of(user(2L)))
         `when`(participantRepository.findAllByChatRoomIdOrderByCreatedDateTimeAsc(room.id)).thenReturn(emptyList())
         `when`(favoriteRepository.existsByUserIdAndChatRoomId(2L, room.id)).thenReturn(true)
         `when`(
@@ -1545,6 +1582,62 @@ class ChatRoomServiceTest {
     }
 
     @Test
+    fun `최소 출발 인원은 3명 이상이고 최대 참가 인원을 넘을 수 없다`() {
+        val tooSmall = createRoomRequest(TripType.DAY_TRIP, endDate = null).copy(minimumParticipants = 2)
+        val tooLarge = createRoomRequest(TripType.DAY_TRIP, endDate = null).copy(minimumParticipants = 5)
+
+        assertEquals(
+            ErrorCode.INVALID_MINIMUM_PARTICIPANTS,
+            assertThrows(BaseException::class.java) { service.createRoom(1L, tooSmall) }.errorCode,
+        )
+        assertEquals(
+            ErrorCode.INVALID_MINIMUM_PARTICIPANTS,
+            assertThrows(BaseException::class.java) { service.createRoom(1L, tooLarge) }.errorCode,
+        )
+        verifyNoInteractions(userRepository)
+    }
+
+    @Test
+    fun `최대 참가 인원은 호스트를 포함해 20명까지 설정할 수 있다`() {
+        val room = room(user(1L), maxParticipants = 20)
+
+        assertEquals(20, room.maxParticipants)
+    }
+
+    @Test
+    fun `과거 여행 시작일 과거 모집 마감일과 시작일 이후의 모집 마감일은 채팅방을 만들 수 없다`() {
+        val pastStartDate =
+            createRoomRequest(TripType.DAY_TRIP, endDate = null).copy(
+                startDate = LocalDate.now().minusDays(1),
+                recruitmentDeadlineDate = LocalDate.now(),
+            )
+        val pastRecruitmentDeadlineDate =
+            createRoomRequest(TripType.DAY_TRIP, endDate = null).copy(
+                startDate = LocalDate.now().plusDays(1),
+                recruitmentDeadlineDate = LocalDate.now().minusDays(1),
+            )
+        val invalidDeadline =
+            createRoomRequest(TripType.DAY_TRIP, endDate = null).copy(
+                startDate = LocalDate.now().plusDays(3),
+                recruitmentDeadlineDate = LocalDate.now().plusDays(4),
+            )
+
+        assertEquals(
+            ErrorCode.PAST_CHAT_ROOM_START_DATE,
+            assertThrows(BaseException::class.java) { service.createRoom(1L, pastStartDate) }.errorCode,
+        )
+        assertEquals(
+            ErrorCode.PAST_RECRUITMENT_DEADLINE_DATE,
+            assertThrows(BaseException::class.java) { service.createRoom(1L, pastRecruitmentDeadlineDate) }.errorCode,
+        )
+        assertEquals(
+            ErrorCode.INVALID_RECRUITMENT_DEADLINE,
+            assertThrows(BaseException::class.java) { service.createRoom(1L, invalidDeadline) }.errorCode,
+        )
+        verifyNoInteractions(userRepository)
+    }
+
+    @Test
     fun `숙박 일정에는 당일치기 시작 종료 시간을 입력할 수 없다`() {
         val request =
             createRoomRequest(
@@ -1572,6 +1665,7 @@ class ChatRoomServiceTest {
             CreateChatRoomRequest(
                 title = " 서울 당일 여행 ",
                 description = " 함께 여행해요 ",
+                minimumParticipants = 3,
                 maxParticipants = 4,
                 tripType = TripType.DAY_TRIP,
                 startDate = startDate,
@@ -1605,6 +1699,7 @@ class ChatRoomServiceTest {
         verify(roomRepository).saveAndFlush(roomCaptor.capture())
         assertEquals("서울 당일 여행", roomCaptor.value.roomTitle)
         assertEquals("함께 여행해요", roomCaptor.value.description)
+        assertEquals(3, roomCaptor.value.minimumParticipants)
         assertEquals(2, roomCaptor.value.course.places.size)
         assertEquals(540L, roomCaptor.value.course.durationMinutes)
         verify(placeRepository, org.mockito.Mockito.times(2)).save(any())
@@ -1621,6 +1716,7 @@ class ChatRoomServiceTest {
         val request =
             CreateChatRoomRequest(
                 title = "공개 코스 여행",
+                minimumParticipants = 3,
                 maxParticipants = 3,
                 tripType = TripType.OVERNIGHT,
                 startDate = startDate,
@@ -1903,43 +1999,43 @@ class ChatRoomServiceTest {
     }
 
     @Test
-    fun `참가 가능 여부 조회는 성별 제한을 충족하지 않으면 false를 반환한다`() {
+    fun `채팅방 상세는 성별 제한을 충족하지 않으면 canApply를 false로 반환한다`() {
         val applicant = profiledUser(2L, Gender.M, LocalDate.now().minusYears(30))
         val room = room(user(1L), genderRestriction = GenderRestriction.FEMALE_ONLY)
         `when`(roomRepository.findById(10L)).thenReturn(Optional.of(room))
         `when`(userRepository.findById(2L)).thenReturn(Optional.of(applicant))
 
-        val response = service.getJoinEligibility(2L, 10L)
+        val response = service.getRoom(2L, 10L)
 
         assertEquals(false, response.canApply)
     }
 
     @Test
-    fun `참가 가능 여부 조회는 연령 조건을 충족하면 신청 가능을 반환한다`() {
+    fun `채팅방 상세는 연령 조건을 충족하면 canApply를 true로 반환한다`() {
         val applicant = profiledUser(2L, Gender.F, LocalDate.now().minusYears(30))
         val room = room(user(1L), minimumAge = 25, maximumAge = 35)
         `when`(roomRepository.findById(10L)).thenReturn(Optional.of(room))
         `when`(userRepository.findById(2L)).thenReturn(Optional.of(applicant))
 
-        val response = service.getJoinEligibility(2L, 10L)
+        val response = service.getRoom(2L, 10L)
 
         assertEquals(true, response.canApply)
     }
 
     @Test
-    fun `참가 가능 여부 조회는 연령 제한을 충족하지 않으면 false를 반환한다`() {
+    fun `채팅방 상세는 연령 제한을 충족하지 않으면 canApply를 false로 반환한다`() {
         val applicant = profiledUser(2L, Gender.F, LocalDate.now().minusYears(30))
         val room = room(user(1L), maximumAge = 25)
         `when`(roomRepository.findById(10L)).thenReturn(Optional.of(room))
         `when`(userRepository.findById(2L)).thenReturn(Optional.of(applicant))
 
-        val response = service.getJoinEligibility(2L, 10L)
+        val response = service.getRoom(2L, 10L)
 
         assertEquals(false, response.canApply)
     }
 
     @Test
-    fun `마감된 방이거나 이미 참가 신청 중이면 참가 가능 여부는 false다`() {
+    fun `마감된 방이거나 이미 참가 신청 중이면 채팅방 상세의 canApply는 false다`() {
         val tomorrow = LocalDate.now().plusDays(1)
         val closedRoom =
             room(
@@ -1950,14 +2046,14 @@ class ChatRoomServiceTest {
             )
         val openRoom = room(user(1L))
         `when`(roomRepository.findById(10L)).thenReturn(Optional.of(closedRoom), Optional.of(openRoom))
+        `when`(userRepository.findById(2L)).thenReturn(Optional.of(user(2L)))
         `when`(participantRepository.existsByChatRoomIdAndUserId(10L, 2L)).thenReturn(true)
 
-        val closedResponse = service.getJoinEligibility(2L, 10L)
-        val duplicateResponse = service.getJoinEligibility(2L, 10L)
+        val closedResponse = service.getRoom(2L, 10L)
+        val duplicateResponse = service.getRoom(2L, 10L)
 
         assertEquals(false, closedResponse.canApply)
         assertEquals(false, duplicateResponse.canApply)
-        verifyNoInteractions(userRepository)
     }
 
     @Test
@@ -2272,6 +2368,7 @@ class ChatRoomServiceTest {
         dayTripEndTime: LocalTime? = LocalTime.of(18, 0),
     ) = CreateChatRoomRequest(
         title = "테스트 여행",
+        minimumParticipants = 3,
         maxParticipants = 4,
         tripType = tripType,
         startDate = LocalDate.now(),
@@ -2323,13 +2420,14 @@ class ChatRoomServiceTest {
         meetingDetails: String? = null,
         meetingLatitude: Double? = 36.0322,
         meetingLongitude: Double? = 129.3747,
+        maxParticipants: Int = 3,
     ) = ChatRoom(
         id = 10L,
         host = host,
         course = course,
         roomTitle = "울릉도 여행",
         thumbnail = thumbnail,
-        maxParticipants = 3,
+        maxParticipants = maxParticipants,
         startDate = startDate,
         endDate = endDate,
         dayTripStartTime = dayTripStartTime,

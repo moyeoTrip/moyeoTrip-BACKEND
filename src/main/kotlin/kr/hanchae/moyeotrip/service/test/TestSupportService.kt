@@ -9,12 +9,10 @@ import kr.hanchae.moyeotrip.exception.UserNotFoundException
 import kr.hanchae.moyeotrip.repository.ChatRoomRepository
 import kr.hanchae.moyeotrip.repository.UserRepository
 import kr.hanchae.moyeotrip.utils.jwt.JwtUtil
-import org.springframework.context.annotation.Profile
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.LocalDate
 
-@Profile("default", "local", "dev")
 @Service
 class TestSupportService(
     private val userRepository: UserRepository,
@@ -37,13 +35,15 @@ class TestSupportService(
         val room = chatRoomRepository.findById(roomId).orElseThrow { BaseException(ErrorCode.CHAT_ROOM_NOT_FOUND) }
         val completedEndDate = LocalDate.now().minusDays(1)
         val startDate = if (room.endDate == null) completedEndDate else completedEndDate.minusDays(1)
+        val recruitmentDeadlineDate = startDate.minusDays(1)
         val endDate = room.endDate?.let { completedEndDate }
-        chatRoomRepository.completeForTest(roomId, startDate, endDate)
+        chatRoomRepository.completeForTest(roomId, startDate, recruitmentDeadlineDate, endDate)
 
         return TestCompletedChatRoomResponse(
             roomId = roomId,
             status = ChatRoomStatus.CONFIRMED,
             startDate = startDate,
+            recruitmentDeadlineDate = recruitmentDeadlineDate,
             endDate = endDate,
             completed = true,
         )

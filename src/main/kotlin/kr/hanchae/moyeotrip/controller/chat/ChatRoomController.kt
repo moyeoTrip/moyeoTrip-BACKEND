@@ -26,7 +26,6 @@ import kr.hanchae.moyeotrip.controller.chat.response.CreateChatRoomResponse
 import kr.hanchae.moyeotrip.controller.chat.response.CurrentTravelRoadmapResponse
 import kr.hanchae.moyeotrip.controller.chat.response.JoinApplicationResponse
 import kr.hanchae.moyeotrip.controller.chat.response.JoinChatRoomResponse
-import kr.hanchae.moyeotrip.controller.chat.response.JoinEligibilityResponse
 import kr.hanchae.moyeotrip.controller.chat.response.LeaveChatRoomResponse
 import kr.hanchae.moyeotrip.controller.chat.response.MyChatRoomSummaryResponse
 import kr.hanchae.moyeotrip.controller.chat.response.MyWaitingChatRoomResponse
@@ -79,6 +78,20 @@ class ChatRoomController(
         @RequestParam(defaultValue = "20") limit: Int,
     ): List<SearchChatRoomResponse> = chatRoomService.searchRooms(userId, keyword, limit)
 
+    @GetMapping("/search/title")
+    override fun searchRoomsByTitle(
+        @LoginUserId userId: Long,
+        @RequestParam(required = false) keyword: String?,
+        @RequestParam(defaultValue = "20") limit: Int,
+    ): List<SearchChatRoomResponse> = chatRoomService.searchRoomsByTitle(userId, keyword, limit)
+
+    @GetMapping("/search/course-tags/{tagId}")
+    override fun searchRoomsByCourseTag(
+        @LoginUserId userId: Long,
+        @PathVariable tagId: Long,
+        @RequestParam(defaultValue = "20") limit: Int,
+    ): List<SearchChatRoomResponse> = chatRoomService.searchRoomsByCourseTag(userId, tagId, limit)
+
     @GetMapping("/{roomId}")
     override fun getRoom(
         @LoginUserId userId: Long,
@@ -121,12 +134,6 @@ class ChatRoomController(
         chatRoomService.cancelJoinApplication(userId, roomId)
         return ResponseEntity.noContent().build()
     }
-
-    @GetMapping("/{roomId}/join-eligibility")
-    override fun getJoinEligibility(
-        @LoginUserId userId: Long,
-        @PathVariable roomId: Long,
-    ): JoinEligibilityResponse = chatRoomService.getJoinEligibility(userId, roomId)
 
     @GetMapping("/{roomId}/applications")
     override fun getApplications(

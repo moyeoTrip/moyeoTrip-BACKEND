@@ -5,16 +5,9 @@ import kr.hanchae.moyeotrip.entity.tour.TourismContentType
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
-import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.data.domain.PageRequest
 
 class TourismContentRepositoryTest : RepositoryIntegrationTestSupport() {
-    @Autowired
-    private lateinit var tourismContentRepository: TourismContentRepository
-
-    @Autowired
-    private lateinit var tourismContentTypeRepository: TourismContentTypeRepository
-
     @Nested
     inner class SearchListableContents {
         @Test

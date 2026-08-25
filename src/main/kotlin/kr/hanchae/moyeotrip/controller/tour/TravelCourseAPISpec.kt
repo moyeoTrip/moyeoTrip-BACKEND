@@ -10,6 +10,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse
 import io.swagger.v3.oas.annotations.responses.ApiResponses
 import io.swagger.v3.oas.annotations.tags.Tag
 import kr.hanchae.moyeotrip.controller.chat.response.PublicTravelCourseDetailResponse
+import kr.hanchae.moyeotrip.controller.chat.response.SearchChatRoomResponse
 import kr.hanchae.moyeotrip.controller.chat.response.TravelCourseDetailResponse
 import kr.hanchae.moyeotrip.controller.chat.response.TravelCourseInformationResponse
 import kr.hanchae.moyeotrip.controller.tour.request.PublishTravelCourseRequest
@@ -47,6 +48,20 @@ interface TravelCourseAPISpec {
     fun getPublicCourses(
         @Parameter(description = "필터링할 여행 코스 태그 ID. 생략하면 전체 공개 코스를 반환합니다.", example = "1")
         tagId: Long?,
+    ): List<TravelCourseInformationResponse>
+
+    @Operation(summary = "공개 여행 코스 검색", description = "검색어가 코스 제목에 포함되거나 코스 태그명과 일치하는 공개 코스를 반환합니다.")
+    @ApiResponses(
+        value = [
+            ApiResponse(
+                responseCode = "200",
+                description = "공개 여행 코스 검색 성공",
+                content = [Content(array = ArraySchema(schema = Schema(implementation = TravelCourseInformationResponse::class)))],
+            ),
+        ],
+    )
+    fun searchPublicCourses(
+        @Parameter(description = "코스 제목 포함 또는 태그명 일치 검색어. 예: 바다", example = "바다") keyword: String?,
     ): List<TravelCourseInformationResponse>
 
     @Operation(summary = "인기 여행 코스 TOP 3", description = "해당 코스로 만들어진 채팅방 수를 기준으로 집계합니다.")
@@ -234,6 +249,47 @@ interface TravelCourseAPISpec {
         @Parameter(description = "상세 조회할 공개 여행 코스 ID", example = "77")
         courseId: Long,
     ): PublicTravelCourseDetailResponse
+
+    @Operation(
+        summary = "공개 코스로 만든 모집 중 채팅방 목록",
+        description = "해당 공개 코스로 만들어진 채팅방 중 모집 마감 전이고 로그인 사용자가 아직 참가하지 않은 방을 반환합니다. 차단 관계가 있는 호스트 또는 참가자가 있는 방은 제외합니다.",
+    )
+    @ApiResponses(
+        value = [
+            ApiResponse(
+                responseCode = "200",
+                description = "공개 코스로 만든 모집 중 채팅방 목록 조회 성공",
+                content = [Content(array = ArraySchema(schema = Schema(implementation = SearchChatRoomResponse::class)))],
+            ),
+            ApiResponse(
+                responseCode = "401",
+                description = "서비스 Access Token이 없거나 유효하지 않음",
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [ExampleObject(value = TravelCourseSwaggerExamples.UNAUTHORIZED)],
+                    ),
+                ],
+            ),
+            ApiResponse(
+                responseCode = "404",
+                description = "공개 여행 코스를 찾을 수 없음",
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [ExampleObject(value = TravelCourseSwaggerExamples.TRAVEL_COURSE_NOT_FOUND)],
+                    ),
+                ],
+            ),
+        ],
+    )
+    fun getPublicCourseChatRooms(
+        @Parameter(hidden = true) userId: Long,
+        @Parameter(description = "채팅방을 조회할 공개 여행 코스 ID", example = "77")
+        courseId: Long,
+        @Parameter(description = "반환할 최대 개수. 1~20이며 기본값은 20", example = "20")
+        limit: Int,
+    ): List<SearchChatRoomResponse>
 
     @Operation(summary = "공개 여행 코스 찜 토글", description = "호출할 때마다 로그인 사용자의 코스 찜 상태를 반전합니다.")
     @ApiResponses(

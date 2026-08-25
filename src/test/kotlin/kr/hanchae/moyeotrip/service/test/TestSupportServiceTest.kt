@@ -37,12 +37,33 @@ class TestSupportServiceTest {
         assertEquals(10L, response.roomId)
         assertEquals(ChatRoomStatus.CONFIRMED, response.status)
         assertEquals(completedDate, response.startDate)
+        assertEquals(completedDate.minusDays(1), response.recruitmentDeadlineDate)
         assertNull(response.endDate)
         assertTrue(response.completed)
-        verify(chatRoomRepository).completeForTest(10L, completedDate, null)
+        verify(chatRoomRepository).completeForTest(10L, completedDate, completedDate.minusDays(1), null)
     }
 
-    private fun room(): ChatRoom {
+    @Test
+    fun `숙박 여행도 QA용 완료 처리 시 시작일 마감일 종료일을 모두 과거로 전환한다`() {
+        val room = room(endDate = LocalDate.now().plusDays(4))
+        val completedEndDate = LocalDate.now().minusDays(1)
+        `when`(chatRoomRepository.findById(10L)).thenReturn(Optional.of(room))
+
+        val response = service.completeChatRoom(10L)
+
+        assertEquals(completedEndDate.minusDays(1), response.startDate)
+        assertEquals(completedEndDate.minusDays(2), response.recruitmentDeadlineDate)
+        assertEquals(completedEndDate, response.endDate)
+        assertTrue(response.completed)
+        verify(chatRoomRepository).completeForTest(
+            10L,
+            completedEndDate.minusDays(1),
+            completedEndDate.minusDays(2),
+            completedEndDate,
+        )
+    }
+
+    private fun room(endDate: LocalDate? = null): ChatRoom {
         val startDate = LocalDate.now().plusDays(3)
         return ChatRoom(
             id = 10L,
@@ -51,9 +72,10 @@ class TestSupportServiceTest {
             roomTitle = "테스트 채팅방",
             maxParticipants = 3,
             startDate = startDate,
+            endDate = endDate,
             recruitmentDeadlineDate = startDate,
-            dayTripStartTime = LocalTime.of(9, 0),
-            dayTripEndTime = LocalTime.of(18, 0),
+            dayTripStartTime = if (endDate == null) LocalTime.of(9, 0) else null,
+            dayTripEndTime = if (endDate == null) LocalTime.of(18, 0) else null,
             meetingDateTime = startDate.atTime(8, 30),
         )
     }

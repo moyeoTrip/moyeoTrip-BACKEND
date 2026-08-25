@@ -36,7 +36,6 @@ import kr.hanchae.moyeotrip.controller.chat.response.CreateChatRoomResponse
 import kr.hanchae.moyeotrip.controller.chat.response.CurrentTravelRoadmapResponse
 import kr.hanchae.moyeotrip.controller.chat.response.JoinApplicationResponse
 import kr.hanchae.moyeotrip.controller.chat.response.JoinChatRoomResponse
-import kr.hanchae.moyeotrip.controller.chat.response.JoinEligibilityResponse
 import kr.hanchae.moyeotrip.controller.chat.response.LeaveChatRoomResponse
 import kr.hanchae.moyeotrip.controller.chat.response.MyChatRoomSummaryResponse
 import kr.hanchae.moyeotrip.controller.chat.response.MyWaitingChatRoomResponse
@@ -72,6 +71,10 @@ interface ChatRoomAPISpec {
                         examples = [
                             ExampleObject(name = "요청 본문 또는 enum 값 오류", value = ChatRoomSwaggerExamples.BAD_REQUEST),
                             ExampleObject(name = "당일·숙박 일정 입력 오류", value = ChatRoomSwaggerExamples.INVALID_TRIP_SCHEDULE),
+                            ExampleObject(name = "최소 출발 인원 오류", value = ChatRoomSwaggerExamples.INVALID_MINIMUM_PARTICIPANTS),
+                            ExampleObject(name = "과거 여행 시작일 오류", value = ChatRoomSwaggerExamples.PAST_CHAT_ROOM_START_DATE),
+                            ExampleObject(name = "과거 모집 마감일 오류", value = ChatRoomSwaggerExamples.PAST_RECRUITMENT_DEADLINE_DATE),
+                            ExampleObject(name = "모집 마감일 오류", value = ChatRoomSwaggerExamples.INVALID_RECRUITMENT_DEADLINE),
                             ExampleObject(name = "참가 나이 범위 오류", value = ChatRoomSwaggerExamples.INVALID_CHAT_ROOM_AGE_RESTRICTION),
                             ExampleObject(name = "커스텀 코스 일차·순서 구성 오류", value = ChatRoomSwaggerExamples.INVALID_TRAVEL_COURSE_SCHEDULE),
                         ],
@@ -195,7 +198,12 @@ interface ChatRoomAPISpec {
         @Parameter(hidden = true) userId: Long,
     ): List<MyWaitingChatRoomResponse>
 
-    @Operation(summary = "모임 검색", description = "채팅방명 검색을 지원하며 차단 관계인 사용자가 호스트 또는 참가자인 모임은 제외합니다.")
+    @Operation(
+        summary = "모임 검색",
+        description =
+            "참가 가능한 모집 중 모임만 반환합니다. 제목·소개·코스 제목·코스 태그·방문지 이름·주소(지역)로 검색하며, " +
+                "차단 관계인 사용자가 호스트 또는 참가자인 모임은 제외합니다.",
+    )
     @ApiResponses(
         value = [
             ApiResponse(
@@ -217,10 +225,62 @@ interface ChatRoomAPISpec {
     )
     fun searchRooms(
         @Parameter(hidden = true) userId: Long,
-        @Parameter(description = "채팅방 제목에 포함되어야 하는 검색어. 생략하면 전체를 조회합니다.", example = "주왕산")
+        @Parameter(description = "제목·소개·코스·태그·방문지·지역 주소에 포함되어야 하는 검색어. 생략하면 전체 모집을 조회합니다.", example = "청송")
         keyword: String?,
         @Parameter(description = "반환할 최대 개수. 기본값은 20입니다.", example = "20")
         limit: Int,
+    ): List<SearchChatRoomResponse>
+
+    @Operation(summary = "모임 제목 검색", description = "참가 가능한 모집 중 모임 가운데 채팅방 제목에만 검색어가 포함된 모임을 반환합니다.")
+    @ApiResponses(
+        value = [
+            ApiResponse(
+                responseCode = "200",
+                description = "모임 제목 검색 성공",
+                content = [Content(schema = Schema(implementation = SearchChatRoomResponse::class))],
+            ),
+            ApiResponse(
+                responseCode = "401",
+                description = "서비스 Access Token이 없거나 유효하지 않음",
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [ExampleObject(value = ChatRoomSwaggerExamples.UNAUTHORIZED)],
+                    ),
+                ],
+            ),
+        ],
+    )
+    fun searchRoomsByTitle(
+        @Parameter(hidden = true) userId: Long,
+        @Parameter(description = "채팅방 제목에 포함될 검색어. 생략하면 전체 모집을 조회합니다.", example = "바다") keyword: String?,
+        @Parameter(description = "반환할 최대 개수. 기본값은 20입니다.", example = "20") limit: Int,
+    ): List<SearchChatRoomResponse>
+
+    @Operation(summary = "코스 태그로 모임 검색", description = "참가 가능한 모집 중 모임 가운데 연결 코스에 지정한 태그가 있는 모임을 반환합니다.")
+    @ApiResponses(
+        value = [
+            ApiResponse(
+                responseCode = "200",
+                description = "코스 태그 모임 검색 성공",
+                content = [Content(schema = Schema(implementation = SearchChatRoomResponse::class))],
+            ),
+            ApiResponse(
+                responseCode = "401",
+                description = "서비스 Access Token이 없거나 유효하지 않음",
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [ExampleObject(value = ChatRoomSwaggerExamples.UNAUTHORIZED)],
+                    ),
+                ],
+            ),
+        ],
+    )
+    fun searchRoomsByCourseTag(
+        @Parameter(hidden = true) userId: Long,
+        @Parameter(description = "필터링할 여행 코스 태그 ID. GET /api/v1/travel-courses/tags의 tagId를 사용합니다.", example = "3") tagId: Long,
+        @Parameter(description = "반환할 최대 개수. 기본값은 20입니다.", example = "20") limit: Int,
     ): List<SearchChatRoomResponse>
 
     @Operation(summary = "채팅방 상세 조회", description = "모집·여행 정보, 호스트, 참가자와 최신 고정 공지를 반환합니다. 종료 후 2주가 지난 채팅방은 조회할 수 없습니다.")
@@ -440,35 +500,6 @@ interface ChatRoomAPISpec {
         @Parameter(description = "참가 신청을 취소할 채팅방 ID", example = "101")
         roomId: Long,
     ): ResponseEntity<Void>
-
-    @Operation(summary = "채팅방 참가 신청 가능 여부", description = "모집 상태, 기존 참가·신청 여부, 성별과 만 나이 조건을 확인합니다.")
-    @ApiResponses(
-        value = [
-            ApiResponse(
-                responseCode = "200",
-                description = "채팅방 참가 신청 가능 여부 조회 성공",
-                content = [Content(schema = Schema(implementation = JoinEligibilityResponse::class))],
-            ),
-            ApiResponse(
-                responseCode = "404",
-                description = "로그인 사용자 또는 채팅방을 찾을 수 없음",
-                content = [
-                    Content(
-                        schema = Schema(implementation = ErrorResponse::class),
-                        examples = [
-                            ExampleObject(name = "로그인 사용자 없음", value = ChatRoomSwaggerExamples.USER_NOT_FOUND),
-                            ExampleObject(name = "채팅방 없음", value = ChatRoomSwaggerExamples.CHAT_ROOM_NOT_FOUND),
-                        ],
-                    ),
-                ],
-            ),
-        ],
-    )
-    fun getJoinEligibility(
-        @Parameter(hidden = true) userId: Long,
-        @Parameter(description = "참가 가능 여부를 확인할 채팅방 ID", example = "101")
-        roomId: Long,
-    ): JoinEligibilityResponse
 
     @Operation(summary = "승인 대기 신청 목록", description = "호스트에게만 신청자의 프로필과 소개를 제공합니다.")
     @ApiResponses(
@@ -1310,6 +1341,10 @@ private object ChatRoomSwaggerExamples {
     const val INVALID_TRAVEL_COURSE_SCHEDULE = """{"code":40007,"errorMessage":"여행 일차마다 방문지를 최소 2개 편성해야 합니다."}"""
     const val INVALID_TRIP_SCHEDULE = """{"code":40008,"errorMessage":"당일치기는 종료 날짜 없이 시간을, 1박 이상은 종료 날짜만 입력해야 합니다."}"""
     const val INVALID_CHAT_ROOM_AGE_RESTRICTION = """{"code":40009,"errorMessage":"최소 나이는 최대 나이보다 작거나 같아야 합니다."}"""
+    const val INVALID_MINIMUM_PARTICIPANTS = """{"code":40034,"errorMessage":"최소 출발 인원은 3명 이상이며 최대 참가 인원 이하여야 합니다."}"""
+    const val PAST_CHAT_ROOM_START_DATE = """{"code":40035,"errorMessage":"여행 시작일은 오늘 또는 미래 날짜여야 합니다."}"""
+    const val INVALID_RECRUITMENT_DEADLINE = """{"code":40036,"errorMessage":"모집 마감일은 여행 시작일 이하여야 합니다."}"""
+    const val PAST_RECRUITMENT_DEADLINE_DATE = """{"code":40038,"errorMessage":"모집 마감일은 오늘 또는 미래 날짜여야 합니다."}"""
     const val CHAT_JOIN_APPLICATION_MESSAGE_REQUIRED = """{"code":40010,"errorMessage":"수동 승인 모임은 호스트에게 전할 말을 입력해야 합니다."}"""
     const val UNAUTHORIZED = """{"code":40100,"errorMessage":"인증되지 않은 사용자입니다."}"""
     const val FORBIDDEN = """{"code":40300,"errorMessage":"접근 권한이 없습니다."}"""

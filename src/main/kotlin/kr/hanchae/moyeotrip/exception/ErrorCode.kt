@@ -42,6 +42,11 @@ enum class ErrorCode(
     REVERSE_FRIEND_REQUEST_EXISTS(HttpStatus.BAD_REQUEST, 40031, "상대방이 보낸 친구 요청을 먼저 처리해 주세요."),
     SELF_BLOCK_NOT_ALLOWED(HttpStatus.BAD_REQUEST, 40032, "자기 자신을 차단할 수 없습니다."),
     MALFORMED_REQUEST_BODY(HttpStatus.BAD_REQUEST, 40033, "요청 본문의 JSON 형식이 올바르지 않습니다."),
+    INVALID_MINIMUM_PARTICIPANTS(HttpStatus.BAD_REQUEST, 40034, "최소 출발 인원은 3명 이상이며 최대 참가 인원 이하여야 합니다."),
+    PAST_CHAT_ROOM_START_DATE(HttpStatus.BAD_REQUEST, 40035, "여행 시작일은 오늘 또는 미래 날짜여야 합니다."),
+    INVALID_RECRUITMENT_DEADLINE(HttpStatus.BAD_REQUEST, 40036, "모집 마감일은 여행 시작일 이하여야 합니다."),
+    INVALID_TOURISM_IMAGE_URL(HttpStatus.BAD_REQUEST, 40037, "관광 이미지 URL은 공식 VisitKorea HTTPS 이미지 주소여야 합니다."),
+    PAST_RECRUITMENT_DEADLINE_DATE(HttpStatus.BAD_REQUEST, 40038, "모집 마감일은 오늘 또는 미래 날짜여야 합니다."),
 
     // UNAUTHORIZED는 40100부터 시작
     UNAUTHORIZED(HttpStatus.UNAUTHORIZED, 40100, "인증되지 않은 사용자입니다."),
@@ -111,4 +116,5 @@ enum class ErrorCode(
     PROFILE_IMAGE_GENERATION_FAILED(HttpStatus.BAD_GATEWAY, 50201, "프로필 이미지 생성에 실패했습니다."),
     KAKAO_AUTH_UNAVAILABLE(HttpStatus.BAD_GATEWAY, 50202, "카카오 인증 서버와 통신하지 못했습니다."),
     WEATHER_DATA_UNAVAILABLE(HttpStatus.BAD_GATEWAY, 50203, "기상청 날씨 데이터를 현재 조회할 수 없습니다."),
+    TOURISM_IMAGE_FETCH_FAILED(HttpStatus.BAD_GATEWAY, 50204, "관광 이미지 원본을 현재 불러올 수 없습니다."),
 }

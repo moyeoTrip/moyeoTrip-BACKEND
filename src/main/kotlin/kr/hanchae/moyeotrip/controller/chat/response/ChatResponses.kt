@@ -71,20 +71,28 @@ data class ChatRoomDetailResponse(
     val maximumAge: Int?,
     @field:Schema(description = "참가 신청 승인 방식. AUTO는 자동 승인, MANUAL은 호스트 승인입니다.", example = "MANUAL")
     val joinApprovalMode: JoinApprovalMode,
-    @field:Schema(description = "모집 마감까지 남은 일수", example = "3")
-    val recruitmentDDay: Long,
+    @field:Schema(description = "모집 마감까지 남은 일수. 모집 마감일이 지나면 null", example = "3", nullable = true)
+    val recruitmentDDay: Long?,
+    @field:Schema(description = "연결된 여행 코스 제목", example = "주왕산 단풍길 코스")
+    val courseTitle: String,
+    @field:Schema(description = "연결된 여행 코스 태그 목록")
+    val tags: List<TravelCourseTagResponse>,
     @field:Schema(description = "호스트 사용자 ID", example = "12")
     val hostId: Long,
     @field:Schema(description = "호스트 프로필 이미지 URL", example = "https://cdn.example.com/profiles/12.png", nullable = true)
     val hostProfileImageUrl: String?,
     @field:Schema(description = "현재 승인된 참가자 수", example = "4")
     val participantCount: Int,
+    @field:Schema(description = "여행 확정에 필요한 호스트 포함 최소 출발 인원", example = "3")
+    val minimumParticipants: Int,
     @field:Schema(description = "호스트를 포함한 최대 참가 인원", example = "5")
     val maxParticipants: Int,
     @field:Schema(description = "채팅방 여행 상태", example = "RECRUITING")
     val status: ChatRoomStatus,
     @field:Schema(description = "로그인 사용자의 채팅방 찜 여부", example = "true")
     val favorite: Boolean,
+    @field:Schema(description = "로그인 사용자가 현재 이 모임에 참가 신청할 수 있는지 여부", example = "true")
+    val canApply: Boolean,
     @field:Schema(description = "가장 최근의 상단 고정 공지. 없으면 null", nullable = true)
     val latestPinnedNotice: ChatRoomNoticeResponse?,
     @field:Schema(description = "현재 승인된 참가자 목록")
@@ -219,6 +227,8 @@ data class ChatParticipantResponse(
 data class ChatRoomMemberListResponse(
     @field:Schema(description = "현재 승인된 참가자 수", example = "4")
     val participantCount: Int,
+    @field:Schema(description = "여행 확정에 필요한 호스트 포함 최소 출발 인원", example = "3")
+    val minimumParticipants: Int,
     @field:Schema(description = "호스트를 포함한 최대 참가 인원", example = "5")
     val maxParticipants: Int,
     @field:Schema(description = "승인 후 대기열에 있는 사용자 수", example = "2")
@@ -274,12 +284,6 @@ data class JoinChatRoomResponse(
     allowableValues = ["JOINED", "WAITLISTED", "PENDING_APPROVAL"],
 )
 enum class JoinResult { JOINED, WAITLISTED, PENDING_APPROVAL }
-
-@Schema(description = "채팅방 참가 신청 가능 여부")
-data class JoinEligibilityResponse(
-    @field:Schema(description = "로그인 사용자의 채팅방 참가 신청 가능 여부", example = "true")
-    val canApply: Boolean,
-)
 
 @Schema(description = "호스트가 조회하는 참가 신청 정보")
 data class JoinApplicationResponse(
@@ -578,8 +582,8 @@ data class SearchChatRoomResponse(
     val dayTripEndTime: LocalTime?,
     @field:Schema(description = "참가 신청 마감일", example = "2026-09-09", type = "string", format = "date")
     val recruitmentDeadlineDate: LocalDate,
-    @field:Schema(description = "모집 마감일까지 남은 일수", example = "3")
-    val recruitmentDDay: Long,
+    @field:Schema(description = "모집 마감일까지 남은 일수. 모집 마감일이 지나면 null", example = "3", nullable = true)
+    val recruitmentDDay: Long?,
     @field:Schema(description = "채팅방 여행 상태", example = "RECRUITING")
     val status: ChatRoomStatus,
     @field:Schema(description = "로그인 사용자의 찜 여부", example = "false")
@@ -596,6 +600,8 @@ data class SearchChatRoomResponse(
     val hostId: Long,
     @field:Schema(description = "현재 승인된 참가자 수", example = "4")
     val participantCount: Int,
+    @field:Schema(description = "여행 확정에 필요한 호스트 포함 최소 출발 인원", example = "3")
+    val minimumParticipants: Int,
     @field:Schema(description = "호스트를 포함한 최대 참가 인원", example = "5")
     val maxParticipants: Int,
     @field:Schema(description = "연결된 여행 코스 제목", example = "주왕산 단풍길 코스")

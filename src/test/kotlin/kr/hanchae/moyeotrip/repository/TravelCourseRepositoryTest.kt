@@ -6,13 +6,9 @@ import kr.hanchae.moyeotrip.entity.tour.TravelCourseType
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
-import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.data.domain.PageRequest
 
 class TravelCourseRepositoryTest : RepositoryIntegrationTestSupport() {
-    @Autowired
-    private lateinit var travelCourseTagRepository: TravelCourseTagRepository
-
     @Nested
     inner class TagQueries {
         @Test
@@ -62,6 +58,27 @@ class TravelCourseRepositoryTest : RepositoryIntegrationTestSupport() {
                 popularCourse.id,
                 travelCourseRepository.findPopularPublicCourses(PageRequest.of(0, 10)).first().id,
             )
+        }
+    }
+
+    @Nested
+    inner class PublicCourseSearchQueries {
+        @Test
+        fun `공개 코스 검색은 제목 포함 또는 태그명 일치 코스를 함께 조회한다`() {
+            val host = savedUser()
+            val keyword = "QA 바다 ${System.nanoTime()}"
+            val tag = travelCourseTagRepository.saveAndFlush(TravelCourseTag(name = keyword))
+            val titleMatched = savedCourse(title = "$keyword 산책 코스")
+            val tagMatched = TravelCourse(type = TravelCourseType.CUSTOM, owner = host, title = "태그 일치 코스")
+            tagMatched.addTags(listOf(tag))
+            tagMatched.publish()
+            travelCourseRepository.saveAndFlush(tagMatched)
+            savedCourse(title = "제목과 태그 모두 다른 코스")
+            travelCourseRepository.saveAndFlush(TravelCourse(type = TravelCourseType.CUSTOM, owner = host, title = "$keyword 비공개 코스"))
+
+            val courses = travelCourseRepository.searchPublicCourses(keyword)
+
+            assertEquals(setOf(titleMatched.id, tagMatched.id), courses.map { it.id }.toSet())
         }
     }
 }

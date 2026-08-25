@@ -43,7 +43,16 @@ class ChatRoomRequestSwaggerTest {
         val badRequest = responses.value.single { it.responseCode == "400" }
 
         assertEquals(
-            setOf("요청 본문 또는 enum 값 오류", "당일·숙박 일정 입력 오류", "참가 나이 범위 오류", "커스텀 코스 일차·순서 구성 오류"),
+            setOf(
+                "요청 본문 또는 enum 값 오류",
+                "당일·숙박 일정 입력 오류",
+                "최소 출발 인원 오류",
+                "과거 여행 시작일 오류",
+                "과거 모집 마감일 오류",
+                "모집 마감일 오류",
+                "참가 나이 범위 오류",
+                "커스텀 코스 일차·순서 구성 오류",
+            ),
             badRequest.content
                 .single()
                 .examples
