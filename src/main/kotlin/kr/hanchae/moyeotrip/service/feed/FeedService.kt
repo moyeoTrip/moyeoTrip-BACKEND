@@ -58,10 +58,10 @@ class FeedService(
         val user = findUser(userId)
         val room = chatRoomRepository.findById(request.chatRoomId).orElseThrow { BaseException(ErrorCode.CHAT_ROOM_NOT_FOUND) }
         if (!participantRepository.hasCompletedTrip(room.id, userId, LocalDate.now())) {
-            throw BaseException(ErrorCode.FORBIDDEN)
+            throw BaseException(ErrorCode.COMPLETED_TRIP_FEED_REQUIRED)
         }
         if (feedRepository.existsByChatRoomIdAndAuthorId(room.id, userId)) {
-            throw BaseException(ErrorCode.BAD_REQUEST, "같은 여행에는 피드를 한 번만 작성할 수 있습니다.")
+            throw BaseException(ErrorCode.FEED_ALREADY_CREATED_FOR_TRIP)
         }
 
         val uploadedKeys = mutableListOf<String>()
@@ -163,7 +163,7 @@ class FeedService(
         val parent =
             request.parentCommentId?.let {
                 feedCommentRepository.findByIdAndFeedId(it, feedId)?.takeIf { comment -> comment.parent == null }
-                    ?: throw BaseException(ErrorCode.RESOURCE_NOT_FOUND)
+                    ?: throw BaseException(ErrorCode.FEED_PARENT_COMMENT_NOT_FOUND)
             }
         return feedCommentRepository
             .save(FeedComment(feed = feed, author = findUser(userId), parent = parent, content = request.content.trim()))
@@ -227,10 +227,10 @@ class FeedService(
     }
 
     private fun validateImages(images: List<MultipartFile>) {
-        if (images.isEmpty() || images.size > MAX_IMAGE_COUNT) throw BaseException(ErrorCode.BAD_REQUEST)
+        if (images.isEmpty() || images.size > MAX_IMAGE_COUNT) throw BaseException(ErrorCode.INVALID_FEED_IMAGE_COUNT)
         images.forEach {
             if (it.isEmpty || it.size > MAX_IMAGE_SIZE || it.contentType?.startsWith("image/") != true) {
-                throw BaseException(ErrorCode.BAD_REQUEST)
+                throw BaseException(ErrorCode.INVALID_FEED_IMAGE)
             }
         }
     }
@@ -249,15 +249,15 @@ class FeedService(
             ?.takeIf { it in ALLOWED_EXTENSIONS }
             ?: "jpg"
 
-    private fun findFeed(feedId: Long): Feed = feedRepository.findById(feedId).orElseThrow { BaseException(ErrorCode.RESOURCE_NOT_FOUND) }
+    private fun findFeed(feedId: Long): Feed = feedRepository.findById(feedId).orElseThrow { BaseException(ErrorCode.FEED_NOT_FOUND) }
 
     private fun requireVisibleFeed(
         userId: Long,
         feedId: Long,
     ): Feed {
         val feed = findFeed(feedId)
-        if (userBlockRepository.existsBetween(userId, feed.author.id)) throw BaseException(ErrorCode.FORBIDDEN)
-        if (!feed.isVisibleTo(userId)) throw BaseException(ErrorCode.FORBIDDEN)
+        if (userBlockRepository.existsBetween(userId, feed.author.id)) throw BaseException(ErrorCode.USER_BLOCK_RELATIONSHIP)
+        if (!feed.isVisibleTo(userId)) throw BaseException(ErrorCode.FEED_NOT_VISIBLE_TO_USER)
         return feed
     }
 

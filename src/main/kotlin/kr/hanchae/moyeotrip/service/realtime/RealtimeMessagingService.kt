@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import jakarta.annotation.PostConstruct
 import jakarta.annotation.PreDestroy
 import kr.hanchae.moyeotrip.controller.chat.response.ChatMessageResponse
+import kr.hanchae.moyeotrip.controller.chat.response.ChatPollUpdatedResponse
 import kr.hanchae.moyeotrip.controller.notification.response.NotificationResponse
 import org.redisson.api.RTopic
 import org.redisson.api.RedissonClient
@@ -73,6 +74,19 @@ class RealtimeMessagingService(
         }
     }
 
+    fun sendChatPollUpdated(
+        roomId: Long,
+        poll: ChatPollUpdatedResponse,
+    ) {
+        publish(
+            RealtimeRedisEvent(
+                type = RealtimeEventType.CHAT_POLL_UPDATED,
+                targetId = roomId,
+                payload = objectMapper.valueToTree(poll),
+            ),
+        )
+    }
+
     private fun publish(event: RealtimeRedisEvent) {
         val json = objectMapper.writeValueAsString(event)
         if (TransactionSynchronizationManager.isActualTransactionActive() &&
@@ -100,6 +114,9 @@ class RealtimeMessagingService(
             RealtimeEventType.CHAT_MESSAGE ->
                 messagingTemplate.convertAndSend("/topic/chat-rooms/${event.targetId}/messages", event.payload)
 
+            RealtimeEventType.CHAT_POLL_UPDATED ->
+                messagingTemplate.convertAndSend("/topic/chat-rooms/${event.targetId}/polls", event.payload)
+
             RealtimeEventType.NOTIFICATION ->
                 messagingTemplate.convertAndSendToUser(event.targetId.toString(), "/queue/notifications", event.payload)
         }
@@ -119,5 +136,6 @@ private data class RealtimeRedisEvent(
 
 private enum class RealtimeEventType {
     CHAT_MESSAGE,
+    CHAT_POLL_UPDATED,
     NOTIFICATION,
 }

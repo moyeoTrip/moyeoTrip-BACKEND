@@ -8,6 +8,8 @@ import kr.hanchae.moyeotrip.controller.tour.request.PublishTravelCourseRequest
 import kr.hanchae.moyeotrip.controller.tour.request.RateTravelCourseRequest
 import kr.hanchae.moyeotrip.controller.tour.request.UpdateTravelCourseRequest
 import kr.hanchae.moyeotrip.controller.tour.response.CoursePublicationResponse
+import kr.hanchae.moyeotrip.controller.tour.response.LikedTravelCourseResponse
+import kr.hanchae.moyeotrip.controller.tour.response.TravelCourseFavoriteResponse
 import kr.hanchae.moyeotrip.controller.tour.response.TravelCourseTagResponse
 import kr.hanchae.moyeotrip.service.chat.ChatRoomService
 import kr.hanchae.moyeotrip.service.tour.TravelCourseService
@@ -62,6 +64,17 @@ class TravelCourseController(
     override fun getCourse(
         @PathVariable courseId: Long,
     ): PublicTravelCourseDetailResponse = chatRoomService.getCourse(courseId)
+
+    @PostMapping("/{courseId}/favorite")
+    override fun toggleCourseFavorite(
+        @LoginUserId userId: Long,
+        @PathVariable courseId: Long,
+    ): TravelCourseFavoriteResponse = travelCourseService.toggleFavorite(userId, courseId)
+
+    @GetMapping("/me/favorites")
+    override fun getLikedCourses(
+        @LoginUserId userId: Long,
+    ): List<LikedTravelCourseResponse> = travelCourseService.getLikedCourses(userId)
 
     @PostMapping("/chat-rooms/{roomId}/rating")
     override fun rateCourse(

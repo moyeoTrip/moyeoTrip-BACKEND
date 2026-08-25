@@ -443,6 +443,26 @@ data class ChatPollOptionResponse(
     val voterNicknames: List<String>?,
 )
 
+@Schema(description = "실시간 채팅 투표 결과 갱신 이벤트")
+data class ChatPollUpdatedResponse(
+    @field:Schema(description = "투표 메시지 ID", example = "501")
+    val messageId: Long,
+    @field:Schema(description = "전체 투표 수", example = "4")
+    val totalVoteCount: Int,
+    @field:Schema(description = "선택지별 최신 투표 결과")
+    val options: List<ChatPollUpdatedOptionResponse>,
+)
+
+@Schema(description = "실시간으로 갱신된 투표 선택지 결과")
+data class ChatPollUpdatedOptionResponse(
+    @field:Schema(description = "투표 선택지 ID", example = "23")
+    val optionId: Long,
+    @field:Schema(description = "이 선택지를 고른 참가자 수", example = "2")
+    val voteCount: Int,
+    @field:Schema(description = "실명 투표일 때만 표시되는 투표자 닉네임 목록. 익명 투표면 null", nullable = true)
+    val voterNicknames: List<String>?,
+)
+
 @Schema(description = "채팅 메시지 커서 조회 응답")
 data class ChatMessagePageResponse(
     @field:Schema(description = "조회한 메시지 목록. 오래된 메시지부터 반환합니다.")

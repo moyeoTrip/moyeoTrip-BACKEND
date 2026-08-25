@@ -31,6 +31,24 @@ data class MyProfileResponse(
     val marketingEnabled: Boolean,
 )
 
+@Schema(description = "다른 사용자에게 공개하는 프로필 정보")
+data class PublicProfileResponse(
+    @field:Schema(description = "사용자 ID", example = "12")
+    val userId: Long,
+    @field:Schema(description = "사용자 닉네임", example = "따스한 사슴 3492")
+    val nickname: String,
+    @field:Schema(description = "현재 프로필 이미지 URL", nullable = true)
+    val profileImageUrl: String?,
+    @field:Schema(description = "자기소개", nullable = true)
+    val introduction: String?,
+    @field:Schema(description = "선택한 여행 스타일 목록")
+    val travelStyles: List<TravelStyleResponse>,
+    @field:Schema(description = "선택한 관심 경북 지역 목록")
+    val interestedRegions: List<InterestedRegionResponse>,
+    @field:Schema(description = "함께 여행한 사용자 평가 평균. 평가가 없으면 null", nullable = true, example = "4.7")
+    val mannerRating: Double?,
+)
+
 @Schema(description = "프로필 수정 화면의 선택 항목 목록")
 data class ProfileOptionsResponse(
     @field:Schema(description = "선택 가능한 여행 스타일 목록")

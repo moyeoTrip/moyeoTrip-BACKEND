@@ -10,6 +10,7 @@ import kr.hanchae.moyeotrip.controller.user.response.ProfileImageCandidatesRespo
 import kr.hanchae.moyeotrip.controller.user.response.ProfileImageGenerationResponse
 import kr.hanchae.moyeotrip.controller.user.response.ProfileImageSelectionResponse
 import kr.hanchae.moyeotrip.controller.user.response.ProfileOptionsResponse
+import kr.hanchae.moyeotrip.controller.user.response.PublicProfileResponse
 import kr.hanchae.moyeotrip.controller.user.response.TravelStyleResponse
 import kr.hanchae.moyeotrip.entity.notification.ChatNotificationMode
 import kr.hanchae.moyeotrip.entity.user.User
@@ -23,6 +24,7 @@ import kr.hanchae.moyeotrip.repository.ObjectStorageRepository
 import kr.hanchae.moyeotrip.repository.TravelStyleRepository
 import kr.hanchae.moyeotrip.repository.UserProfileImageRepository
 import kr.hanchae.moyeotrip.repository.UserRepository
+import kr.hanchae.moyeotrip.repository.UserWithdrawalDataRepository
 import kr.hanchae.moyeotrip.utils.ProfileImageOptimizer
 import kr.hanchae.moyeotrip.utils.jwt.JwtUtil
 import org.slf4j.LoggerFactory
@@ -31,6 +33,7 @@ import org.springframework.transaction.annotation.Transactional
 import org.springframework.transaction.support.TransactionSynchronization
 import org.springframework.transaction.support.TransactionSynchronizationManager
 import java.time.LocalDate
+import java.time.LocalDateTime
 import java.time.Period
 
 @Service
@@ -45,6 +48,7 @@ class UserService(
     private val notificationSettingRepository: NotificationSettingRepository,
     private val profileImageOptimizer: ProfileImageOptimizer,
     private val jwtUtil: JwtUtil,
+    private val userWithdrawalDataRepository: UserWithdrawalDataRepository,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -53,6 +57,22 @@ class UserService(
         val user = userRepository.findById(userId).orElseThrow { UserNotFoundException(userId) }
         requireProfileSetupStarted(user)
         return user.toProfileResponse()
+    }
+
+    @Transactional(readOnly = true)
+    fun getPublicProfile(userId: Long): PublicProfileResponse {
+        val user = userRepository.findById(userId).orElseThrow { UserNotFoundException(userId) }
+        val information = user.information ?: throw UserNotFoundException(userId)
+        if (user.isWithdrawn()) throw UserNotFoundException(userId)
+        return PublicProfileResponse(
+            userId = user.id,
+            nickname = information.nickname,
+            profileImageUrl = information.profileFileName?.let(objectStorageRepository::getDownloadUrl),
+            introduction = information.introduction,
+            travelStyles = user.travelStyles.sortedBy { it.id }.map { TravelStyleResponse(it.id, it.label) },
+            interestedRegions = user.interestedRegions.sortedBy { it.id }.map { InterestedRegionResponse(it.id, it.signguName) },
+            mannerRating = user.mannerRating,
+        )
     }
 
     @Transactional
@@ -70,11 +90,11 @@ class UserService(
             interestedRegions.map { it.id }.toSet() != request.interestedRegionIds ||
             interestedRegions.any { it.regionCode != GYEONGSANGBUKDO_REGION_CODE }
         ) {
-            throw BaseException(ErrorCode.BAD_REQUEST)
+            throw BaseException(ErrorCode.INVALID_INTERESTED_REGION_SELECTION)
         }
         val travelStyles = travelStyleRepository.findAllById(request.travelStyleIds)
         if (travelStyles.map { it.id }.toSet() != request.travelStyleIds) {
-            throw BaseException(ErrorCode.BAD_REQUEST)
+            throw BaseException(ErrorCode.INVALID_TRAVEL_STYLE_SELECTION)
         }
         user.updateProfile(
             introduction = request.introduction?.trim()?.takeIf(String::isNotEmpty),
@@ -166,14 +186,48 @@ class UserService(
     }
 
     @Transactional
-    fun withdraw(userId: Long) {
+    fun withdraw(
+        userId: Long,
+        withdrawnAt: LocalDateTime = LocalDateTime.now(),
+    ) {
         val user = userRepository.findByIdForUpdate(userId) ?: throw UserNotFoundException(userId)
-        val profileImageKeys =
-            userProfileImageRepository
-                .findFileNamesByUserIdOrderByCreatedDateTimeAsc(userId)
+        if (user.isWithdrawn()) throw UserNotFoundException(userId)
 
-        userRepository.delete(user)
-        scheduleWithdrawalCleanupAfterCommit(userId, profileImageKeys)
+        val activityObjectKeys =
+            userWithdrawalDataRepository
+                .removePersonalActivity(userId, user.information?.nickname, withdrawnAt)
+                .all
+
+        user.withdraw(withdrawnAt)
+        scheduleWithdrawalCleanupAfterCommit(userId, activityObjectKeys)
+    }
+
+    @Transactional
+    fun handleWithdrawnLogin(user: User): WithdrawnLoginResult = handleWithdrawnLogin(user, LocalDateTime.now())
+
+    @Transactional
+    fun handleWithdrawnLogin(
+        user: User,
+        loginAt: LocalDateTime,
+    ): WithdrawnLoginResult {
+        if (!user.isWithdrawn()) return WithdrawnLoginResult.ACTIVE
+        if (user.canRestore(loginAt)) {
+            user.restore()
+            return WithdrawnLoginResult.RESTORED
+        }
+        permanentlyDelete(user, loginAt)
+        return WithdrawnLoginResult.EXPIRED_DELETED
+    }
+
+    @Transactional
+    fun deleteExpiredWithdrawnUsers(): Int = deleteExpiredWithdrawnUsers(LocalDateTime.now())
+
+    @Transactional
+    fun deleteExpiredWithdrawnUsers(now: LocalDateTime): Int {
+        val cutoff = now.minusDays(User.WITHDRAWAL_GRACE_PERIOD_DAYS)
+        val expiredUsers = userRepository.findAllByWithdrawnDateTimeLessThanEqual(cutoff)
+        expiredUsers.forEach { permanentlyDelete(it, now) }
+        return expiredUsers.size
     }
 
     private fun requireProfileSetupStarted(user: User) {
@@ -224,16 +278,16 @@ class UserService(
 
     private fun scheduleWithdrawalCleanupAfterCommit(
         userId: Long,
-        profileImageKeys: List<String>,
+        objectKeys: List<String>,
     ) {
         if (!TransactionSynchronizationManager.isSynchronizationActive()) {
-            cleanupWithdrawalResources(userId, profileImageKeys)
+            cleanupWithdrawalResources(userId, objectKeys)
             return
         }
         TransactionSynchronizationManager.registerSynchronization(
             object : TransactionSynchronization {
                 override fun afterCommit() {
-                    cleanupWithdrawalResources(userId, profileImageKeys)
+                    cleanupWithdrawalResources(userId, objectKeys)
                 }
             },
         )
@@ -241,9 +295,9 @@ class UserService(
 
     private fun cleanupWithdrawalResources(
         userId: Long,
-        profileImageKeys: List<String>,
+        objectKeys: List<String>,
     ) {
-        profileImageKeys.forEach(::deleteQuietly)
+        objectKeys.distinct().forEach(::deleteQuietly)
         try {
             jwtUtil.deleteCachedRefreshTokenRotateId(userId)
         } catch (exception: Exception) {
@@ -259,8 +313,33 @@ class UserService(
         }
     }
 
+    private fun permanentlyDelete(
+        user: User,
+        deletedAt: LocalDateTime,
+    ) {
+        val userId = user.id
+        val profileImageKeys = userProfileImageRepository.findFileNamesByUserIdOrderByCreatedDateTimeAsc(userId)
+        val activityObjectKeys =
+            userWithdrawalDataRepository
+                .removePersonalActivity(userId, user.information?.nickname, deletedAt)
+                .all
+        val hostedRoomObjectKeys =
+            userWithdrawalDataRepository
+                .preparePermanentDeletion(userId, user.information?.nickname)
+                .all
+
+        userRepository.delete(user)
+        scheduleWithdrawalCleanupAfterCommit(userId, profileImageKeys + activityObjectKeys + hostedRoomObjectKeys)
+    }
+
     companion object {
         private const val MINIMUM_PROFILE_AGE = 20
         private const val GYEONGSANGBUKDO_REGION_CODE = "47"
     }
+}
+
+enum class WithdrawnLoginResult {
+    ACTIVE,
+    RESTORED,
+    EXPIRED_DELETED,
 }

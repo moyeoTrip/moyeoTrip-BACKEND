@@ -23,6 +23,7 @@ import kr.hanchae.moyeotrip.repository.ObjectStorageRepository
 import kr.hanchae.moyeotrip.repository.TravelStyleRepository
 import kr.hanchae.moyeotrip.repository.UserProfileImageRepository
 import kr.hanchae.moyeotrip.repository.UserRepository
+import kr.hanchae.moyeotrip.repository.UserWithdrawalDataRepository
 import kr.hanchae.moyeotrip.utils.ProfileImageOptimizer
 import kr.hanchae.moyeotrip.utils.jwt.JwtUtil
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -37,8 +38,10 @@ import org.mockito.Mockito.never
 import org.mockito.Mockito.verify
 import org.mockito.Mockito.verifyNoInteractions
 import org.mockito.Mockito.`when`
+import org.springframework.transaction.support.TransactionSynchronization
 import org.springframework.transaction.support.TransactionSynchronizationManager
 import java.time.LocalDate
+import java.time.LocalDateTime
 import java.util.Optional
 
 class UserServiceTest {
@@ -52,6 +55,7 @@ class UserServiceTest {
     private val profileImageOptimizer = mock(ProfileImageOptimizer::class.java)
     private val promptFactory = ProfileImagePromptFactory()
     private val jwtUtil = mock(JwtUtil::class.java)
+    private val userWithdrawalDataRepository = mock(UserWithdrawalDataRepository::class.java)
     private val service =
         UserService(
             userRepository,
@@ -64,6 +68,7 @@ class UserServiceTest {
             notificationSettingRepository,
             profileImageOptimizer,
             jwtUtil,
+            userWithdrawalDataRepository,
         )
 
     @Test
@@ -112,6 +117,33 @@ class UserServiceTest {
         assertEquals(SignupState.PROFILE_IMAGE_REQUIRED, response.signupState)
         assertNull(user.information?.profileFileName)
         assertEquals(SignupState.PROFILE_IMAGE_REQUIRED, user.signupState)
+    }
+
+    @Test
+    fun `프로필 이미지 생성 트랜잭션이 롤백되면 업로드한 객체를 삭제한다`() {
+        val user = profileImageRequiredUser()
+        val imageBytes = byteArrayOf(1, 2, 3)
+        val optimizedImageBytes = byteArrayOf(4, 5, 6)
+        val imageKey = "user/profile/image/rollback.webp"
+        val prompt = promptFactory.create("따스한 사슴 2347", NicknameColor.BLUE)
+        `when`(userRepository.findByIdForUpdate(7L)).thenReturn(user)
+        `when`(profileImageGenerationClient.generate(prompt)).thenReturn(imageBytes)
+        `when`(profileImageOptimizer.optimizeToHdWebp(imageBytes)).thenReturn(optimizedImageBytes)
+        `when`(objectStorageRepository.uploadGeneratedProfileImage(optimizedImageBytes)).thenReturn(imageKey)
+        `when`(userProfileImageRepository.save(any(UserProfileImage::class.java)))
+            .thenReturn(UserProfileImage(id = 12L, user = user, fileName = imageKey))
+        `when`(objectStorageRepository.getDownloadUrl(imageKey)).thenReturn("https://cdn.example.com/rollback.webp")
+        TransactionSynchronizationManager.initSynchronization()
+
+        try {
+            service.generateProfileImage(7L)
+
+            verify(objectStorageRepository, never()).delete(imageKey)
+            TransactionSynchronizationManager.getSynchronizations().single().afterCompletion(TransactionSynchronization.STATUS_ROLLED_BACK)
+            verify(objectStorageRepository).delete(imageKey)
+        } finally {
+            TransactionSynchronizationManager.clearSynchronization()
+        }
     }
 
     @Test
@@ -171,26 +203,34 @@ class UserServiceTest {
     }
 
     @Test
-    fun `회원 탈퇴는 사용자를 삭제하고 커밋 후 이미지와 Refresh Token을 정리한다`() {
+    fun `회원 탈퇴는 활동 데이터를 삭제하고 계정을 30일 복구 상태로 전환한다`() {
         val user = profileImageRequiredUser()
-        val firstImageKey = "user/profile/image/first.png"
-        val secondImageKey = "user/profile/image/second.png"
+        val feedImageKey = "feed/image/first.png"
+        val chatImageKey = "chat/image/second.png"
+        val withdrawnAt = LocalDateTime.of(2026, 8, 24, 12, 0)
         `when`(userRepository.findByIdForUpdate(7L)).thenReturn(user)
-        `when`(userProfileImageRepository.findFileNamesByUserIdOrderByCreatedDateTimeAsc(7L))
-            .thenReturn(listOf(firstImageKey, secondImageKey))
+        `when`(
+            userWithdrawalDataRepository.removePersonalActivity(
+                7L,
+                "따스한 사슴 2347",
+                withdrawnAt,
+            ),
+        ).thenReturn(UserWithdrawalDataRepository.StoredObjectKeys(listOf(feedImageKey), listOf(chatImageKey)))
         TransactionSynchronizationManager.initSynchronization()
 
         try {
-            service.withdraw(7L)
+            service.withdraw(7L, withdrawnAt)
 
-            verify(userRepository).delete(user)
-            verify(objectStorageRepository, never()).delete(firstImageKey)
+            assertTrue(user.isWithdrawn())
+            assertNull(user.fcmToken)
+            verify(userRepository, never()).delete(user)
+            verify(objectStorageRepository, never()).delete(feedImageKey)
             verify(jwtUtil, never()).deleteCachedRefreshTokenRotateId(7L)
 
             TransactionSynchronizationManager.getSynchronizations().single().afterCommit()
 
-            verify(objectStorageRepository).delete(firstImageKey)
-            verify(objectStorageRepository).delete(secondImageKey)
+            verify(objectStorageRepository).delete(feedImageKey)
+            verify(objectStorageRepository).delete(chatImageKey)
             verify(jwtUtil).deleteCachedRefreshTokenRotateId(7L)
         } finally {
             TransactionSynchronizationManager.clearSynchronization()
@@ -204,8 +244,61 @@ class UserServiceTest {
         assertThrows(UserNotFoundException::class.java) { service.withdraw(404L) }
 
         verify(userRepository, never()).delete(any(User::class.java))
+        verifyNoInteractions(userWithdrawalDataRepository)
         verifyNoInteractions(objectStorageRepository)
         verifyNoInteractions(jwtUtil)
+    }
+
+    @Test
+    fun `탈퇴 후 30일 이내 로그인하면 계정을 복구한다`() {
+        val user = profileImageRequiredUser()
+        val withdrawnAt = LocalDateTime.of(2026, 8, 1, 12, 0)
+        user.withdraw(withdrawnAt)
+
+        val result = service.handleWithdrawnLogin(user, withdrawnAt.plusDays(29).plusHours(23))
+
+        assertEquals(WithdrawnLoginResult.RESTORED, result)
+        assertFalse(user.isWithdrawn())
+        verify(userRepository, never()).delete(user)
+        verifyNoInteractions(userWithdrawalDataRepository)
+    }
+
+    @Test
+    fun `탈퇴 후 30일이 지나 로그인하면 계정을 영구 삭제한다`() {
+        val user = profileImageRequiredUser()
+        val withdrawnAt = LocalDateTime.of(2026, 8, 1, 12, 0)
+        val expiredAt = withdrawnAt.plusDays(User.WITHDRAWAL_GRACE_PERIOD_DAYS)
+        val profileImageKey = "user/profile/image/profile.webp"
+        val feedImageKey = "feed/image/feed.webp"
+        val roomImageKey = "chat/image/room.webp"
+        user.withdraw(withdrawnAt)
+        `when`(userProfileImageRepository.findFileNamesByUserIdOrderByCreatedDateTimeAsc(7L))
+            .thenReturn(listOf(profileImageKey))
+        `when`(userWithdrawalDataRepository.removePersonalActivity(7L, "따스한 사슴 2347", expiredAt))
+            .thenReturn(UserWithdrawalDataRepository.StoredObjectKeys(listOf(feedImageKey), emptyList()))
+        `when`(userWithdrawalDataRepository.preparePermanentDeletion(7L, "따스한 사슴 2347"))
+            .thenReturn(UserWithdrawalDataRepository.StoredObjectKeys(emptyList(), listOf(roomImageKey)))
+
+        val result = service.handleWithdrawnLogin(user, expiredAt)
+
+        assertEquals(WithdrawnLoginResult.EXPIRED_DELETED, result)
+        verify(userRepository).delete(user)
+        verify(objectStorageRepository).delete(profileImageKey)
+        verify(objectStorageRepository).delete(feedImageKey)
+        verify(objectStorageRepository).delete(roomImageKey)
+        verify(jwtUtil).deleteCachedRefreshTokenRotateId(7L)
+    }
+
+    @Test
+    fun `스케줄러용 영구 삭제는 탈퇴 후 30일이 지난 사용자만 조회한다`() {
+        val now = LocalDateTime.of(2026, 8, 31, 12, 0)
+        val cutoff = now.minusDays(User.WITHDRAWAL_GRACE_PERIOD_DAYS)
+        `when`(userRepository.findAllByWithdrawnDateTimeLessThanEqual(cutoff)).thenReturn(emptyList())
+
+        val deletedCount = service.deleteExpiredWithdrawnUsers(now)
+
+        assertEquals(0, deletedCount)
+        verify(userRepository).findAllByWithdrawnDateTimeLessThanEqual(cutoff)
     }
 
     @Test
@@ -272,8 +365,139 @@ class UserServiceTest {
                 )
             }
 
-        assertEquals(ErrorCode.BAD_REQUEST, exception.errorCode)
+        assertEquals(ErrorCode.INVALID_INTERESTED_REGION_SELECTION, exception.errorCode)
         verifyNoInteractions(travelStyleRepository)
+    }
+
+    @Test
+    fun `만 20세 미만 생년월일로 프로필을 수정할 수 없다`() {
+        val user = profileImageRequiredUser()
+        `when`(userRepository.findByIdForUpdate(7L)).thenReturn(user)
+
+        val exception =
+            assertThrows(BaseException::class.java) {
+                service.updateProfile(
+                    7L,
+                    UpdateProfileRequest(
+                        birthDate = LocalDate.now().minusYears(20).plusDays(1),
+                        gender = Gender.F,
+                    ),
+                )
+            }
+
+        assertEquals(ErrorCode.MINIMUM_SIGNUP_AGE_NOT_MET, exception.errorCode)
+        verifyNoInteractions(legalDongCodeRepository, travelStyleRepository)
+    }
+
+    @Test
+    fun `경상북도에 없거나 존재하지 않는 관심 지역은 프로필에 저장할 수 없다`() {
+        val user = profileImageRequiredUser()
+        `when`(userRepository.findByIdForUpdate(7L)).thenReturn(user)
+        `when`(legalDongCodeRepository.findAllById(setOf(99L))).thenReturn(emptyList())
+
+        val exception =
+            assertThrows(BaseException::class.java) {
+                service.updateProfile(
+                    7L,
+                    UpdateProfileRequest(
+                        interestedRegionIds = setOf(99L),
+                        birthDate = LocalDate.now().minusYears(25),
+                        gender = Gender.F,
+                    ),
+                )
+            }
+
+        assertEquals(ErrorCode.INVALID_INTERESTED_REGION_SELECTION, exception.errorCode)
+        verifyNoInteractions(travelStyleRepository)
+    }
+
+    @Test
+    fun `존재하지 않는 여행 스타일은 프로필에 저장할 수 없다`() {
+        val user = profileImageRequiredUser()
+        `when`(userRepository.findByIdForUpdate(7L)).thenReturn(user)
+        `when`(legalDongCodeRepository.findAllById(emptySet())).thenReturn(emptyList())
+        `when`(travelStyleRepository.findAllById(setOf(99L))).thenReturn(emptyList())
+
+        val exception =
+            assertThrows(BaseException::class.java) {
+                service.updateProfile(
+                    7L,
+                    UpdateProfileRequest(
+                        travelStyleIds = setOf(99L),
+                        birthDate = LocalDate.now().minusYears(25),
+                        gender = Gender.F,
+                    ),
+                )
+            }
+
+        assertEquals(ErrorCode.INVALID_TRAVEL_STYLE_SELECTION, exception.errorCode)
+    }
+
+    @Test
+    fun `프로필 선택지는 이름 순 여행 스타일과 경상북도 시군을 반환한다`() {
+        `when`(travelStyleRepository.findAllByOrderByLabelAsc())
+            .thenReturn(listOf(TravelStyle(id = 2L, label = "사진"), TravelStyle(id = 1L, label = "자연")))
+        `when`(legalDongCodeRepository.findAllByRegionCodeOrderBySignguNameAsc("47"))
+            .thenReturn(
+                listOf(
+                    LegalDongCode(
+                        id = 1L,
+                        regionCode = "47",
+                        signguCode = "47170",
+                        regionName = "경상북도",
+                        signguName = "안동시",
+                    ),
+                ),
+            )
+
+        val response = service.getProfileOptions()
+
+        assertEquals(listOf("사진", "자연"), response.travelStyles.map { it.label })
+        assertEquals(listOf("안동시"), response.interestedRegions.map { it.signguName })
+    }
+
+    @Test
+    fun `다른 사용자 프로필에서는 공개 프로필 항목만 반환한다`() {
+        val style = TravelStyle(id = 2L, label = "사진")
+        val region = LegalDongCode(id = 3L, regionCode = "47", signguCode = "47170", regionName = "경상북도", signguName = "안동시")
+        val user =
+            User(
+                id = 8L,
+                userRole = UserRole.ROLE_USER,
+                signupState = SignupState.SIGNUP_COMPLETE,
+                userInformation =
+                    UserInformation(
+                        nickname = "여행자",
+                        nicknameColor = NicknameColor.MINT,
+                        gender = Gender.F,
+                        birthDate = LocalDate.of(1998, 4, 12),
+                        profileFileName = "profile.webp",
+                        introduction = "함께 걸어요",
+                    ),
+            )
+        user.updateProfile("함께 걸어요", setOf(style), setOf(region), LocalDate.of(1998, 4, 12), Gender.F)
+        user.updateMannerRating(4.7)
+        `when`(userRepository.findById(8L)).thenReturn(Optional.of(user))
+        `when`(objectStorageRepository.getDownloadUrl("profile.webp")).thenReturn("https://cdn.example.com/profile.webp")
+
+        val response = service.getPublicProfile(8L)
+
+        assertEquals(8L, response.userId)
+        assertEquals("여행자", response.nickname)
+        assertEquals("함께 걸어요", response.introduction)
+        assertEquals(listOf("사진"), response.travelStyles.map { it.label })
+        assertEquals(listOf("안동시"), response.interestedRegions.map { it.signguName })
+        assertEquals(4.7, response.mannerRating)
+    }
+
+    @Test
+    fun `가입 정보 입력 전에는 프로필을 조회할 수 없다`() {
+        val user = User(id = 7L, userRole = UserRole.ROLE_USER)
+        `when`(userRepository.findById(7L)).thenReturn(Optional.of(user))
+
+        val exception = assertThrows(BaseException::class.java) { service.getProfile(7L) }
+
+        assertEquals(ErrorCode.USER_INFO_REQUIRED, exception.errorCode)
     }
 
     private fun profileImageRequiredUser(): User =

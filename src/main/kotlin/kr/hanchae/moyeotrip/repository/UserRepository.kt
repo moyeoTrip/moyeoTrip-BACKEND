@@ -6,6 +6,7 @@ import kr.hanchae.moyeotrip.entity.user.User
 import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.data.jpa.repository.Lock
 import org.springframework.stereotype.Repository
+import java.time.LocalDateTime
 
 @Repository
 interface UserRepository :
@@ -14,6 +15,10 @@ interface UserRepository :
     fun existsByInformationNickname(nickName: String): Boolean
 
     fun findByEmail(email: String): User?
+
+    fun findByFcmToken(fcmToken: String): User?
+
+    fun findAllByWithdrawnDateTimeLessThanEqual(withdrawnDateTime: LocalDateTime): List<User>
 }
 
 interface UserCustomRepository {

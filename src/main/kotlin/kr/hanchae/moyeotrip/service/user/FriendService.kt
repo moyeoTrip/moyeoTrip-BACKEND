@@ -38,10 +38,10 @@ class FriendService(
     ): FriendRequestResponse {
         validateRelationship(requesterId, receiverId)
         if (friendshipRepository.existsBetween(requesterId, receiverId)) {
-            throw BaseException(ErrorCode.BAD_REQUEST, "이미 친구인 사용자입니다.")
+            throw BaseException(ErrorCode.ALREADY_FRIEND)
         }
         friendRequestRepository.findByRequesterIdAndReceiverId(receiverId, requesterId)?.let {
-            throw BaseException(ErrorCode.BAD_REQUEST, "상대방이 보낸 친구 요청을 먼저 처리해 주세요.")
+            throw BaseException(ErrorCode.REVERSE_FRIEND_REQUEST_EXISTS)
         }
         friendRequestRepository.findByRequesterIdAndReceiverId(requesterId, receiverId)?.let { return it.toSentResponse() }
 
@@ -62,7 +62,7 @@ class FriendService(
         requestId: Long,
     ): FriendResponse {
         val request = findReceivedRequest(receiverId, requestId)
-        if (blockRepository.existsBetween(request.requester.id, receiverId)) throw BaseException(ErrorCode.FORBIDDEN)
+        if (blockRepository.existsBetween(request.requester.id, receiverId)) throw BaseException(ErrorCode.USER_BLOCK_RELATIONSHIP)
         val friendship =
             friendshipRepository.findBetween(request.requester.id, receiverId)
                 ?: friendshipRepository.save(createFriendship(request.requester, request.receiver))
@@ -86,7 +86,7 @@ class FriendService(
     ) {
         val request =
             friendRequestRepository.findByIdAndRequesterId(requestId, requesterId)
-                ?: throw BaseException(ErrorCode.RESOURCE_NOT_FOUND)
+                ?: throw BaseException(ErrorCode.FRIEND_REQUEST_NOT_FOUND)
         friendRequestRepository.delete(request)
     }
 
@@ -113,15 +113,15 @@ class FriendService(
         userId: Long,
         friendId: Long,
     ) {
-        if (friendshipRepository.deleteBetween(userId, friendId) == 0) throw BaseException(ErrorCode.RESOURCE_NOT_FOUND)
+        if (friendshipRepository.deleteBetween(userId, friendId) == 0) throw BaseException(ErrorCode.FRIENDSHIP_NOT_FOUND)
     }
 
     private fun validateRelationship(
         firstUserId: Long,
         secondUserId: Long,
     ) {
-        if (firstUserId == secondUserId) throw BaseException(ErrorCode.BAD_REQUEST)
-        if (blockRepository.existsBetween(firstUserId, secondUserId)) throw BaseException(ErrorCode.FORBIDDEN)
+        if (firstUserId == secondUserId) throw BaseException(ErrorCode.SELF_FRIEND_REQUEST_NOT_ALLOWED)
+        if (blockRepository.existsBetween(firstUserId, secondUserId)) throw BaseException(ErrorCode.USER_BLOCK_RELATIONSHIP)
     }
 
     private fun findReceivedRequest(
@@ -129,7 +129,7 @@ class FriendService(
         requestId: Long,
     ): FriendRequest =
         friendRequestRepository.findByIdAndReceiverId(requestId, receiverId)
-            ?: throw BaseException(ErrorCode.RESOURCE_NOT_FOUND)
+            ?: throw BaseException(ErrorCode.FRIEND_REQUEST_NOT_FOUND)
 
     private fun findUser(userId: Long): User = userRepository.findById(userId).orElseThrow { UserNotFoundException(userId) }
 

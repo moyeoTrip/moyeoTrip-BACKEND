@@ -1,18 +1,28 @@
 package kr.hanchae.moyeotrip.service.realtime
 
-import kr.hanchae.moyeotrip.config.JacksonConfig
+import com.fasterxml.jackson.databind.JsonNode
+import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import kr.hanchae.moyeotrip.controller.chat.response.ChatMessageResponse
+import kr.hanchae.moyeotrip.controller.chat.response.ChatPollUpdatedOptionResponse
+import kr.hanchae.moyeotrip.controller.chat.response.ChatPollUpdatedResponse
+import kr.hanchae.moyeotrip.controller.notification.response.NotificationResponse
 import kr.hanchae.moyeotrip.entity.chat.ChatMessageType
+import kr.hanchae.moyeotrip.entity.notification.NotificationType
+import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertDoesNotThrow
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
+import org.mockito.ArgumentCaptor
+import org.mockito.ArgumentMatchers.any
 import org.mockito.ArgumentMatchers.anyString
+import org.mockito.ArgumentMatchers.eq
 import org.mockito.Mockito.mock
 import org.mockito.Mockito.never
 import org.mockito.Mockito.verify
 import org.mockito.Mockito.`when`
 import org.redisson.api.RTopic
 import org.redisson.api.RedissonClient
-import org.redisson.client.codec.StringCodec
+import org.redisson.api.listener.MessageListener
 import org.springframework.messaging.simp.SimpMessagingTemplate
 import org.springframework.transaction.support.TransactionSynchronizationManager
 import java.time.LocalDateTime
@@ -21,19 +31,78 @@ class RealtimeMessagingServiceTest {
     private val redissonClient = mock(RedissonClient::class.java)
     private val topic = mock(RTopic::class.java)
     private val messagingTemplate = mock(SimpMessagingTemplate::class.java)
-    private val service =
-        RealtimeMessagingService(
-            redissonClient = redissonClient,
-            objectMapper = JacksonConfig().objectMapper(),
-            messagingTemplate = messagingTemplate,
-        )
+    private val objectMapper = jacksonObjectMapper().findAndRegisterModules()
+    private val service = RealtimeMessagingService(redissonClient, objectMapper, messagingTemplate)
+
+    @AfterEach
+    fun clearTransactionSynchronization() {
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.clearSynchronization()
+        }
+        TransactionSynchronizationManager.setActualTransactionActive(false)
+    }
+
+    @Test
+    fun `Redis 구독 메시지를 채팅방 웹소켓 구독자에게 전달하고 해제한다`() {
+        val listener = subscribe()
+        service.sendChatMessage(10L, chatMessage())
+
+        listener.onMessage("moyeotrip:realtime-events", publishedJson())
+        service.unsubscribe()
+
+        verify(messagingTemplate).convertAndSend(eq("/topic/chat-rooms/10/messages"), any(JsonNode::class.java))
+        verify(topic).removeListener(7)
+    }
+
+    @Test
+    fun `Redis 알림 이벤트를 해당 사용자의 개인 큐로 전달한다`() {
+        val listener = subscribe()
+        val notification =
+            NotificationResponse(1L, NotificationType.FRIEND_REQUEST, "친구 신청", null, 3L, false, LocalDateTime.now())
+        service.sendNotification(2L, notification)
+
+        listener.onMessage("moyeotrip:realtime-events", publishedJson())
+
+        verify(messagingTemplate).convertAndSendToUser(eq("2"), eq("/queue/notifications"), any(JsonNode::class.java))
+    }
+
+    @Test
+    fun `Redis 투표 갱신 이벤트를 채팅방 투표 웹소켓 구독자에게 전달한다`() {
+        val listener = subscribe()
+        val poll =
+            ChatPollUpdatedResponse(
+                messageId = 501L,
+                totalVoteCount = 1,
+                options = listOf(ChatPollUpdatedOptionResponse(23L, 1, null)),
+            )
+        service.sendChatPollUpdated(10L, poll)
+
+        listener.onMessage("moyeotrip:realtime-events", publishedJson())
+
+        verify(messagingTemplate).convertAndSend(eq("/topic/chat-rooms/10/polls"), any(JsonNode::class.java))
+    }
 
     @Test
     fun `Redis 발행 실패가 채팅 REST 요청의 실패로 전파되지 않는다`() {
         subscribe()
         `when`(topic.publish(anyString())).thenThrow(IllegalStateException("Redis unavailable"))
 
-        assertDoesNotThrow { service.sendChatMessage(101L, message()) }
+        assertDoesNotThrow { service.sendChatMessage(101L, systemMessage()) }
+    }
+
+    @Test
+    fun `트랜잭션 중 생성된 이벤트는 커밋 후 Redis에 발행한다`() {
+        subscribe()
+        TransactionSynchronizationManager.initSynchronization()
+        TransactionSynchronizationManager.setActualTransactionActive(true)
+
+        service.sendChatMessage(10L, chatMessage())
+
+        verify(topic, never()).publish(anyString())
+        val synchronizations = TransactionSynchronizationManager.getSynchronizations()
+        assertEquals(1, synchronizations.size)
+        synchronizations.single().afterCommit()
+        verify(topic).publish(anyString())
     }
 
     @Test
@@ -43,37 +112,57 @@ class RealtimeMessagingServiceTest {
         TransactionSynchronizationManager.initSynchronization()
         TransactionSynchronizationManager.setActualTransactionActive(true)
 
-        try {
-            service.sendChatMessage(101L, message())
+        service.sendChatMessage(101L, systemMessage())
 
-            verify(topic, never()).publish(anyString())
-            val synchronization = TransactionSynchronizationManager.getSynchronizations().single()
-            assertDoesNotThrow { synchronization.afterCommit() }
-            verify(topic).publish(anyString())
-        } finally {
-            TransactionSynchronizationManager.clearSynchronization()
-            TransactionSynchronizationManager.setActualTransactionActive(false)
-        }
+        verify(topic, never()).publish(anyString())
+        val synchronization = TransactionSynchronizationManager.getSynchronizations().single()
+        assertDoesNotThrow { synchronization.afterCommit() }
+        verify(topic).publish(anyString())
+    }
+
+    @Test
+    fun `해석할 수 없는 Redis 메시지는 웹소켓으로 전달하지 않는다`() {
+        val listener = subscribe()
+
+        listener.onMessage("moyeotrip:realtime-events", "not-json")
+
+        verify(messagingTemplate, never()).convertAndSend(any(String::class.java), any<Any>())
     }
 
     @Test
     fun `구독 해제 시 등록한 Redis 리스너를 제거한다`() {
-        `when`(redissonClient.getTopic("moyeotrip:realtime-events", StringCodec.INSTANCE)).thenReturn(topic)
-        `when`(topic.addListener(org.mockito.ArgumentMatchers.eq(String::class.java), org.mockito.ArgumentMatchers.any()))
-            .thenReturn(7)
+        subscribe()
 
-        service.subscribe()
         service.unsubscribe()
 
         verify(topic).removeListener(7)
     }
 
-    private fun subscribe() {
-        `when`(redissonClient.getTopic("moyeotrip:realtime-events", StringCodec.INSTANCE)).thenReturn(topic)
+    private fun subscribe(): MessageListener<String> {
+        `when`(redissonClient.getTopic(eq("moyeotrip:realtime-events"), any())).thenReturn(topic)
+        val captor = listenerCaptor()
+        `when`(topic.addListener(eq(String::class.java), captor.capture())).thenReturn(7)
         service.subscribe()
+        return captor.value
     }
 
-    private fun message() =
+    private fun publishedJson(): String {
+        val captor = ArgumentCaptor.forClass(String::class.java)
+        verify(topic).publish(captor.capture())
+        return captor.value
+    }
+
+    private fun chatMessage() =
+        ChatMessageResponse(
+            messageId = 1L,
+            type = ChatMessageType.USER,
+            senderId = 2L,
+            senderNickname = "여행자",
+            content = "안녕하세요",
+            createdAt = LocalDateTime.now(),
+        )
+
+    private fun systemMessage() =
         ChatMessageResponse(
             messageId = 1L,
             type = ChatMessageType.SYSTEM,
@@ -82,4 +171,8 @@ class RealtimeMessagingServiceTest {
             content = "테스트 메시지",
             createdAt = LocalDateTime.of(2026, 8, 23, 12, 0),
         )
+
+    @Suppress("UNCHECKED_CAST")
+    private fun listenerCaptor(): ArgumentCaptor<MessageListener<String>> =
+        ArgumentCaptor.forClass(MessageListener::class.java) as ArgumentCaptor<MessageListener<String>>
 }

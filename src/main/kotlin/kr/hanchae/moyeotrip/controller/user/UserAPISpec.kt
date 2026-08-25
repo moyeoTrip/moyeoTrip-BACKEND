@@ -79,7 +79,9 @@ interface UserAPISpec {
                     Content(
                         schema = Schema(implementation = ErrorResponse::class),
                         examples = [
-                            ExampleObject(name = "요청 본문 또는 선택 ID 오류", value = UserSwaggerExamples.BAD_REQUEST),
+                            ExampleObject(name = "관심 지역 ID 오류", value = UserSwaggerExamples.INVALID_INTERESTED_REGION_SELECTION),
+                            ExampleObject(name = "여행 스타일 ID 오류", value = UserSwaggerExamples.INVALID_TRAVEL_STYLE_SELECTION),
+                            ExampleObject(name = "요청 JSON 형식 오류", value = UserSwaggerExamples.MALFORMED_REQUEST_BODY),
                             ExampleObject(name = "최소 가입 연령 미달", value = UserSwaggerExamples.MINIMUM_SIGNUP_AGE_NOT_MET),
                         ],
                     ),
@@ -140,19 +142,20 @@ interface UserAPISpec {
     @Operation(
         summary = "회원 탈퇴",
         description = """
-            로그인한 사용자의 서비스 계정을 즉시 영구 삭제합니다(하드 삭제).
-            사용자 정보와 연결된 로그인 수단, 생성한 프로필 이미지 후보의 DB 레코드가 함께 삭제됩니다.
-            DB 삭제가 커밋된 뒤 객체 저장소의 프로필 이미지와 Refresh Token 캐시도 정리됩니다.
+            피드·친구 관계·친구 도감·여행 참가 및 활동 기록은 탈퇴 즉시 삭제됩니다.
+            다른 사용자의 좋아요 또는 여행 사용 이력이 있는 공개 코스는 삭제하지 않고 작성자 닉네임을 보존합니다.
+            계정과 로그인 수단, 프로필은 복구를 위해 30일간 보관합니다.
+            이 기간 안에 같은 로그인 수단으로 로그인하면 계정이 자동 복구되지만, 탈퇴 시 삭제된 활동 데이터는 복구되지 않습니다.
+            30일이 지나면 계정과 프로필도 영구 삭제되어 되돌릴 수 없습니다.
             카카오·Apple·Google 등 외부 제공자의 계정 자체는 삭제하지 않습니다.
-            성공 이후 기존 Access Token으로 요청하면 사용자를 찾을 수 없어 인증되지 않으며,
-            기존 Refresh Token도 더 이상 갱신에 사용할 수 없습니다. 삭제한 데이터는 복구할 수 없습니다.
+            탈퇴 즉시 FCM 토큰과 Refresh Token 캐시를 제거하며 기존 Access Token도 인증에 사용할 수 없습니다.
         """,
     )
     @ApiResponses(
         value = [
             ApiResponse(
                 responseCode = "204",
-                description = "회원 탈퇴 및 서비스 계정 영구 삭제 성공. 응답 본문 없음",
+                description = "회원 탈퇴 처리 및 30일 복구 유예 시작. 응답 본문 없음",
             ),
             ApiResponse(
                 responseCode = "401",
@@ -405,6 +408,9 @@ private object UserSwaggerExamples {
     const val PROFILE_IMAGE_NOT_FOUND =
         """{"code":40401,"errorMessage":"선택할 수 있는 프로필 이미지를 찾을 수 없습니다."}"""
     const val MINIMUM_SIGNUP_AGE_NOT_MET = """{"code":40011,"errorMessage":"만 20세 이상만 가입할 수 있습니다."}"""
+    const val INVALID_INTERESTED_REGION_SELECTION = """{"code":40014,"errorMessage":"관심 지역으로 선택할 수 없는 지역 ID가 포함되어 있습니다."}"""
+    const val INVALID_TRAVEL_STYLE_SELECTION = """{"code":40015,"errorMessage":"선택할 수 없는 여행 스타일 ID가 포함되어 있습니다."}"""
+    const val MALFORMED_REQUEST_BODY = """{"code":40033,"errorMessage":"요청 본문의 JSON 형식이 올바르지 않습니다."}"""
     const val GENERATION_LIMIT =
         """{"code":42900,"errorMessage":"프로필 이미지는 사용자당 최대 3번까지 생성할 수 있습니다."}"""
     const val PROFILE_IMAGE_GENERATION_FAILED =

@@ -2,6 +2,7 @@ package kr.hanchae.moyeotrip.controller.chat
 
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.Parameter
+import io.swagger.v3.oas.annotations.media.ArraySchema
 import io.swagger.v3.oas.annotations.media.Content
 import io.swagger.v3.oas.annotations.media.Encoding
 import io.swagger.v3.oas.annotations.media.ExampleObject
@@ -277,13 +278,47 @@ interface ChatRoomAPISpec {
         roomId: Long,
     ): ChatRoomFavoriteResponse
 
+    @Operation(summary = "내가 찜한 채팅방 목록", description = "로그인 사용자가 찜한 채팅방을 가장 최근에 찜한 순서로 반환합니다. 종료된 채팅방도 찜을 해제하기 전까지 목록에 포함됩니다.")
+    @ApiResponses(
+        value = [
+            ApiResponse(
+                responseCode = "200",
+                description = "찜한 채팅방 목록 조회 성공",
+                content = [Content(array = ArraySchema(schema = Schema(implementation = SearchChatRoomResponse::class)))],
+            ),
+            ApiResponse(
+                responseCode = "401",
+                description = "서비스 Access Token이 없거나 유효하지 않음",
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [ExampleObject(value = ChatRoomSwaggerExamples.UNAUTHORIZED)],
+                    ),
+                ],
+            ),
+        ],
+    )
+    fun getFavoriteRooms(
+        @Parameter(hidden = true) userId: Long,
+    ): List<SearchChatRoomResponse>
+
     @Operation(summary = "집합 정보 수정", description = "여행 확정 전까지 채팅방 호스트가 집합 좌표, 상세 안내와 시간을 수정합니다.")
     @ApiResponses(
         value = [
             ApiResponse(responseCode = "204", description = "집합 정보 수정 성공. 응답 본문 없음"),
             ApiResponse(
+                responseCode = "400",
+                description = "집합 좌표를 위도·경도 중 하나만 입력했거나 집합일이 여행 시작일 이후임",
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [ExampleObject(value = ChatRoomSwaggerExamples.INVALID_MEETING_INFORMATION)],
+                    ),
+                ],
+            ),
+            ApiResponse(
                 responseCode = "409",
-                description = "인증·권한·입력 검증 또는 수정 가능 상태 확인 실패",
+                description = "여행 확정 후라 집합 정보를 수정할 수 없음",
                 content = [
                     Content(
                         schema = Schema(implementation = ErrorResponse::class),
@@ -608,7 +643,7 @@ interface ChatRoomAPISpec {
                 content = [
                     Content(
                         schema = Schema(implementation = ErrorResponse::class),
-                        examples = [ExampleObject(value = ChatRoomSwaggerExamples.BAD_REQUEST)],
+                        examples = [ExampleObject(value = ChatRoomSwaggerExamples.KICK_REASON_BLANK)],
                     ),
                 ],
             ),
@@ -627,11 +662,11 @@ interface ChatRoomAPISpec {
             ),
             ApiResponse(
                 responseCode = "403",
-                description = "인증·권한·입력 검증·채팅방 또는 멤버 확인 실패",
+                description = "채팅방 호스트가 아니어서 멤버를 강퇴할 수 없음",
                 content = [
                     Content(
                         schema = Schema(implementation = ErrorResponse::class),
-                        examples = [ExampleObject(value = ChatRoomSwaggerExamples.FORBIDDEN)],
+                        examples = [ExampleObject(value = ChatRoomSwaggerExamples.CHAT_ROOM_HOST_REQUIRED)],
                     ),
                 ],
             ),
@@ -695,17 +730,17 @@ interface ChatRoomAPISpec {
                 content = [
                     Content(
                         schema = Schema(implementation = ErrorResponse::class),
-                        examples = [ExampleObject(value = ChatRoomSwaggerExamples.BAD_REQUEST)],
+                        examples = [ExampleObject(value = ChatRoomSwaggerExamples.NOTICE_CONTENT_BLANK)],
                     ),
                 ],
             ),
             ApiResponse(
                 responseCode = "403",
-                description = "인증·권한·입력 검증 또는 채팅방 확인 실패",
+                description = "채팅방 호스트가 아니어서 공지를 등록할 수 없음",
                 content = [
                     Content(
                         schema = Schema(implementation = ErrorResponse::class),
-                        examples = [ExampleObject(value = ChatRoomSwaggerExamples.FORBIDDEN)],
+                        examples = [ExampleObject(value = ChatRoomSwaggerExamples.CHAT_ROOM_HOST_REQUIRED)],
                     ),
                 ],
             ),
@@ -749,7 +784,7 @@ interface ChatRoomAPISpec {
                 content = [
                     Content(
                         schema = Schema(implementation = ErrorResponse::class),
-                        examples = [ExampleObject(value = ChatRoomSwaggerExamples.BAD_REQUEST)],
+                        examples = [ExampleObject(value = ChatRoomSwaggerExamples.NOTICE_CONTENT_BLANK)],
                     ),
                 ],
             ),
@@ -772,7 +807,7 @@ interface ChatRoomAPISpec {
                 content = [
                     Content(
                         schema = Schema(implementation = ErrorResponse::class),
-                        examples = [ExampleObject(value = ChatRoomSwaggerExamples.FORBIDDEN)],
+                        examples = [ExampleObject(value = ChatRoomSwaggerExamples.CHAT_ROOM_HOST_REQUIRED)],
                     ),
                 ],
             ),
@@ -834,11 +869,11 @@ interface ChatRoomAPISpec {
             ),
             ApiResponse(
                 responseCode = "400",
-                description = "메시지 입력값이 유효하지 않음",
+                description = "멘션 대상 중 채팅방 참가자가 아닌 사용자가 있음",
                 content = [
                     Content(
                         schema = Schema(implementation = ErrorResponse::class),
-                        examples = [ExampleObject(value = ChatRoomSwaggerExamples.BAD_REQUEST)],
+                        examples = [ExampleObject(value = ChatRoomSwaggerExamples.MENTIONED_USER_NOT_PARTICIPANT)],
                     ),
                 ],
             ),
@@ -858,7 +893,7 @@ interface ChatRoomAPISpec {
                 content = [
                     Content(
                         schema = Schema(implementation = ErrorResponse::class),
-                        examples = [ExampleObject(value = ChatRoomSwaggerExamples.RESOURCE_NOT_FOUND)],
+                        examples = [ExampleObject(value = ChatRoomSwaggerExamples.CHAT_REPLY_MESSAGE_NOT_FOUND)],
                     ),
                 ],
             ),
@@ -896,7 +931,7 @@ interface ChatRoomAPISpec {
                 content = [
                     Content(
                         schema = Schema(implementation = ErrorResponse::class),
-                        examples = [ExampleObject(value = ChatRoomSwaggerExamples.BAD_REQUEST)],
+                        examples = [ExampleObject(value = ChatRoomSwaggerExamples.INVALID_CHAT_IMAGE)],
                     ),
                 ],
             ),
@@ -994,7 +1029,7 @@ interface ChatRoomAPISpec {
                 content = [
                     Content(
                         schema = Schema(implementation = ErrorResponse::class),
-                        examples = [ExampleObject(value = ChatRoomSwaggerExamples.BAD_REQUEST)],
+                        examples = [ExampleObject(value = ChatRoomSwaggerExamples.CHAT_ROOM_MEETING_LOCATION_NOT_SET)],
                     ),
                 ],
             ),
@@ -1040,7 +1075,7 @@ interface ChatRoomAPISpec {
                 content = [
                     Content(
                         schema = Schema(implementation = ErrorResponse::class),
-                        examples = [ExampleObject(value = ChatRoomSwaggerExamples.BAD_REQUEST)],
+                        examples = [ExampleObject(value = ChatRoomSwaggerExamples.DUPLICATE_CHAT_POLL_OPTION)],
                     ),
                 ],
             ),
@@ -1141,7 +1176,7 @@ interface ChatRoomAPISpec {
                 content = [
                     Content(
                         schema = Schema(implementation = ErrorResponse::class),
-                        examples = [ExampleObject(value = ChatRoomSwaggerExamples.RESOURCE_NOT_FOUND)],
+                        examples = [ExampleObject(value = ChatRoomSwaggerExamples.POLL_NOT_FOUND)],
                     ),
                 ],
             ),
@@ -1292,8 +1327,17 @@ private object ChatRoomSwaggerExamples {
     const val CHAT_DISABLED = """{"code":40911,"errorMessage":"종료된 방에서는 채팅할 수 없습니다."}"""
     const val CHAT_ROOM_NOT_PARTICIPANT = """{"code":40301,"errorMessage":"사용자가 채팅방에 참여하고 있지 않습니다."}"""
     const val RESOURCE_NOT_FOUND = """{"code":40402,"errorMessage":"요청한 리소스를 찾을 수 없습니다."}"""
-    const val POLL_NOT_FOUND = """{"code":40402,"errorMessage":"요청한 리소스를 찾을 수 없습니다."}"""
-    const val POLL_OPTION_NOT_FOUND = """{"code":40402,"errorMessage":"요청한 리소스를 찾을 수 없습니다."}"""
+    const val POLL_NOT_FOUND = """{"code":40414,"errorMessage":"해당 채팅방의 투표 메시지를 찾을 수 없습니다."}"""
+    const val POLL_OPTION_NOT_FOUND = """{"code":40415,"errorMessage":"해당 투표의 선택지를 찾을 수 없습니다."}"""
+    const val INVALID_MEETING_INFORMATION = """{"code":40019,"errorMessage":"집합 좌표는 위도와 경도를 함께 입력하고 집합일은 여행 시작일 이하여야 합니다."}"""
+    const val KICK_REASON_BLANK = """{"code":40020,"errorMessage":"강퇴 사유는 공백일 수 없습니다."}"""
+    const val NOTICE_CONTENT_BLANK = """{"code":40021,"errorMessage":"공지 내용은 공백일 수 없습니다."}"""
+    const val MENTIONED_USER_NOT_PARTICIPANT = """{"code":40022,"errorMessage":"멘션한 사용자 중 채팅방 참여자가 아닌 사용자가 있습니다."}"""
+    const val INVALID_CHAT_IMAGE = """{"code":40023,"errorMessage":"채팅 이미지는 비어 있지 않은 20MB 이하 이미지 파일만 공유할 수 있습니다."}"""
+    const val CHAT_ROOM_MEETING_LOCATION_NOT_SET = """{"code":40024,"errorMessage":"호스트가 채팅방 집합 위치 좌표를 등록하지 않았습니다."}"""
+    const val DUPLICATE_CHAT_POLL_OPTION = """{"code":40025,"errorMessage":"투표 선택지는 중복될 수 없습니다."}"""
+    const val CHAT_ROOM_HOST_REQUIRED = """{"code":40307,"errorMessage":"채팅방 호스트만 이 작업을 할 수 있습니다."}"""
+    const val CHAT_REPLY_MESSAGE_NOT_FOUND = """{"code":40416,"errorMessage":"답글을 달 원본 채팅 메시지를 찾을 수 없습니다."}"""
     const val TOURISM_CONTENT_NOT_FOUND = """{"code":40408,"errorMessage":"관광 콘텐츠를 찾을 수 없습니다."}"""
     const val CHAT_ROOM_NOTICE_NOT_FOUND = """{"code":40411,"errorMessage":"채팅방 공지를 찾을 수 없습니다."}"""
     const val TRAVEL_COURSE_TAG_NOT_FOUND = """{"code":40412,"errorMessage":"여행 코스 태그를 찾을 수 없습니다."}"""

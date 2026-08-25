@@ -10,6 +10,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses
 import io.swagger.v3.oas.annotations.tags.Tag
 import kr.hanchae.moyeotrip.controller.chat.response.ChatRoomKickHistoryResponse
 import kr.hanchae.moyeotrip.controller.notification.request.UpdateChatRoomNotificationSettingRequest
+import kr.hanchae.moyeotrip.controller.notification.request.UpdateFcmTokenRequest
 import kr.hanchae.moyeotrip.controller.notification.request.UpdateNotificationSettingRequest
 import kr.hanchae.moyeotrip.controller.notification.response.ChatRoomNotificationSettingResponse
 import kr.hanchae.moyeotrip.controller.notification.response.NotificationPageResponse
@@ -17,7 +18,12 @@ import kr.hanchae.moyeotrip.controller.notification.response.NotificationSetting
 import kr.hanchae.moyeotrip.exception.ErrorResponse
 import org.springframework.http.ResponseEntity
 
-@Tag(name = "알림", description = "모임 및 채팅 알림 API")
+@Tag(
+    name = "알림",
+    description =
+        "모임 및 채팅 알림 API. Android 앱은 ID가 moyeotrip_notifications인 알림 채널을 생성해야 하며, " +
+            "iOS 앱은 Firebase 프로젝트에 APNs 인증 키를 연결하고 알림 권한을 받아야 합니다.",
+)
 interface NotificationAPISpec {
     @Operation(summary = "내 알림 목록", description = "lastId 이전의 알림을 최신순으로 조회합니다. unreadOnly가 true면 읽지 않은 알림만 반환합니다.")
     @ApiResponses(
@@ -63,7 +69,7 @@ interface NotificationAPISpec {
                 content = [
                     Content(
                         schema = Schema(implementation = ErrorResponse::class),
-                        examples = [ExampleObject(value = NotificationSwaggerExamples.BAD_REQUEST)],
+                        examples = [ExampleObject(value = NotificationSwaggerExamples.NOT_CHAT_ROOM_KICK_NOTIFICATION)],
                     ),
                 ],
             ),
@@ -130,6 +136,63 @@ interface NotificationAPISpec {
         @Parameter(hidden = true) userId: Long,
     ): ResponseEntity<Void>
 
+    @Operation(
+        summary = "FCM 토큰 등록·갱신",
+        description =
+            "Android의 onNewToken 또는 iOS의 FCM 등록 토큰 갱신 콜백에서 받은 최신 토큰을 저장합니다. " +
+                "앱 시작과 토큰 갱신 시 호출합니다.",
+    )
+    @ApiResponses(
+        value = [
+            ApiResponse(responseCode = "204", description = "FCM 토큰 저장 성공. 응답 본문 없음"),
+            ApiResponse(
+                responseCode = "400",
+                description = "FCM 토큰이 비어 있거나 허용 길이를 초과함",
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [ExampleObject(value = NotificationSwaggerExamples.FCM_TOKEN_BLANK)],
+                    ),
+                ],
+            ),
+            ApiResponse(
+                responseCode = "404",
+                description = "로그인 사용자를 찾을 수 없음",
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [ExampleObject(value = NotificationSwaggerExamples.USER_NOT_FOUND)],
+                    ),
+                ],
+            ),
+        ],
+    )
+    fun updateFcmToken(
+        @Parameter(hidden = true) userId: Long,
+        @Parameter(description = "Android 또는 iOS 앱의 최신 FCM 등록 토큰", required = true)
+        request: UpdateFcmTokenRequest,
+    ): ResponseEntity<Void>
+
+    @Operation(summary = "FCM 토큰 삭제", description = "로그아웃하거나 이 기기에서 푸시 수신을 중단할 때 현재 사용자의 FCM 토큰을 삭제합니다.")
+    @ApiResponses(
+        value = [
+            ApiResponse(responseCode = "204", description = "FCM 토큰 삭제 성공. 응답 본문 없음"),
+            ApiResponse(
+                responseCode = "404",
+                description = "로그인 사용자를 찾을 수 없음",
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [ExampleObject(value = NotificationSwaggerExamples.USER_NOT_FOUND)],
+                    ),
+                ],
+            ),
+        ],
+    )
+    fun deleteFcmToken(
+        @Parameter(hidden = true) userId: Long,
+    ): ResponseEntity<Void>
+
     @Operation(summary = "방해 금지 설정 조회", description = "방해 금지 사용 여부와 적용 시간·요일을 반환합니다. 기본 알림 수신 설정은 내 프로필 조회에서 반환합니다.")
     @ApiResponses(
         value = [
@@ -168,7 +231,7 @@ interface NotificationAPISpec {
                 content = [
                     Content(
                         schema = Schema(implementation = ErrorResponse::class),
-                        examples = [ExampleObject(value = NotificationSwaggerExamples.BAD_REQUEST)],
+                        examples = [ExampleObject(value = NotificationSwaggerExamples.INVALID_DO_NOT_DISTURB_CONFIGURATION)],
                     ),
                 ],
             ),
@@ -241,4 +304,7 @@ private object NotificationSwaggerExamples {
     const val CHAT_ROOM_NOT_PARTICIPANT = """{"code":40301,"errorMessage":"사용자가 채팅방에 참여하고 있지 않습니다."}"""
     const val NOTIFICATION_NOT_FOUND = """{"code":40410,"errorMessage":"알림을 찾을 수 없습니다."}"""
     const val USER_NOT_FOUND = """{"code":40400,"errorMessage":"해당 유저를 찾을 수 없습니다."}"""
+    const val FCM_TOKEN_BLANK = """{"code":40016,"errorMessage":"FCM 토큰은 공백일 수 없습니다."}"""
+    const val NOT_CHAT_ROOM_KICK_NOTIFICATION = """{"code":40017,"errorMessage":"강퇴 알림이 아니므로 강퇴 이력을 조회할 수 없습니다."}"""
+    const val INVALID_DO_NOT_DISTURB_CONFIGURATION = """{"code":40018,"errorMessage":"방해 금지 사용 시 시작·종료 시간과 요일을 모두 설정해야 합니다."}"""
 }

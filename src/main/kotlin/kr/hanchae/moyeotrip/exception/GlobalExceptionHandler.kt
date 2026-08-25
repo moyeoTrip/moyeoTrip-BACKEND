@@ -46,11 +46,11 @@ class GlobalExceptionHandler(
 
     @ExceptionHandler(HttpMessageNotReadableException::class)
     fun handleUnreadableRequest(exception: HttpMessageNotReadableException): ResponseEntity<ErrorResponse> {
-        sentryExceptionReporter.capture(exception, HttpStatus.BAD_REQUEST, ErrorCode.BAD_REQUEST.code)
+        sentryExceptionReporter.capture(exception, HttpStatus.BAD_REQUEST, ErrorCode.MALFORMED_REQUEST_BODY.code)
         return ResponseEntity
             .status(HttpStatus.BAD_REQUEST)
             .contentType(MediaType.APPLICATION_JSON)
-            .body(ErrorResponse.of(ErrorCode.BAD_REQUEST, ErrorCode.BAD_REQUEST.errorMessage))
+            .body(ErrorResponse.of(ErrorCode.MALFORMED_REQUEST_BODY, ErrorCode.MALFORMED_REQUEST_BODY.errorMessage))
             .apply {
                 traceManager.doErrorLog(exception)
             }

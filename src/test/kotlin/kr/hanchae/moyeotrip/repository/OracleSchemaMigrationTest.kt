@@ -15,10 +15,12 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase
 import org.springframework.context.annotation.Import
+import org.springframework.test.context.TestPropertySource
 
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import(KotlinJdslAutoConfiguration::class)
+@TestPropertySource(properties = ["spring.cloud.aws.parameterstore.enabled=false"])
 class OracleSchemaMigrationTest : ContainerIntegrationTestSupport() {
     @Autowired
     private lateinit var entityManager: EntityManager

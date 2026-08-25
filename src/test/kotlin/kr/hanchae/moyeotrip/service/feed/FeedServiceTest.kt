@@ -1,11 +1,15 @@
 package kr.hanchae.moyeotrip.service.feed
 
+import kr.hanchae.moyeotrip.controller.feed.request.CreateFeedCommentRequest
 import kr.hanchae.moyeotrip.controller.feed.request.CreateFeedRequest
 import kr.hanchae.moyeotrip.controller.feed.request.FeedTab
 import kr.hanchae.moyeotrip.entity.chat.ChatRoom
 import kr.hanchae.moyeotrip.entity.feed.Feed
+import kr.hanchae.moyeotrip.entity.feed.FeedComment
 import kr.hanchae.moyeotrip.entity.feed.FeedLike
 import kr.hanchae.moyeotrip.entity.feed.FeedVisibility
+import kr.hanchae.moyeotrip.entity.tour.TravelCourse
+import kr.hanchae.moyeotrip.entity.tour.TravelCourseType
 import kr.hanchae.moyeotrip.entity.user.Gender
 import kr.hanchae.moyeotrip.entity.user.NicknameColor
 import kr.hanchae.moyeotrip.entity.user.User
@@ -30,7 +34,10 @@ import org.mockito.Mockito.mock
 import org.mockito.Mockito.verify
 import org.mockito.Mockito.verifyNoInteractions
 import org.mockito.Mockito.`when`
+import org.springframework.data.domain.PageRequest
 import org.springframework.mock.web.MockMultipartFile
+import java.time.LocalDate
+import java.time.LocalDateTime
 import java.util.Optional
 
 class FeedServiceTest {
@@ -67,7 +74,7 @@ class FeedServiceTest {
                 service.createFeed(1L, CreateFeedRequest(2L, "내용", FeedVisibility.PUBLIC), listOf(file))
             }
 
-        assertEquals(ErrorCode.BAD_REQUEST, exception.errorCode)
+        assertEquals(ErrorCode.INVALID_FEED_IMAGE, exception.errorCode)
         verifyNoInteractions(userRepository, roomRepository, storageRepository)
     }
 
@@ -83,8 +90,28 @@ class FeedServiceTest {
                 service.createFeed(1L, CreateFeedRequest(2L, "내용", FeedVisibility.PUBLIC), images)
             }
 
-        assertEquals(ErrorCode.BAD_REQUEST, exception.errorCode)
+        assertEquals(ErrorCode.INVALID_FEED_IMAGE_COUNT, exception.errorCode)
         verifyNoInteractions(userRepository, roomRepository, storageRepository)
+    }
+
+    @Test
+    fun `사진이 없거나 20MB를 초과하면 피드를 작성할 수 없다`() {
+        val oversized = mock(org.springframework.web.multipart.MultipartFile::class.java)
+        `when`(oversized.isEmpty).thenReturn(false)
+        `when`(oversized.size).thenReturn(20L * 1024L * 1024L + 1L)
+        `when`(oversized.contentType).thenReturn("image/jpeg")
+
+        val emptyException =
+            assertThrows(BaseException::class.java) {
+                service.createFeed(1L, CreateFeedRequest(2L, "내용", FeedVisibility.PUBLIC), emptyList())
+            }
+        val oversizedException =
+            assertThrows(BaseException::class.java) {
+                service.createFeed(1L, CreateFeedRequest(2L, "내용", FeedVisibility.PUBLIC), listOf(oversized))
+            }
+
+        assertEquals(ErrorCode.INVALID_FEED_IMAGE_COUNT, emptyException.errorCode)
+        assertEquals(ErrorCode.INVALID_FEED_IMAGE, oversizedException.errorCode)
     }
 
     @Test
@@ -101,8 +128,52 @@ class FeedServiceTest {
                 service.createFeed(1L, CreateFeedRequest(2L, "내용", FeedVisibility.PUBLIC), listOf(image))
             }
 
-        assertEquals(ErrorCode.FORBIDDEN, exception.errorCode)
+        assertEquals(ErrorCode.COMPLETED_TRIP_FEED_REQUIRED, exception.errorCode)
         verifyNoInteractions(storageRepository)
+    }
+
+    @Test
+    fun `같은 여행에는 피드를 한 번만 작성할 수 있다`() {
+        val image = MockMultipartFile("images", "trip.jpg", "image/jpeg", byteArrayOf(1))
+        val room = mock(ChatRoom::class.java)
+        `when`(room.id).thenReturn(2L)
+        `when`(userRepository.findById(1L)).thenReturn(Optional.of(user(1L)))
+        `when`(roomRepository.findById(2L)).thenReturn(Optional.of(room))
+        `when`(participantRepository.hasCompletedTrip(2L, 1L, LocalDate.now())).thenReturn(true)
+        `when`(feedRepository.existsByChatRoomIdAndAuthorId(2L, 1L)).thenReturn(true)
+
+        val exception =
+            assertThrows(BaseException::class.java) {
+                service.createFeed(1L, CreateFeedRequest(2L, "내용", FeedVisibility.PUBLIC), listOf(image))
+            }
+
+        assertEquals(ErrorCode.FEED_ALREADY_CREATED_FOR_TRIP, exception.errorCode)
+        verifyNoInteractions(storageRepository)
+    }
+
+    @Test
+    fun `두 번째 사진 업로드가 실패하면 앞서 업로드한 사진을 삭제한다`() {
+        val first = MockMultipartFile("images", "first.PNG", "image/png", byteArrayOf(1))
+        val second = MockMultipartFile("images", "second.exe", "image/jpeg", byteArrayOf(2))
+        val room = mock(ChatRoom::class.java)
+        `when`(room.id).thenReturn(2L)
+        `when`(userRepository.findById(1L)).thenReturn(Optional.of(user(1L)))
+        `when`(roomRepository.findById(2L)).thenReturn(Optional.of(room))
+        `when`(participantRepository.hasCompletedTrip(2L, 1L, LocalDate.now())).thenReturn(true)
+        `when`(
+            storageRepository.upload(
+                anyValue(),
+                anyValue(),
+                anyValue(),
+            ),
+        ).thenReturn("first-key").thenThrow(IllegalStateException("upload failed"))
+
+        assertThrows(IllegalStateException::class.java) {
+            service.createFeed(1L, CreateFeedRequest(2L, "내용", FeedVisibility.PUBLIC), listOf(first, second))
+        }
+
+        verify(storageRepository).delete("first-key")
+        verifyNoInteractions(notificationService)
     }
 
     @Test
@@ -114,6 +185,25 @@ class FeedServiceTest {
         assertEquals(emptyList<Any>(), response.feeds)
         assertEquals(null, response.nextId)
         verify(feedRepository).findRandomDiscoverFeeds(1L, 20)
+    }
+
+    @Test
+    fun `친구 피드는 커서와 최대 페이지 크기를 적용한다`() {
+        val feeds = (3L downTo 1L).map(::responseFeed)
+        `when`(
+            feedRepository.findFriendFeeds(
+                1L,
+                Long.MAX_VALUE,
+                FeedVisibility.PUBLIC,
+                FeedVisibility.FRIENDS,
+                PageRequest.of(0, 3),
+            ),
+        ).thenReturn(feeds)
+
+        val response = service.getFeeds(1L, FeedTab.FRIENDS, beforeFeedId = null, limit = 2)
+
+        assertEquals(listOf(3L, 2L), response.feeds.map { it.feedId })
+        assertEquals(2L, response.nextId)
     }
 
     @Test
@@ -161,7 +251,7 @@ class FeedServiceTest {
 
         val exception = assertThrows(BaseException::class.java) { service.getFeed(1L, 3L) }
 
-        assertEquals(ErrorCode.FORBIDDEN, exception.errorCode)
+        assertEquals(ErrorCode.FEED_NOT_VISIBLE_TO_USER, exception.errorCode)
     }
 
     @Test
@@ -180,10 +270,79 @@ class FeedServiceTest {
         verify(friendshipRepository).existsBetween(1L, 2L)
     }
 
+    @Test
+    fun `차단 관계인 사용자의 공개 피드는 조회할 수 없다`() {
+        val feed = mock(Feed::class.java)
+        `when`(feed.author).thenReturn(user(2L))
+        `when`(feedRepository.findById(3L)).thenReturn(Optional.of(feed))
+        `when`(userBlockRepository.existsBetween(1L, 2L)).thenReturn(true)
+
+        val exception = assertThrows(BaseException::class.java) { service.getFeed(1L, 3L) }
+
+        assertEquals(ErrorCode.USER_BLOCK_RELATIONSHIP, exception.errorCode)
+        verifyNoInteractions(friendshipRepository)
+    }
+
+    @Test
+    fun `대댓글의 부모가 다른 피드이거나 이미 대댓글이면 작성할 수 없다`() {
+        val feed = mock(Feed::class.java)
+        `when`(feed.author).thenReturn(user(1L))
+        `when`(feed.visibility).thenReturn(FeedVisibility.PRIVATE)
+        `when`(feedRepository.findById(3L)).thenReturn(Optional.of(feed))
+        `when`(commentRepository.findByIdAndFeedId(5L, 3L)).thenReturn(null)
+
+        val exception =
+            assertThrows(BaseException::class.java) {
+                service.createComment(1L, 3L, CreateFeedCommentRequest("답글", parentCommentId = 5L))
+            }
+
+        assertEquals(ErrorCode.FEED_PARENT_COMMENT_NOT_FOUND, exception.errorCode)
+        verifyNoInteractions(userRepository)
+    }
+
+    @Test
+    fun `최상위 댓글은 공백을 제거해 저장한다`() {
+        val author = user(1L)
+        val feed = mock(Feed::class.java)
+        val savedComment = mock(FeedComment::class.java)
+        `when`(feed.author).thenReturn(author)
+        `when`(feed.visibility).thenReturn(FeedVisibility.PRIVATE)
+        `when`(feedRepository.findById(3L)).thenReturn(Optional.of(feed))
+        `when`(userRepository.findById(1L)).thenReturn(Optional.of(author))
+        `when`(savedComment.id).thenReturn(7L)
+        `when`(savedComment.author).thenReturn(author)
+        `when`(savedComment.content).thenReturn("댓글")
+        `when`(savedComment.createdDateTime).thenReturn(LocalDateTime.now())
+        `when`(commentRepository.save(org.mockito.ArgumentMatchers.any(FeedComment::class.java))).thenReturn(savedComment)
+
+        val response = service.createComment(1L, 3L, CreateFeedCommentRequest(" 댓글 "))
+
+        assertEquals("댓글", response.content)
+    }
+
+    private fun responseFeed(id: Long): Feed {
+        val feed = mock(Feed::class.java)
+        val room = mock(ChatRoom::class.java)
+        `when`(feed.id).thenReturn(id)
+        `when`(feed.author).thenReturn(user(2L))
+        `when`(feed.chatRoom).thenReturn(room)
+        `when`(feed.content).thenReturn("피드 $id")
+        `when`(feed.visibility).thenReturn(FeedVisibility.PUBLIC)
+        `when`(feed.images).thenReturn(emptyList())
+        `when`(feed.createdDateTime).thenReturn(LocalDateTime.now())
+        `when`(room.id).thenReturn(10L)
+        `when`(room.course).thenReturn(TravelCourse(id = 20L, type = TravelCourseType.PUBLIC, title = "코스"))
+        `when`(room.startDate).thenReturn(LocalDate.now())
+        return feed
+    }
+
     private fun user(id: Long): User =
         User(
             id = id,
             userRole = UserRole.ROLE_USER,
             userInformation = UserInformation("여행자", NicknameColor.GREEN, Gender.N),
         )
+
+    @Suppress("UNCHECKED_CAST")
+    private fun <T> anyValue(): T = org.mockito.Mockito.any<T>()
 }

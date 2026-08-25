@@ -17,6 +17,9 @@ class CustomUserDetailService(
             userRepository.findById(userId).orElseThrow {
                 BaseException(ErrorCode.USER_NOT_FOUND, ErrorCode.USER_NOT_FOUND.errorMessage)
             }
+        if (user.isWithdrawn()) {
+            throw BaseException(ErrorCode.USER_NOT_FOUND, ErrorCode.USER_NOT_FOUND.errorMessage)
+        }
         return CustomUserDto(
             id = user.id.toString(),
             password = "",

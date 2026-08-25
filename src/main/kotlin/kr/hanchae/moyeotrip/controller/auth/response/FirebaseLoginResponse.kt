@@ -45,4 +45,11 @@ data class FirebaseLoginResponse(
         accessMode = Schema.AccessMode.READ_ONLY,
     )
     val providerType: ProviderType,
+    @field:Schema(
+        description = "탈퇴 후 30일 이내 로그인으로 계정이 복구되었는지 여부",
+        example = "false",
+        requiredMode = Schema.RequiredMode.REQUIRED,
+        accessMode = Schema.AccessMode.READ_ONLY,
+    )
+    val reactivated: Boolean = false,
 )

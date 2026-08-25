@@ -8,6 +8,7 @@ import kr.hanchae.moyeotrip.controller.auth.request.FirebaseLoginRequest
 import kr.hanchae.moyeotrip.controller.auth.request.FirebaseSignupRequest
 import kr.hanchae.moyeotrip.controller.auth.request.KakaoAuthorizationCodeRequest
 import kr.hanchae.moyeotrip.controller.auth.request.KakaoCustomTokenRequest
+import kr.hanchae.moyeotrip.controller.auth.request.RefreshAccessTokenRequest
 import kr.hanchae.moyeotrip.controller.client.KakaoTokenInfoResponse
 import kr.hanchae.moyeotrip.entity.notification.NotificationSetting
 import kr.hanchae.moyeotrip.entity.terms.AgreementTerm
@@ -21,6 +22,9 @@ import kr.hanchae.moyeotrip.entity.user.UserAuthIdentity
 import kr.hanchae.moyeotrip.entity.user.UserRole
 import kr.hanchae.moyeotrip.exception.BaseException
 import kr.hanchae.moyeotrip.exception.ErrorCode
+import kr.hanchae.moyeotrip.exception.InvalidRefreshTokenException
+import kr.hanchae.moyeotrip.exception.KakaoClientException
+import kr.hanchae.moyeotrip.exception.UserNotFoundException
 import kr.hanchae.moyeotrip.repository.AgreementTermRepository
 import kr.hanchae.moyeotrip.repository.NicknameCandidateRepository
 import kr.hanchae.moyeotrip.repository.NotificationSettingRepository
@@ -35,12 +39,15 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.mockito.ArgumentMatchers.any
+import org.mockito.ArgumentMatchers.anySet
 import org.mockito.Mockito.mock
 import org.mockito.Mockito.verify
 import org.mockito.Mockito.verifyNoInteractions
 import org.mockito.Mockito.`when`
 import org.springframework.http.HttpStatus
 import org.springframework.web.client.HttpClientErrorException
+import org.springframework.web.client.HttpServerErrorException
+import org.springframework.web.client.RestClientException
 import java.time.LocalDate
 
 class AuthServiceTest {
@@ -53,6 +60,7 @@ class AuthServiceTest {
     private lateinit var notificationSettingRepository: NotificationSettingRepository
     private lateinit var agreementTermRepository: AgreementTermRepository
     private lateinit var userTermsAgreementRepository: UserTermsAgreementRepository
+    private lateinit var userService: UserService
     private lateinit var authService: AuthService
 
     @BeforeEach
@@ -66,6 +74,7 @@ class AuthServiceTest {
         notificationSettingRepository = mock(NotificationSettingRepository::class.java)
         agreementTermRepository = mock(AgreementTermRepository::class.java)
         userTermsAgreementRepository = mock(UserTermsAgreementRepository::class.java)
+        userService = mock(UserService::class.java)
         authService =
             AuthService(
                 userRepository,
@@ -83,6 +92,7 @@ class AuthServiceTest {
                 notificationSettingRepository,
                 agreementTermRepository,
                 userTermsAgreementRepository,
+                userService,
             )
     }
 
@@ -383,6 +393,60 @@ class AuthServiceTest {
     }
 
     @Test
+    fun `탈퇴 후 30일 이내 로그인으로 복구되면 복구 여부와 새 토큰을 반환한다`() {
+        val user =
+            User.createFirebaseUser(
+                email = "restored@example.com",
+                nickname = "돌아온 여행자",
+                nicknameColor = NicknameColor.MINT,
+                userRole = UserRole.ROLE_USER,
+            )
+        user.selectProfileImage("profile.webp")
+        val identity = UserAuthIdentity(user = user, providerType = ProviderType.EMAIL, providerUserId = "restored-uid")
+        `when`(firebaseAuthenticationClient.verifyIdToken("restore-token"))
+            .thenReturn(FirebaseIdentity("restored-uid", "restored@example.com", ProviderType.EMAIL))
+        `when`(userAuthIdentityRepository.findByProviderTypeAndProviderUserId(ProviderType.EMAIL, "restored-uid"))
+            .thenReturn(identity)
+        `when`(userService.handleWithdrawnLogin(user)).thenReturn(WithdrawnLoginResult.RESTORED)
+        `when`(jwtUtil.generateAccessToken(0L, "돌아온 여행자")).thenReturn("restored-access")
+        `when`(jwtUtil.generateRotateId()).thenReturn("restored-rotate")
+        `when`(jwtUtil.generateRefreshToken(0L, "restored-rotate")).thenReturn("restored-refresh")
+
+        val response = authService.loginWithFirebase(FirebaseLoginRequest("restore-token"))
+
+        assertTrue(response.reactivated)
+        assertFalse(response.isNewUser)
+        assertEquals("restored-access", response.accessToken)
+        assertEquals("restored-refresh", response.refreshToken)
+    }
+
+    @Test
+    fun `복구 기간이 지난 탈퇴 계정은 영구 삭제하고 신규 가입 대상으로 응답한다`() {
+        val user =
+            User.createFirebaseUser(
+                email = "expired@example.com",
+                nickname = "만료된 여행자",
+                nicknameColor = NicknameColor.NAVY,
+                userRole = UserRole.ROLE_USER,
+            )
+        val identity = UserAuthIdentity(user = user, providerType = ProviderType.EMAIL, providerUserId = "expired-uid")
+        `when`(firebaseAuthenticationClient.verifyIdToken("expired-token"))
+            .thenReturn(FirebaseIdentity("expired-uid", "expired@example.com", ProviderType.EMAIL))
+        `when`(userAuthIdentityRepository.findByProviderTypeAndProviderUserId(ProviderType.EMAIL, "expired-uid"))
+            .thenReturn(identity)
+        `when`(userService.handleWithdrawnLogin(user)).thenReturn(WithdrawnLoginResult.EXPIRED_DELETED)
+
+        val response = authService.loginWithFirebase(FirebaseLoginRequest("expired-token"))
+
+        assertTrue(response.isNewUser)
+        assertFalse(response.reactivated)
+        assertEquals(SignupState.USER_INFO_REQUIRED, response.signupState)
+        assertEquals(null, response.accessToken)
+        assertEquals(null, response.refreshToken)
+        verifyNoInteractions(jwtUtil)
+    }
+
+    @Test
     fun `프로필 이미지를 선택하지 않은 사용자는 재로그인 시 토큰과 진행 상태를 받는다`() {
         val user =
             User.createFirebaseUser(
@@ -426,6 +490,268 @@ class AuthServiceTest {
 
         assertEquals(ErrorCode.AUTH_IDENTITY_ALREADY_LINKED, exception.errorCode)
     }
+
+    @Test
+    fun `카카오 Web 설정이 비어 있으면 인가 코드 교환을 시작하지 않는다`() {
+        val unavailableService =
+            AuthService(
+                userRepository,
+                jwtUtil,
+                firebaseAuthenticationClient,
+                kakaoClient,
+                KakaoProperties(appId = 987654L, restApiKey = "", clientSecret = "", allowedRedirectUris = emptyList()),
+                userAuthIdentityRepository,
+                nicknameCandidateRepository,
+                notificationSettingRepository,
+                agreementTermRepository,
+                userTermsAgreementRepository,
+                userService,
+            )
+
+        val exception =
+            assertThrows(BaseException::class.java) {
+                unavailableService.createKakaoCustomToken(
+                    KakaoAuthorizationCodeRequest("code", "https://moyeo-trip.jayden-bin.cc/moyeoTrip-Web/auth/kakao/callback"),
+                )
+            }
+
+        assertEquals(ErrorCode.KAKAO_AUTH_UNAVAILABLE, exception.errorCode)
+        verifyNoInteractions(kakaoClient)
+    }
+
+    @Test
+    fun `카카오 서버 오류는 인증 서비스 이용 불가로 변환한다`() {
+        val redirectUri = "https://moyeo-trip.jayden-bin.cc/moyeoTrip-Web/auth/kakao/callback"
+        `when`(kakaoClient.exchangeAuthorizationCode("code", redirectUri))
+            .thenThrow(HttpServerErrorException(HttpStatus.INTERNAL_SERVER_ERROR))
+
+        val exception =
+            assertThrows(BaseException::class.java) {
+                authService.createKakaoCustomToken(KakaoAuthorizationCodeRequest("code", redirectUri))
+            }
+
+        assertEquals(ErrorCode.KAKAO_AUTH_UNAVAILABLE, exception.errorCode)
+    }
+
+    @Test
+    fun `카카오 인가 코드 통신 실패도 인증 서비스 이용 불가로 변환한다`() {
+        val redirectUri = "https://moyeo-trip.jayden-bin.cc/moyeoTrip-Web/auth/kakao/callback"
+        `when`(kakaoClient.exchangeAuthorizationCode("code", redirectUri)).thenThrow(RestClientException("network"))
+
+        val exception =
+            assertThrows(BaseException::class.java) {
+                authService.createKakaoCustomToken(KakaoAuthorizationCodeRequest("code", redirectUri))
+            }
+
+        assertEquals(ErrorCode.KAKAO_AUTH_UNAVAILABLE, exception.errorCode)
+    }
+
+    @Test
+    fun `카카오 토큰 정보 조회 실패는 카카오 클라이언트 예외로 변환한다`() {
+        `when`(kakaoClient.getTokenInfo("token")).thenThrow(IllegalStateException("invalid response"))
+
+        assertThrows(KakaoClientException::class.java) {
+            authService.createKakaoCustomToken(KakaoCustomTokenRequest("token"))
+        }
+    }
+
+    @Test
+    fun `가입 정보가 미완성인 기존 사용자는 신규 가입 단계로 응답한다`() {
+        val user = User(id = 7L, userRole = UserRole.ROLE_USER)
+        val identity = UserAuthIdentity(user = user, providerType = ProviderType.EMAIL, providerUserId = "uid")
+        `when`(firebaseAuthenticationClient.verifyIdToken("token"))
+            .thenReturn(FirebaseIdentity("uid", "user@example.com", ProviderType.EMAIL))
+        `when`(userAuthIdentityRepository.findByProviderTypeAndProviderUserId(ProviderType.EMAIL, "uid"))
+            .thenReturn(identity)
+
+        val response = authService.loginWithFirebase(FirebaseLoginRequest("token", "new-fcm"))
+
+        assertTrue(response.isNewUser)
+        assertEquals(SignupState.USER_INFO_REQUIRED, response.signupState)
+        assertEquals("new-fcm", user.fcmToken)
+    }
+
+    @Test
+    fun `가입 완료된 인증 수단으로 다시 회원가입할 수 없다`() {
+        val user =
+            User.createFirebaseUser(
+                email = "user@example.com",
+                nickname = "기존 사용자",
+                nicknameColor = NicknameColor.BLUE,
+                userRole = UserRole.ROLE_USER,
+            )
+        user.selectProfileImage("profile.png")
+        `when`(firebaseAuthenticationClient.verifyIdToken("id-token"))
+            .thenReturn(FirebaseIdentity("uid", "user@example.com", ProviderType.EMAIL))
+        `when`(userAuthIdentityRepository.findByProviderTypeAndProviderUserId(ProviderType.EMAIL, "uid"))
+            .thenReturn(UserAuthIdentity(user = user, providerType = ProviderType.EMAIL, providerUserId = "uid"))
+
+        assertThrows(kr.hanchae.moyeotrip.exception.AlreadyExistedProviderUserIdException::class.java) {
+            authService.signupWithFirebase(signupRequest())
+        }
+    }
+
+    @Test
+    fun `동일 이메일 계정이 있으면 신규 인증 수단 회원가입을 거부한다`() {
+        `when`(firebaseAuthenticationClient.verifyIdToken("id-token"))
+            .thenReturn(FirebaseIdentity("uid", "user@example.com", ProviderType.GOOGLE))
+        `when`(userAuthIdentityRepository.findByProviderTypeAndProviderUserId(ProviderType.GOOGLE, "uid")).thenReturn(null)
+        `when`(userRepository.findByEmail("user@example.com")).thenReturn(User(id = 9L, userRole = UserRole.ROLE_USER))
+
+        val exception = assertThrows(BaseException::class.java) { authService.signupWithFirebase(signupRequest()) }
+
+        assertEquals(ErrorCode.AUTH_IDENTITY_ALREADY_LINKED, exception.errorCode)
+    }
+
+    @Test
+    fun `존재하지 않는 약관 ID에는 동의할 수 없다`() {
+        stubNewSignupIdentity()
+        `when`(agreementTermRepository.findAllByActiveTrueOrderByIdAsc()).thenReturn(requiredTerms())
+
+        val exception =
+            assertThrows(BaseException::class.java) {
+                authService.signupWithFirebase(signupRequest(agreedTermIds = setOf(1L, 2L, 999L)))
+            }
+
+        assertEquals(ErrorCode.INVALID_TERMS_AGREEMENT, exception.errorCode)
+    }
+
+    @Test
+    fun `후보에 없는 닉네임으로 가입할 수 없다`() {
+        stubNewSignupIdentity()
+        `when`(agreementTermRepository.findAllByActiveTrueOrderByIdAsc()).thenReturn(requiredTerms())
+        `when`(nicknameCandidateRepository.consume("selection-token")).thenReturn(emptyMap())
+
+        val exception = assertThrows(BaseException::class.java) { authService.signupWithFirebase(signupRequest()) }
+
+        assertEquals(ErrorCode.INVALID_NICKNAME_SELECTION, exception.errorCode)
+    }
+
+    @Test
+    fun `이미 사용 중인 닉네임으로 가입할 수 없다`() {
+        stubNewSignupIdentity()
+        `when`(agreementTermRepository.findAllByActiveTrueOrderByIdAsc()).thenReturn(requiredTerms())
+        `when`(nicknameCandidateRepository.consume("selection-token")).thenReturn(mapOf("따스한 사슴 1234" to NicknameColor.RED))
+        `when`(userRepository.existsByInformationNickname("따스한 사슴 1234")).thenReturn(true)
+
+        assertThrows(kr.hanchae.moyeotrip.exception.AlreadyExistNicknameException::class.java) {
+            authService.signupWithFirebase(signupRequest())
+        }
+    }
+
+    @Test
+    fun `미완성 기존 사용자의 가입을 완료하며 누락 약관과 알림 설정을 저장한다`() {
+        val user = User(id = 7L, userRole = UserRole.ROLE_USER)
+        `when`(firebaseAuthenticationClient.verifyIdToken("id-token"))
+            .thenReturn(FirebaseIdentity("uid", "user@example.com", ProviderType.EMAIL))
+        `when`(userAuthIdentityRepository.findByProviderTypeAndProviderUserId(ProviderType.EMAIL, "uid"))
+            .thenReturn(UserAuthIdentity(user = user, providerType = ProviderType.EMAIL, providerUserId = "uid"))
+        `when`(agreementTermRepository.findAllByActiveTrueOrderByIdAsc()).thenReturn(requiredTerms())
+        `when`(nicknameCandidateRepository.consume("selection-token")).thenReturn(mapOf("따스한 사슴 1234" to NicknameColor.RED))
+        `when`(userRepository.existsByInformationNickname("따스한 사슴 1234")).thenReturn(false)
+        `when`(userTermsAgreementRepository.findAllByUserIdAndAgreementTermIdIn(org.mockito.ArgumentMatchers.eq(7L), anySet()))
+            .thenReturn(emptyList())
+        `when`(notificationSettingRepository.findByUserId(7L)).thenReturn(null)
+        `when`(jwtUtil.generateAccessToken(7L, "따스한 사슴 1234")).thenReturn("access")
+        `when`(jwtUtil.generateRotateId()).thenReturn("rotate")
+        `when`(jwtUtil.generateRefreshToken(7L, "rotate")).thenReturn("refresh")
+
+        val response = authService.signupWithFirebase(signupRequest(agreedTermIds = setOf(1L, 2L, 3L)))
+
+        assertEquals("access", response.accessToken)
+        verify(userTermsAgreementRepository).saveAll(org.mockito.ArgumentMatchers.anyList())
+        verify(notificationSettingRepository).save(any(NotificationSetting::class.java))
+    }
+
+    @Test
+    fun `유효하지 않은 refresh token은 재발급할 수 없다`() {
+        `when`(jwtUtil.validateToken(jwtUtil.refreshKey, "refresh")).thenReturn(false)
+
+        assertThrows(InvalidRefreshTokenException::class.java) {
+            authService.refreshTokens(RefreshAccessTokenRequest("refresh"))
+        }
+    }
+
+    @Test
+    fun `유효한 refresh token으로 토큰을 재발급한다`() {
+        val user =
+            User.createFirebaseUser(
+                email = "user@example.com",
+                nickname = "모여트립",
+                nicknameColor = NicknameColor.BLUE,
+                userRole = UserRole.ROLE_USER,
+            )
+        `when`(jwtUtil.validateToken(jwtUtil.refreshKey, "refresh")).thenReturn(true)
+        `when`(jwtUtil.validateCachedRefreshTokenRotateId("refresh")).thenReturn(true)
+        `when`(jwtUtil.getUserId(jwtUtil.refreshKey, "refresh")).thenReturn(7L)
+        `when`(userRepository.findById(7L)).thenReturn(java.util.Optional.of(user))
+        `when`(jwtUtil.generateAccessToken(0L, "모여트립")).thenReturn("new-access")
+        `when`(jwtUtil.generateRotateId()).thenReturn("new-rotate")
+        `when`(jwtUtil.generateRefreshToken(0L, "new-rotate")).thenReturn("new-refresh")
+
+        val response = authService.refreshTokens(RefreshAccessTokenRequest("refresh"))
+
+        assertEquals("new-access", response.accessToken)
+        assertEquals("new-refresh", response.refreshToken)
+    }
+
+    @Test
+    fun `존재하지 않는 사용자의 연결 제공자는 조회할 수 없다`() {
+        `when`(userRepository.existsById(77L)).thenReturn(false)
+
+        assertThrows(UserNotFoundException::class.java) { authService.getLinkedProviders(77L) }
+    }
+
+    @Test
+    fun `이미 같은 사용자에게 연결된 인증 수단은 그대로 반환한다`() {
+        val user = User(id = 7L, userRole = UserRole.ROLE_USER)
+        val identity = UserAuthIdentity(user = user, providerType = ProviderType.GOOGLE, providerUserId = "google")
+        `when`(firebaseAuthenticationClient.verifyIdToken("token"))
+            .thenReturn(FirebaseIdentity("google", "user@gmail.com", ProviderType.GOOGLE))
+        `when`(userRepository.findById(7L)).thenReturn(java.util.Optional.of(user))
+        `when`(userAuthIdentityRepository.findByProviderTypeAndProviderUserId(ProviderType.GOOGLE, "google"))
+            .thenReturn(identity)
+        `when`(userAuthIdentityRepository.findAllByUserId(7L)).thenReturn(listOf(identity))
+
+        val response = authService.linkFirebaseIdentity(7L, FirebaseLoginRequest("token"))
+
+        assertEquals(setOf(ProviderType.GOOGLE), response.providers)
+    }
+
+    @Test
+    fun `한 사용자에게 같은 제공자의 다른 인증 수단을 중복 연결할 수 없다`() {
+        val user = User(id = 7L, userRole = UserRole.ROLE_USER)
+        `when`(firebaseAuthenticationClient.verifyIdToken("token"))
+            .thenReturn(FirebaseIdentity("new-google", "user@gmail.com", ProviderType.GOOGLE))
+        `when`(userRepository.findById(7L)).thenReturn(java.util.Optional.of(user))
+        `when`(userAuthIdentityRepository.findByProviderTypeAndProviderUserId(ProviderType.GOOGLE, "new-google"))
+            .thenReturn(null)
+        `when`(userAuthIdentityRepository.existsByUserIdAndProviderType(7L, ProviderType.GOOGLE)).thenReturn(true)
+
+        val exception =
+            assertThrows(BaseException::class.java) {
+                authService.linkFirebaseIdentity(7L, FirebaseLoginRequest("token"))
+            }
+
+        assertEquals(ErrorCode.AUTH_PROVIDER_ALREADY_LINKED, exception.errorCode)
+    }
+
+    private fun stubNewSignupIdentity() {
+        `when`(firebaseAuthenticationClient.verifyIdToken("id-token"))
+            .thenReturn(FirebaseIdentity("uid", "user@example.com", ProviderType.EMAIL))
+        `when`(userAuthIdentityRepository.findByProviderTypeAndProviderUserId(ProviderType.EMAIL, "uid")).thenReturn(null)
+        `when`(userRepository.findByEmail("user@example.com")).thenReturn(null)
+    }
+
+    private fun signupRequest(agreedTermIds: Set<Long> = setOf(1L, 2L)): FirebaseSignupRequest =
+        FirebaseSignupRequest(
+            idToken = "id-token",
+            nicknameSelectionToken = "selection-token",
+            nickname = "따스한 사슴 1234",
+            gender = Gender.F,
+            birthDate = LocalDate.now().minusYears(20),
+            agreedTermIds = agreedTermIds,
+        )
 
     private fun requiredTerms(): List<AgreementTerm> =
         listOf(

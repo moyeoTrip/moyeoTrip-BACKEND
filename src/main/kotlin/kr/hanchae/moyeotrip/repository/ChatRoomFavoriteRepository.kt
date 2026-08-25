@@ -21,6 +21,8 @@ interface ChatRoomFavoriteRepository :
 }
 
 interface ChatRoomFavoriteCustomRepository {
+    fun findChatRoomsByUserIdOrderByFavoritedAtDesc(userId: Long): List<ChatRoom>
+
     fun findChatRoomIdsByUserIdAndChatRoomIdIn(
         userId: Long,
         chatRoomIds: Collection<Long>,
@@ -30,6 +32,23 @@ interface ChatRoomFavoriteCustomRepository {
 class ChatRoomFavoriteCustomRepositoryImpl(
     private val kotlinJdslJpqlExecutor: KotlinJdslJpqlExecutor,
 ) : ChatRoomFavoriteCustomRepository {
+    override fun findChatRoomsByUserIdOrderByFavoritedAtDesc(userId: Long): List<ChatRoom> =
+        kotlinJdslJpqlExecutor
+            .findAll {
+                val favorite = entity(ChatRoomFavorite::class)
+                val room = entity(ChatRoom::class)
+
+                select(room)
+                    .from(
+                        favorite,
+                        innerJoin(favorite.path(ChatRoomFavorite::chatRoom)).`as`(room),
+                    ).where(favorite.path(ChatRoomFavorite::user).path(User::id).eq(userId))
+                    .orderBy(
+                        favorite.path(ChatRoomFavorite::createdDateTime).desc(),
+                        favorite.path(ChatRoomFavorite::id).desc(),
+                    )
+            }.filterNotNull()
+
     override fun findChatRoomIdsByUserIdAndChatRoomIdIn(
         userId: Long,
         chatRoomIds: Collection<Long>,
