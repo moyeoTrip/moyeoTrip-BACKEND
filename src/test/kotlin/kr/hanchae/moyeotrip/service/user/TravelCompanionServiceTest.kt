@@ -28,6 +28,7 @@ import org.mockito.Mockito.verify
 import org.mockito.Mockito.verifyNoInteractions
 import org.mockito.Mockito.`when`
 import java.time.LocalDate
+import java.time.LocalDateTime
 import java.util.Optional
 
 class TravelCompanionServiceTest {
@@ -176,6 +177,7 @@ class TravelCompanionServiceTest {
 
         assertEquals(1, response.totalCount)
         assertEquals(2, response.companions.single().tripCount)
+        assertEquals(NicknameColor.GREEN, response.companions.single().nicknameColor)
         assertEquals("안동 여행", response.companions.single().latestTripTitle)
         assertEquals(
             listOf(11L, 10L),
@@ -191,7 +193,16 @@ class TravelCompanionServiceTest {
         val reviewer = user(1L, "여행자")
         val target = user(2L, "동행자")
         val room = completedRoom(10L, "안동 여행", LocalDate.now().minusDays(2))
-        val review = TravelCompanion(id = 3L, owner = reviewer, companion = target, chatRoom = room, oneLineReview = "약속을 잘 지켜요")
+        val reviewedAt = LocalDateTime.of(2026, 8, 26, 14, 30)
+        val review =
+            TravelCompanion(
+                id = 3L,
+                owner = reviewer,
+                companion = target,
+                chatRoom = room,
+                oneLineReview = "약속을 잘 지켜요",
+                reviewedAt = reviewedAt,
+            )
         val blankReview = TravelCompanion(id = 4L, owner = reviewer, companion = target, chatRoom = room, oneLineReview = "   ")
         `when`(userRepository.findById(2L)).thenReturn(Optional.of(target))
         `when`(companionRepository.findAllReviewedByCompanionId(2L)).thenReturn(listOf(review, blankReview))
@@ -203,6 +214,8 @@ class TravelCompanionServiceTest {
         assertEquals("여행자", response.single().reviewerNickname)
         assertEquals(NicknameColor.GREEN, response.single().reviewerNicknameColor)
         assertEquals("약속을 잘 지켜요", response.single().content)
+        assertEquals("안동 여행", response.single().tripTitle)
+        assertEquals(reviewedAt, response.single().createdAt)
     }
 
     private fun completedRoom(

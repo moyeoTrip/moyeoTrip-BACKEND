@@ -14,7 +14,7 @@ import org.springframework.data.jpa.repository.JpaRepository
 interface FeedRepository :
     JpaRepository<Feed, Long>,
     FeedCustomRepository {
-답    fun countByAuthorIdAndVisibility(
+    fun countByAuthorIdAndVisibility(
         authorId: Long,
         visibility: FeedVisibility,
     ): Long

@@ -61,7 +61,7 @@ class TravelCompanionCustomRepositoryImpl(
                         record.path(TravelCompanion::companion).path(User::id).eq(companionId),
                         record.path(TravelCompanion::oneLineReview).isNotNull(),
                     ).orderBy(
-                        record.path(TravelCompanion::createdDateTime).desc(),
+                        record.path(TravelCompanion::reviewedAt).desc(),
                         record.path(TravelCompanion::id).desc(),
                     )
             }.filterNotNull()

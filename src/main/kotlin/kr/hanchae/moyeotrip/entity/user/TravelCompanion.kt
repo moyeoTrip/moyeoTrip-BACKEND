@@ -12,6 +12,7 @@ import jakarta.persistence.Table
 import jakarta.persistence.UniqueConstraint
 import kr.hanchae.moyeotrip.entity.BaseTimeEntity
 import kr.hanchae.moyeotrip.entity.chat.ChatRoom
+import java.time.LocalDateTime
 
 @Entity
 @Table(
@@ -32,6 +33,7 @@ class TravelCompanion(
     val chatRoom: ChatRoom,
     mannerScore: Int? = null,
     oneLineReview: String? = null,
+    reviewedAt: LocalDateTime? = null,
 ) : BaseTimeEntity() {
     @Column(name = "manner_score")
     var mannerScore: Int? = mannerScore
@@ -39,6 +41,11 @@ class TravelCompanion(
 
     @Column(name = "one_line_review", length = 40)
     var oneLineReview: String? = oneLineReview
+        protected set
+
+    @Column(name = "reviewed_datetime")
+    var reviewedAt: LocalDateTime? =
+        reviewedAt ?: if (mannerScore != null || !oneLineReview.isNullOrBlank()) LocalDateTime.now() else null
         protected set
 
     init {
@@ -55,5 +62,6 @@ class TravelCompanion(
         require(oneLineReview == null || oneLineReview.length <= 40)
         this.mannerScore = mannerScore
         this.oneLineReview = oneLineReview
+        this.reviewedAt = LocalDateTime.now()
     }
 }

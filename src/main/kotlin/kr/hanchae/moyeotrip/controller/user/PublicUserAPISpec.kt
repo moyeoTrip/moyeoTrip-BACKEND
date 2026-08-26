@@ -53,7 +53,10 @@ interface PublicUserAPISpec {
         @Parameter(description = "조회할 사용자 ID", example = "12") userId: Long,
     ): PublicProfileResponse
 
-    @Operation(summary = "사용자에게 받은 여행 한줄평 목록", description = "대상 사용자에게 완료 여행 동행자가 남긴 비어 있지 않은 한줄평을 최신순으로 반환합니다.")
+    @Operation(
+        summary = "사용자에게 받은 여행 한줄평 목록",
+        description = "대상 사용자에게 완료 여행 동행자가 남긴 비어 있지 않은 한줄평을 여행 제목 및 작성 시각과 함께 최신순으로 반환합니다.",
+    )
     @ApiResponses(
         value = [
             ApiResponse(

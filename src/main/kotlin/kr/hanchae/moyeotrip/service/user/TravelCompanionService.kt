@@ -129,11 +129,13 @@ class TravelCompanionService(
         val content = oneLineReview?.takeIf(String::isNotBlank) ?: return null
         val information = checkNotNull(owner.information)
         return ReceivedTravelReviewResponse(
+            tripTitle = chatRoom.roomTitle,
             reviewerId = owner.id,
             reviewerNickname = information.nickname,
             reviewerNicknameColor = information.nicknameColor,
             reviewerProfileImageUrl = information.profileFileName?.let(objectStorageRepository::getDownloadUrl),
             content = content,
+            createdAt = reviewedAt ?: createdDateTime,
         )
     }
 
@@ -144,6 +146,7 @@ class TravelCompanionService(
         return TravelDexCompanionResponse(
             userId = companion.id,
             nickname = information.nickname,
+            nicknameColor = information.nicknameColor,
             profileImageUrl = information.profileFileName?.let(objectStorageRepository::getDownloadUrl),
             mannerRating = companion.mannerRating,
             tripCount = size,

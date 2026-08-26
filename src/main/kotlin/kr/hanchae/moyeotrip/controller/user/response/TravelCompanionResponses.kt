@@ -3,6 +3,7 @@ package kr.hanchae.moyeotrip.controller.user.response
 import io.swagger.v3.oas.annotations.media.Schema
 import kr.hanchae.moyeotrip.entity.user.NicknameColor
 import java.time.LocalDate
+import java.time.LocalDateTime
 
 @Schema(description = "완료한 여행의 동행자 및 내 평가 정보")
 data class TripCompanionResponse(
@@ -38,6 +39,8 @@ data class TravelDexCompanionResponse(
     val userId: Long,
     @field:Schema(description = "동행자 닉네임", example = "따스한 사슴 3492")
     val nickname: String,
+    @field:Schema(description = "동행자 닉네임 표시 색상", example = "MINT")
+    val nicknameColor: NicknameColor,
     @field:Schema(description = "동행자 프로필 이미지 URL", nullable = true)
     val profileImageUrl: String?,
     @field:Schema(description = "동행자의 평균 매너 점수. 평가가 없으면 null", example = "4.8", nullable = true)
@@ -66,6 +69,8 @@ data class TravelDexMemoryResponse(
 
 @Schema(description = "다른 사용자에게 남겨진 여행 동행 한줄평")
 data class ReceivedTravelReviewResponse(
+    @field:Schema(description = "평가가 작성된 여행 제목", example = "주왕산 & 주산지 힐링 트레킹")
+    val tripTitle: String,
     @field:Schema(description = "한줄평을 남긴 사용자 ID", example = "15")
     val reviewerId: Long,
     @field:Schema(description = "한줄평을 남긴 사용자 닉네임", example = "따스한 사슴 3492")
@@ -76,4 +81,6 @@ data class ReceivedTravelReviewResponse(
     val reviewerProfileImageUrl: String?,
     @field:Schema(description = "여행 동행 한줄평", example = "약속 시간을 잘 지키는 좋은 동행자예요.")
     val content: String,
+    @field:Schema(description = "평가 작성 시각", example = "2026-08-26T14:30:00", type = "string", format = "date-time")
+    val createdAt: LocalDateTime,
 )
