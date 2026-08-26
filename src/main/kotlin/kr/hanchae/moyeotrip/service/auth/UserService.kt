@@ -12,12 +12,15 @@ import kr.hanchae.moyeotrip.controller.user.response.ProfileImageSelectionRespon
 import kr.hanchae.moyeotrip.controller.user.response.ProfileOptionsResponse
 import kr.hanchae.moyeotrip.controller.user.response.PublicProfileResponse
 import kr.hanchae.moyeotrip.controller.user.response.TravelStyleResponse
+import kr.hanchae.moyeotrip.entity.feed.FeedVisibility
 import kr.hanchae.moyeotrip.entity.notification.ChatNotificationMode
 import kr.hanchae.moyeotrip.entity.user.User
 import kr.hanchae.moyeotrip.entity.user.UserProfileImage
 import kr.hanchae.moyeotrip.exception.BaseException
 import kr.hanchae.moyeotrip.exception.ErrorCode
 import kr.hanchae.moyeotrip.exception.UserNotFoundException
+import kr.hanchae.moyeotrip.repository.ChatRoomParticipantRepository
+import kr.hanchae.moyeotrip.repository.FeedRepository
 import kr.hanchae.moyeotrip.repository.LegalDongCodeRepository
 import kr.hanchae.moyeotrip.repository.NotificationSettingRepository
 import kr.hanchae.moyeotrip.repository.ObjectStorageRepository
@@ -49,6 +52,8 @@ class UserService(
     private val profileImageOptimizer: ProfileImageOptimizer,
     private val jwtUtil: JwtUtil,
     private val userWithdrawalDataRepository: UserWithdrawalDataRepository,
+    private val chatRoomParticipantRepository: ChatRoomParticipantRepository,
+    private val feedRepository: FeedRepository,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -73,6 +78,8 @@ class UserService(
             travelStyles = user.travelStyles.sortedBy { it.id }.map { TravelStyleResponse(it.id, it.label) },
             interestedRegions = user.interestedRegions.sortedBy { it.id }.map { InterestedRegionResponse(it.id, it.signguName) },
             mannerRating = user.mannerRating,
+            completedTripCount = chatRoomParticipantRepository.countCompletedTrips(user.id),
+            feedCount = feedRepository.countByAuthorIdAndVisibility(user.id, FeedVisibility.PUBLIC),
         )
     }
 

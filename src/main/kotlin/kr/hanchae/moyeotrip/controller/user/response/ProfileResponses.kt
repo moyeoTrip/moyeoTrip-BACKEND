@@ -54,6 +54,10 @@ data class PublicProfileResponse(
     val interestedRegions: List<InterestedRegionResponse>,
     @field:Schema(description = "함께 여행한 사용자 평가 평균. 평가가 없으면 null", nullable = true, example = "4.7")
     val mannerRating: Double?,
+    @field:Schema(description = "완료한 여행 횟수", example = "8")
+    val completedTripCount: Long,
+    @field:Schema(description = "공개 피드 작성 횟수", example = "5")
+    val feedCount: Long,
 )
 
 @Schema(description = "프로필 수정 화면의 선택 항목 목록")

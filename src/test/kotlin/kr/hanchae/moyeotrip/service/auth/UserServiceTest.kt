@@ -3,6 +3,7 @@ package kr.hanchae.moyeotrip.service.auth
 import kr.hanchae.moyeotrip.client.ProfileImageGenerationClient
 import kr.hanchae.moyeotrip.client.ProfileImagePromptFactory
 import kr.hanchae.moyeotrip.controller.user.request.UpdateProfileRequest
+import kr.hanchae.moyeotrip.entity.feed.FeedVisibility
 import kr.hanchae.moyeotrip.entity.notification.ChatNotificationMode
 import kr.hanchae.moyeotrip.entity.notification.NotificationSetting
 import kr.hanchae.moyeotrip.entity.tour.LegalDongCode
@@ -17,6 +18,8 @@ import kr.hanchae.moyeotrip.entity.user.UserRole
 import kr.hanchae.moyeotrip.exception.BaseException
 import kr.hanchae.moyeotrip.exception.ErrorCode
 import kr.hanchae.moyeotrip.exception.UserNotFoundException
+import kr.hanchae.moyeotrip.repository.ChatRoomParticipantRepository
+import kr.hanchae.moyeotrip.repository.FeedRepository
 import kr.hanchae.moyeotrip.repository.LegalDongCodeRepository
 import kr.hanchae.moyeotrip.repository.NotificationSettingRepository
 import kr.hanchae.moyeotrip.repository.ObjectStorageRepository
@@ -56,6 +59,8 @@ class UserServiceTest {
     private val promptFactory = ProfileImagePromptFactory()
     private val jwtUtil = mock(JwtUtil::class.java)
     private val userWithdrawalDataRepository = mock(UserWithdrawalDataRepository::class.java)
+    private val chatRoomParticipantRepository = mock(ChatRoomParticipantRepository::class.java)
+    private val feedRepository = mock(FeedRepository::class.java)
     private val service =
         UserService(
             userRepository,
@@ -69,6 +74,8 @@ class UserServiceTest {
             profileImageOptimizer,
             jwtUtil,
             userWithdrawalDataRepository,
+            chatRoomParticipantRepository,
+            feedRepository,
         )
 
     @Test
@@ -481,6 +488,8 @@ class UserServiceTest {
         user.updateMannerRating(4.7)
         `when`(userRepository.findById(8L)).thenReturn(Optional.of(user))
         `when`(objectStorageRepository.getDownloadUrl("profile.webp")).thenReturn("https://cdn.example.com/profile.webp")
+        `when`(chatRoomParticipantRepository.countCompletedTrips(8L)).thenReturn(6L)
+        `when`(feedRepository.countByAuthorIdAndVisibility(8L, FeedVisibility.PUBLIC)).thenReturn(4L)
 
         val response = service.getPublicProfile(8L)
 
@@ -491,6 +500,8 @@ class UserServiceTest {
         assertEquals(listOf("사진"), response.travelStyles.map { it.label })
         assertEquals(listOf("안동시"), response.interestedRegions.map { it.signguName })
         assertEquals(4.7, response.mannerRating)
+        assertEquals(6L, response.completedTripCount)
+        assertEquals(4L, response.feedCount)
     }
 
     @Test

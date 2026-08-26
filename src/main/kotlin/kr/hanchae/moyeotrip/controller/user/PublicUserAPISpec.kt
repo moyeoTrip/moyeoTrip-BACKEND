@@ -18,7 +18,7 @@ import kr.hanchae.moyeotrip.exception.ErrorResponse
 interface PublicUserAPISpec {
     @Operation(
         summary = "다른 사용자 프로필 조회",
-        description = "닉네임, 닉네임 표시 색상, 프로필 이미지, 자기소개, 여행 스타일, 관심 지역과 매너 점수만 반환합니다. 생년월일·성별·알림 설정은 반환하지 않습니다.",
+        description = "닉네임, 닉네임 표시 색상, 프로필 이미지, 자기소개, 여행 스타일, 관심 지역, 매너 점수, 완료 여행 횟수와 공개 피드 횟수를 반환합니다. 생년월일·성별·알림 설정은 반환하지 않습니다.",
     )
     @ApiResponses(
         value = [
