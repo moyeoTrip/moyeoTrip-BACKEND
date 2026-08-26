@@ -27,6 +27,7 @@ import kr.hanchae.moyeotrip.controller.chat.response.CurrentTravelRoadmapRespons
 import kr.hanchae.moyeotrip.controller.chat.response.JoinApplicationResponse
 import kr.hanchae.moyeotrip.controller.chat.response.JoinChatRoomResponse
 import kr.hanchae.moyeotrip.controller.chat.response.LeaveChatRoomResponse
+import kr.hanchae.moyeotrip.controller.chat.response.MapChatRoomResponse
 import kr.hanchae.moyeotrip.controller.chat.response.MyChatRoomSummaryResponse
 import kr.hanchae.moyeotrip.controller.chat.response.MyWaitingChatRoomResponse
 import kr.hanchae.moyeotrip.controller.chat.response.SearchChatRoomResponse
@@ -77,6 +78,14 @@ class ChatRoomController(
         @RequestParam(required = false) keyword: String?,
         @RequestParam(defaultValue = "20") limit: Int,
     ): List<SearchChatRoomResponse> = chatRoomService.searchRooms(userId, keyword, limit)
+
+    @GetMapping("/map")
+    override fun getMapRooms(
+        @LoginUserId userId: Long,
+        @RequestParam latitude: Double,
+        @RequestParam longitude: Double,
+        @RequestParam radiusKm: Double,
+    ): List<MapChatRoomResponse> = chatRoomService.getMapRooms(userId, latitude, longitude, radiusKm)
 
     @GetMapping("/search/title")
     override fun searchRoomsByTitle(

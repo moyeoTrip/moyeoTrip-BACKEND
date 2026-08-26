@@ -35,6 +35,7 @@ import kr.hanchae.moyeotrip.controller.chat.response.JoinResult
 import kr.hanchae.moyeotrip.controller.chat.response.LatestChatMessageResponse
 import kr.hanchae.moyeotrip.controller.chat.response.LeaveChatRoomResponse
 import kr.hanchae.moyeotrip.controller.chat.response.LeaveResult
+import kr.hanchae.moyeotrip.controller.chat.response.MapChatRoomResponse
 import kr.hanchae.moyeotrip.controller.chat.response.MentionedChatUserResponse
 import kr.hanchae.moyeotrip.controller.chat.response.MyChatRoomSummaryResponse
 import kr.hanchae.moyeotrip.controller.chat.response.MyWaitingChatRoomResponse
@@ -246,6 +247,58 @@ class ChatRoomService(
                 pageable = pageable,
             )
         }
+
+    @Transactional(readOnly = true)
+    fun getMapRooms(
+        userId: Long,
+        latitude: Double,
+        longitude: Double,
+        radiusKm: Double,
+    ): List<MapChatRoomResponse> {
+        validateMapSearchArea(latitude, longitude, radiusKm)
+        val angularDistance = (radiusKm / EARTH_RADIUS_KM).coerceAtMost(Math.PI)
+        val latitudeDelta = Math.toDegrees(angularDistance)
+        val minimumLatitude = (latitude - latitudeDelta).coerceAtLeast(-90.0)
+        val maximumLatitude = (latitude + latitudeDelta).coerceAtMost(90.0)
+        val longitudeDelta =
+            if (minimumLatitude == -90.0 || maximumLatitude == 90.0) {
+                180.0
+            } else {
+                val ratio = sin(angularDistance) / cos(Math.toRadians(latitude))
+                kotlin.math.abs(Math.toDegrees(asin(ratio.coerceIn(-1.0, 1.0))))
+            }
+        val minimumLongitude = if (longitudeDelta == 180.0) -180.0 else normalizeLongitude(longitude - longitudeDelta)
+        val maximumLongitude = if (longitudeDelta == 180.0) 180.0 else normalizeLongitude(longitude + longitudeDelta)
+        val blockedUserIds = userBlockRepository.findRelatedUserIds(userId).ifEmpty { listOf(NO_USER_ID) }
+        val rooms =
+            roomRepository.findMapRooms(
+                userId = userId,
+                blockedUserIds = blockedUserIds,
+                today = LocalDate.now(),
+                minimumLatitude = minimumLatitude,
+                maximumLatitude = maximumLatitude,
+                minimumLongitude = minimumLongitude,
+                maximumLongitude = maximumLongitude,
+                crossesDateLine = minimumLongitude > maximumLongitude,
+            )
+        val roomsWithDistance =
+            rooms
+                .mapNotNull { room ->
+                    val roomLatitude = room.meetingLatitude ?: return@mapNotNull null
+                    val roomLongitude = room.meetingLongitude ?: return@mapNotNull null
+                    val distanceKm = haversineKm(latitude, longitude, roomLatitude, roomLongitude)
+                    room.takeIf { distanceKm <= radiusKm }?.let { it to distanceKm }
+                }.sortedWith(compareBy<Pair<ChatRoom, Double>> { it.second }.thenBy { it.first.id })
+        val favoriteRoomIds =
+            roomsWithDistance
+                .map { it.first.id }
+                .takeIf(List<Long>::isNotEmpty)
+                ?.let { roomFavoriteRepository.findChatRoomIdsByUserIdAndChatRoomIdIn(userId, it) }
+                .orEmpty()
+        return roomsWithDistance.map { (room, distanceKm) ->
+            room.toMapResponse(favorite = room.id in favoriteRoomIds, distanceKm = distanceKm)
+        }
+    }
 
     @Transactional(readOnly = true)
     fun searchRoomsByTitle(
@@ -1380,6 +1433,25 @@ class ChatRoomService(
             tags = course.tags.sortedBy { it.id }.map { TravelCourseTagResponse(it.id, it.name) },
         )
 
+    private fun ChatRoom.toMapResponse(
+        favorite: Boolean,
+        distanceKm: Double,
+    ): MapChatRoomResponse =
+        MapChatRoomResponse(
+            roomId = id,
+            title = roomTitle,
+            thumbnail = thumbnail,
+            status = status,
+            favorite = favorite,
+            participantCount = participantRepository.countByChatRoomId(id).toInt(),
+            maxParticipants = maxParticipants,
+            tags = course.tags.sortedBy { it.id }.map { TravelCourseTagResponse(it.id, it.name) },
+            meetingLatitude = requireNotNull(meetingLatitude),
+            meetingLongitude = requireNotNull(meetingLongitude),
+            meetingDetails = meetingDetails,
+            distanceMeters = round(distanceKm * METERS_PER_KILOMETER).toLong(),
+        )
+
     private fun ChatRoom.toDetail(
         favorite: Boolean,
         canApply: Boolean,
@@ -1875,4 +1947,24 @@ private fun Double.rounded(scale: Int): Double {
     return round(this * factor) / factor
 }
 
+private fun validateMapSearchArea(
+    latitude: Double,
+    longitude: Double,
+    radiusKm: Double,
+) {
+    if (
+        !latitude.isFinite() ||
+        latitude !in -90.0..90.0 ||
+        !longitude.isFinite() ||
+        longitude !in -180.0..180.0 ||
+        !radiusKm.isFinite() ||
+        radiusKm <= 0.0
+    ) {
+        throw BaseException(ErrorCode.INVALID_MAP_SEARCH_AREA)
+    }
+}
+
+private fun normalizeLongitude(longitude: Double): Double = ((longitude + 540.0) % 360.0) - 180.0
+
 private const val EARTH_RADIUS_KM = 6371.0088
+private const val METERS_PER_KILOMETER = 1000.0

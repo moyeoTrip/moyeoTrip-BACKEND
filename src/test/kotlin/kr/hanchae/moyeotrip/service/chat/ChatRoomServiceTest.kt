@@ -152,6 +152,73 @@ class ChatRoomServiceTest {
     }
 
     @Test
+    fun `지도 탐색은 반경 내 집합 장소를 가까운 순서 응답으로 변환한다`() {
+        val room = room(user(1L), meetingDetails = "포항역 1번 출구")
+        val latitude = 36.0322
+        val longitude = 129.3747
+        val radiusKm = 5.0
+        val latitudeDelta = Math.toDegrees(radiusKm / 6371.0088)
+        val angularDistance = radiusKm / 6371.0088
+        val longitudeDelta =
+            Math.toDegrees(
+                kotlin.math.asin(kotlin.math.sin(angularDistance) / kotlin.math.cos(Math.toRadians(latitude))),
+            )
+        val minimumLongitude = ((longitude - longitudeDelta + 540.0) % 360.0) - 180.0
+        val maximumLongitude = ((longitude + longitudeDelta + 540.0) % 360.0) - 180.0
+        `when`(userBlockRepository.findRelatedUserIds(7L)).thenReturn(emptyList())
+        `when`(
+            roomRepository.findMapRooms(
+                userId = 7L,
+                blockedUserIds = listOf(-1L),
+                today = LocalDate.now(),
+                minimumLatitude = latitude - latitudeDelta,
+                maximumLatitude = latitude + latitudeDelta,
+                minimumLongitude = minimumLongitude,
+                maximumLongitude = maximumLongitude,
+                crossesDateLine = false,
+            ),
+        ).thenReturn(listOf(room))
+        `when`(participantRepository.countByChatRoomId(10L)).thenReturn(2L)
+        `when`(favoriteRepository.findChatRoomIdsByUserIdAndChatRoomIdIn(7L, listOf(10L))).thenReturn(setOf(10L))
+
+        val response = service.getMapRooms(7L, latitude, longitude, radiusKm).single()
+
+        assertEquals(10L, response.roomId)
+        assertEquals(0L, response.distanceMeters)
+        assertEquals(true, response.favorite)
+        assertEquals("포항역 1번 출구", response.meetingDetails)
+    }
+
+    @Test
+    fun `지도 탐색은 유효하지 않은 좌표와 반경을 거부한다`() {
+        val exception = assertThrows(BaseException::class.java) { service.getMapRooms(1L, 91.0, 127.0, 0.0) }
+
+        assertEquals(ErrorCode.INVALID_MAP_SEARCH_AREA, exception.errorCode)
+        verifyNoInteractions(userBlockRepository, roomRepository)
+    }
+
+    @Test
+    fun `지도 탐색 반경에는 상한을 두지 않는다`() {
+        `when`(userBlockRepository.findRelatedUserIds(1L)).thenReturn(emptyList())
+        `when`(
+            roomRepository.findMapRooms(
+                userId = 1L,
+                blockedUserIds = listOf(-1L),
+                today = LocalDate.now(),
+                minimumLatitude = -90.0,
+                maximumLatitude = 90.0,
+                minimumLongitude = -180.0,
+                maximumLongitude = 180.0,
+                crossesDateLine = false,
+            ),
+        ).thenReturn(emptyList())
+
+        val response = service.getMapRooms(1L, 0.0, 0.0, 50_000.0)
+
+        assertEquals(emptyList<Any>(), response)
+    }
+
+    @Test
     fun `모임 찾기는 빈 검색어와 제한값을 정규화하고 방 카드 정보를 반환한다`() {
         val course = TravelCourse(id = 5L, type = TravelCourseType.CUSTOM, title = "경주 코스")
         course.addTags(listOf(TravelCourseTag(id = 2L, name = "역사"), TravelCourseTag(id = 1L, name = "힐링")))

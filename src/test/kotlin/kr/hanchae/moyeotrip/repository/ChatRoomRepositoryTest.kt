@@ -36,6 +36,34 @@ class ChatRoomRepositoryTest : RepositoryIntegrationTestSupport() {
     @Nested
     inner class SearchRoomQueries {
         @Test
+        fun `지도 경계 안에 집합 좌표가 있는 모집 방만 조회한다`() {
+            val me = savedUser()
+            val host = savedUser()
+            val course = savedCourse()
+            val visible = savedRoom(host, course, title = "지도 조회 대상")
+            visible.updateMeetingInfo(36.0322, 129.3747, "포항역", visible.meetingDateTime)
+            chatRoomRepository.saveAndFlush(visible)
+            val outside = savedRoom(host, course, title = "지도 범위 밖")
+            outside.updateMeetingInfo(37.5665, 126.9780, "서울역", outside.meetingDateTime)
+            chatRoomRepository.saveAndFlush(outside)
+            savedRoom(host, course, title = "집합 좌표 없음")
+
+            val rooms =
+                chatRoomRepository.findMapRooms(
+                    userId = me.id,
+                    blockedUserIds = listOf(-1L),
+                    today = LocalDate.now(),
+                    minimumLatitude = 35.9,
+                    maximumLatitude = 36.1,
+                    minimumLongitude = 129.2,
+                    maximumLongitude = 129.5,
+                    crossesDateLine = false,
+                )
+
+            assertEquals(listOf(visible.id), rooms.map { it.id })
+        }
+
+        @Test
         fun `검색어와 차단 및 참가 상태를 적용해 모집 중인 방을 조회한다`() {
             val me = savedUser()
             val host = savedUser()

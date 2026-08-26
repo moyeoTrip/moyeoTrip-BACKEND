@@ -37,6 +37,7 @@ import kr.hanchae.moyeotrip.controller.chat.response.CurrentTravelRoadmapRespons
 import kr.hanchae.moyeotrip.controller.chat.response.JoinApplicationResponse
 import kr.hanchae.moyeotrip.controller.chat.response.JoinChatRoomResponse
 import kr.hanchae.moyeotrip.controller.chat.response.LeaveChatRoomResponse
+import kr.hanchae.moyeotrip.controller.chat.response.MapChatRoomResponse
 import kr.hanchae.moyeotrip.controller.chat.response.MyChatRoomSummaryResponse
 import kr.hanchae.moyeotrip.controller.chat.response.MyWaitingChatRoomResponse
 import kr.hanchae.moyeotrip.controller.chat.response.SearchChatRoomResponse
@@ -231,6 +232,48 @@ interface ChatRoomAPISpec {
         @Parameter(description = "반환할 최대 개수. 기본값은 20입니다.", example = "20")
         limit: Int,
     ): List<SearchChatRoomResponse>
+
+    @Operation(
+        summary = "지도 반경 내 모임 조회",
+        description =
+            "입력 좌표로부터 지정 반경 안에 집합 장소가 있는 모집 중 모임을 가까운 순서로 반환합니다. " +
+                "집합 좌표가 없거나 모집이 마감된 모임, 차단 관계인 사용자가 포함된 모임과 이미 참여 중인 모임은 제외합니다.",
+    )
+    @ApiResponses(
+        value = [
+            ApiResponse(
+                responseCode = "200",
+                description = "지도 반경 내 모임 조회 성공",
+                content = [Content(array = ArraySchema(schema = Schema(implementation = MapChatRoomResponse::class)))],
+            ),
+            ApiResponse(
+                responseCode = "400",
+                description = "위도, 경도 또는 반경이 유효하지 않음",
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [ExampleObject(value = ChatRoomSwaggerExamples.INVALID_MAP_SEARCH_AREA)],
+                    ),
+                ],
+            ),
+            ApiResponse(
+                responseCode = "401",
+                description = "서비스 Access Token이 없거나 유효하지 않음",
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [ExampleObject(value = ChatRoomSwaggerExamples.UNAUTHORIZED)],
+                    ),
+                ],
+            ),
+        ],
+    )
+    fun getMapRooms(
+        @Parameter(hidden = true) userId: Long,
+        @Parameter(description = "지도 중심 위도(-90~90)", example = "36.5684") latitude: Double,
+        @Parameter(description = "지도 중심 경도(-180~180)", example = "128.7294") longitude: Double,
+        @Parameter(description = "검색 반경(km). 0보다 커야 하며 상한은 없습니다.", example = "5") radiusKm: Double,
+    ): List<MapChatRoomResponse>
 
     @Operation(summary = "모임 제목 검색", description = "참가 가능한 모집 중 모임 가운데 채팅방 제목에만 검색어가 포함된 모임을 반환합니다.")
     @ApiResponses(
@@ -1385,6 +1428,7 @@ interface ChatRoomAPISpec {
 }
 
 private object ChatRoomSwaggerExamples {
+    const val INVALID_MAP_SEARCH_AREA = """{"code":40040,"errorMessage":"위도, 경도 또는 검색 반경이 유효하지 않습니다."}"""
     const val BAD_REQUEST = """{"code":40000,"errorMessage":"잘못된 요청입니다."}"""
     const val INVALID_TRAVEL_COURSE_SCHEDULE = """{"code":40007,"errorMessage":"여행 일차마다 방문지를 최소 2개 편성해야 합니다."}"""
     const val INVALID_TRIP_SCHEDULE = """{"code":40008,"errorMessage":"당일치기는 종료 날짜 없이 시간을, 1박 이상은 종료 날짜만 입력해야 합니다."}"""

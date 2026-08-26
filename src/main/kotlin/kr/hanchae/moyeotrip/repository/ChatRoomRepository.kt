@@ -72,6 +72,17 @@ interface ChatRoomCustomRepository {
         pageable: Pageable,
     ): List<ChatRoom>
 
+    fun findMapRooms(
+        userId: Long,
+        blockedUserIds: Collection<Long>,
+        today: LocalDate,
+        minimumLatitude: Double,
+        maximumLatitude: Double,
+        minimumLongitude: Double,
+        maximumLongitude: Double,
+        crossesDateLine: Boolean,
+    ): List<ChatRoom>
+
     fun findAllStartingRoomsWithoutSystemEvent(
         status: ChatRoomStatus,
         date: LocalDate,
@@ -119,6 +130,55 @@ interface ChatRoomCustomRepository {
 class ChatRoomCustomRepositoryImpl(
     private val kotlinJdslJpqlExecutor: KotlinJdslJpqlExecutor,
 ) : ChatRoomCustomRepository {
+    override fun findMapRooms(
+        userId: Long,
+        blockedUserIds: Collection<Long>,
+        today: LocalDate,
+        minimumLatitude: Double,
+        maximumLatitude: Double,
+        minimumLongitude: Double,
+        maximumLongitude: Double,
+        crossesDateLine: Boolean,
+    ): List<ChatRoom> =
+        kotlinJdslJpqlExecutor
+            .findAll {
+                val room = entity(ChatRoom::class)
+                val blockedParticipant = entity(ChatRoomParticipant::class)
+                val myParticipant = entity(ChatRoomParticipant::class)
+                val longitude = room.path(ChatRoom::meetingLongitude)
+
+                select(room)
+                    .from(room)
+                    .whereAnd(
+                        room.path(ChatRoom::status).eq(ChatRoomStatus.RECRUITING),
+                        room.path(ChatRoom::recruitmentDeadlineDate).ge(today),
+                        room.path(ChatRoom::meetingLatitude).ge(minimumLatitude),
+                        room.path(ChatRoom::meetingLatitude).le(maximumLatitude),
+                        if (crossesDateLine) {
+                            or(longitude.ge(minimumLongitude), longitude.le(maximumLongitude))
+                        } else {
+                            and(longitude.ge(minimumLongitude), longitude.le(maximumLongitude))
+                        },
+                        room.path(ChatRoom::host).path(User::id).notIn(blockedUserIds),
+                        notExists(
+                            select(blockedParticipant.path(ChatRoomParticipant::id))
+                                .from(blockedParticipant)
+                                .whereAnd(
+                                    blockedParticipant.path(ChatRoomParticipant::chatRoom).path(ChatRoom::id).eq(room.path(ChatRoom::id)),
+                                    blockedParticipant.path(ChatRoomParticipant::user).path(User::id).`in`(blockedUserIds),
+                                ).asSubquery(),
+                        ),
+                        notExists(
+                            select(myParticipant.path(ChatRoomParticipant::id))
+                                .from(myParticipant)
+                                .whereAnd(
+                                    myParticipant.path(ChatRoomParticipant::chatRoom).path(ChatRoom::id).eq(room.path(ChatRoom::id)),
+                                    myParticipant.path(ChatRoomParticipant::user).path(User::id).eq(userId),
+                                ).asSubquery(),
+                        ),
+                    )
+            }.filterNotNull()
+
     override fun searchRooms(
         userId: Long,
         blockedUserIds: Collection<Long>,

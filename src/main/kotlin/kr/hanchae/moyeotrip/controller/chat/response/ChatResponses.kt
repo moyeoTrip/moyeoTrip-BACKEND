@@ -580,6 +580,34 @@ data class SearchChatRoomResponse(
     val tags: List<TravelCourseTagResponse>,
 )
 
+@Schema(description = "지도 반경 내 모집 중인 채팅방 정보")
+data class MapChatRoomResponse(
+    @field:Schema(description = "채팅방 ID", example = "101")
+    val roomId: Long,
+    @field:Schema(description = "채팅방 제목", example = "주왕산 & 주산지 힐링 트레킹")
+    val title: String,
+    @field:Schema(description = "채팅방 썸네일 URL", nullable = true)
+    val thumbnail: String?,
+    @field:Schema(description = "채팅방 여행 상태", example = "RECRUITING")
+    val status: ChatRoomStatus,
+    @field:Schema(description = "로그인 사용자의 찜 여부", example = "false")
+    val favorite: Boolean,
+    @field:Schema(description = "현재 승인된 참가자 수", example = "2")
+    val participantCount: Int,
+    @field:Schema(description = "호스트를 포함한 최대 참가 인원", example = "5")
+    val maxParticipants: Int,
+    @field:Schema(description = "여행 코스 태그 목록")
+    val tags: List<TravelCourseTagResponse>,
+    @field:Schema(description = "집합 장소 위도", example = "36.5760")
+    val meetingLatitude: Double,
+    @field:Schema(description = "집합 장소 경도", example = "128.9700")
+    val meetingLongitude: Double,
+    @field:Schema(description = "집합 장소 이름 또는 상세 안내", nullable = true)
+    val meetingDetails: String?,
+    @field:Schema(description = "요청 좌표로부터 집합 장소까지의 직선거리(m)", example = "842")
+    val distanceMeters: Long,
+)
+
 @Schema(description = "호스트 승인 또는 대기열 대기 중인 채팅방 정보")
 data class MyWaitingChatRoomResponse(
     @field:Schema(description = "채팅방 ID", example = "101")
