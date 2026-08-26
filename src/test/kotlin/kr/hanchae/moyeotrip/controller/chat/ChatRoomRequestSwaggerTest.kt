@@ -45,6 +45,7 @@ class ChatRoomRequestSwaggerTest {
         assertEquals(
             setOf(
                 "요청 본문 또는 enum 값 오류",
+                "필수 썸네일 오류",
                 "당일·숙박 일정 입력 오류",
                 "최소 출발 인원 오류",
                 "과거 여행 시작일 오류",

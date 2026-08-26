@@ -1569,7 +1569,7 @@ class ChatRoomServiceTest {
     fun `당일치기 일정에는 종료 날짜를 입력할 수 없다`() {
         val request = createRoomRequest(TripType.DAY_TRIP, endDate = LocalDate.now().plusDays(1))
 
-        val exception = assertThrows(BaseException::class.java) { service.createRoom(1L, request) }
+        val exception = assertThrows(BaseException::class.java) { service.createRoom(1L, request, nonEmptyThumbnail()) }
 
         assertEquals(ErrorCode.INVALID_TRIP_SCHEDULE, exception.errorCode)
         verifyNoInteractions(userRepository)
@@ -1582,11 +1582,11 @@ class ChatRoomServiceTest {
 
         assertEquals(
             ErrorCode.INVALID_MINIMUM_PARTICIPANTS,
-            assertThrows(BaseException::class.java) { service.createRoom(1L, tooSmall) }.errorCode,
+            assertThrows(BaseException::class.java) { service.createRoom(1L, tooSmall, nonEmptyThumbnail()) }.errorCode,
         )
         assertEquals(
             ErrorCode.INVALID_MINIMUM_PARTICIPANTS,
-            assertThrows(BaseException::class.java) { service.createRoom(1L, tooLarge) }.errorCode,
+            assertThrows(BaseException::class.java) { service.createRoom(1L, tooLarge, nonEmptyThumbnail()) }.errorCode,
         )
         verifyNoInteractions(userRepository)
     }
@@ -1618,15 +1618,15 @@ class ChatRoomServiceTest {
 
         assertEquals(
             ErrorCode.PAST_CHAT_ROOM_START_DATE,
-            assertThrows(BaseException::class.java) { service.createRoom(1L, pastStartDate) }.errorCode,
+            assertThrows(BaseException::class.java) { service.createRoom(1L, pastStartDate, nonEmptyThumbnail()) }.errorCode,
         )
         assertEquals(
             ErrorCode.PAST_RECRUITMENT_DEADLINE_DATE,
-            assertThrows(BaseException::class.java) { service.createRoom(1L, pastRecruitmentDeadlineDate) }.errorCode,
+            assertThrows(BaseException::class.java) { service.createRoom(1L, pastRecruitmentDeadlineDate, nonEmptyThumbnail()) }.errorCode,
         )
         assertEquals(
             ErrorCode.INVALID_RECRUITMENT_DEADLINE,
-            assertThrows(BaseException::class.java) { service.createRoom(1L, invalidDeadline) }.errorCode,
+            assertThrows(BaseException::class.java) { service.createRoom(1L, invalidDeadline, nonEmptyThumbnail()) }.errorCode,
         )
         verifyNoInteractions(userRepository)
     }
@@ -1641,9 +1641,23 @@ class ChatRoomServiceTest {
                 dayTripEndTime = LocalTime.of(18, 0),
             )
 
-        val exception = assertThrows(BaseException::class.java) { service.createRoom(1L, request) }
+        val exception = assertThrows(BaseException::class.java) { service.createRoom(1L, request, nonEmptyThumbnail()) }
 
         assertEquals(ErrorCode.INVALID_TRIP_SCHEDULE, exception.errorCode)
+        verifyNoInteractions(userRepository)
+    }
+
+    @Test
+    fun `빈 채팅방 썸네일은 생성할 수 없다`() {
+        val thumbnail = mock(MultipartFile::class.java)
+        `when`(thumbnail.isEmpty).thenReturn(true)
+
+        val exception =
+            assertThrows(BaseException::class.java) {
+                service.createRoom(1L, createRoomRequest(TripType.DAY_TRIP, endDate = null), thumbnail)
+            }
+
+        assertEquals(ErrorCode.CHAT_ROOM_THUMBNAIL_REQUIRED, exception.errorCode)
         verifyNoInteractions(userRepository)
     }
 
@@ -1654,6 +1668,8 @@ class ChatRoomServiceTest {
         val first = TourismContent(contentId = 100L, contentType = contentType, title = "서울역")
         val second = TourismContent(contentId = 101L, contentType = contentType, title = "남산")
         val tag = TravelCourseTag(id = 7L, name = "힐링")
+        val thumbnail = mock(MultipartFile::class.java)
+        val thumbnailStream = ByteArrayInputStream(byteArrayOf(1, 2, 3))
         val startDate = LocalDate.now().plusDays(10)
         val request =
             CreateChatRoomRequest(
@@ -1683,11 +1699,23 @@ class ChatRoomServiceTest {
         `when`(tourismContentRepository.findByContentId(100L)).thenReturn(first)
         `when`(tourismContentRepository.findByContentId(101L)).thenReturn(second)
         `when`(tagRepository.findAllById(setOf(7L))).thenReturn(listOf(tag))
+        `when`(thumbnail.isEmpty).thenReturn(false)
+        `when`(thumbnail.originalFilename).thenReturn("cover.webp")
+        `when`(thumbnail.inputStream).thenReturn(thumbnailStream)
+        `when`(
+            objectStorageRepository.upload(
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString(),
+                anyInputStream(),
+            ),
+        ).thenReturn("chat-room/thumbnail/cover.webp")
+        `when`(objectStorageRepository.getDownloadUrl("chat-room/thumbnail/cover.webp"))
+            .thenReturn("https://cdn.example.com/cover.webp")
         `when`(roomRepository.saveAndFlush(any(ChatRoom::class.java))).thenAnswer { it.arguments[0] }
         `when`(participantRepository.saveAndFlush(any(ChatRoomParticipant::class.java))).thenAnswer { it.arguments[0] }
         `when`(messageRepository.saveAndFlush(any(ChatMessage::class.java))).thenAnswer { it.arguments[0] }
 
-        service.createRoom(1L, request)
+        service.createRoom(1L, request, thumbnail)
 
         val roomCaptor = ArgumentCaptor.forClass(ChatRoom::class.java)
         verify(roomRepository).saveAndFlush(roomCaptor.capture())
@@ -1696,6 +1724,7 @@ class ChatRoomServiceTest {
         assertEquals(3, roomCaptor.value.minimumParticipants)
         assertEquals(2, roomCaptor.value.course.places.size)
         assertEquals(540L, roomCaptor.value.course.durationMinutes)
+        assertEquals("https://cdn.example.com/cover.webp", roomCaptor.value.thumbnail)
         verify(placeRepository, org.mockito.Mockito.times(2)).save(any())
         verify(notificationService).notifyRoomCreated(roomCaptor.value)
     }
@@ -2354,6 +2383,8 @@ class ChatRoomServiceTest {
         hour: Int,
         minute: Int,
     ) = CustomCoursePlaceRequest(contentId, dayNumber, sequence, LocalTime.of(hour, minute))
+
+    private fun nonEmptyThumbnail(): MultipartFile = mock(MultipartFile::class.java)
 
     private fun createRoomRequest(
         tripType: TripType,

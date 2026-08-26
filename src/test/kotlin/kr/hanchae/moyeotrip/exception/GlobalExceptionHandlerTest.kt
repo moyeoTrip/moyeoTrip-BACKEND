@@ -8,11 +8,13 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 import org.mockito.Mockito.mock
 import org.mockito.Mockito.verify
+import org.mockito.Mockito.`when`
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
 import org.springframework.http.converter.HttpMessageNotReadableException
 import org.springframework.mock.http.MockHttpInputMessage
 import org.springframework.web.HttpRequestMethodNotSupportedException
+import org.springframework.web.multipart.support.MissingServletRequestPartException
 import org.springframework.web.servlet.resource.NoResourceFoundException
 
 class GlobalExceptionHandlerTest {
@@ -100,5 +102,20 @@ class GlobalExceptionHandlerTest {
         assertEquals(HttpStatus.BAD_REQUEST, response.statusCode)
         assertEquals(ErrorCode.MALFORMED_REQUEST_BODY.code, response.body?.code)
         assertEquals("content 필드는 이 요청에서 사용할 수 없습니다.", response.body?.errorMessage)
+    }
+
+    @Test
+    fun `필수 채팅방 썸네일 파트가 없으면 구체적인 400 오류를 반환한다`() {
+        val exception = mock(MissingServletRequestPartException::class.java)
+        `when`(exception.requestPartName).thenReturn("thumbnail")
+
+        val response = handler.handleMissingRequestPart(exception)
+
+        assertEquals(HttpStatus.BAD_REQUEST, response.statusCode)
+        assertEquals(ErrorCode.CHAT_ROOM_THUMBNAIL_REQUIRED.code, response.body?.code)
+        assertEquals(ErrorCode.CHAT_ROOM_THUMBNAIL_REQUIRED.errorMessage, response.body?.errorMessage)
+        verify(sentryExceptionReporter)
+            .capture(exception, HttpStatus.BAD_REQUEST, ErrorCode.CHAT_ROOM_THUMBNAIL_REQUIRED.code)
+        verify(traceManager).doErrorLog(exception)
     }
 }

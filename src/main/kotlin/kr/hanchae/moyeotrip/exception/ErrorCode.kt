@@ -47,6 +47,7 @@ enum class ErrorCode(
     INVALID_RECRUITMENT_DEADLINE(HttpStatus.BAD_REQUEST, 40036, "모집 마감일은 여행 시작일 이하여야 합니다."),
     INVALID_TOURISM_IMAGE_URL(HttpStatus.BAD_REQUEST, 40037, "관광 이미지 URL은 공식 VisitKorea HTTPS 이미지 주소여야 합니다."),
     PAST_RECRUITMENT_DEADLINE_DATE(HttpStatus.BAD_REQUEST, 40038, "모집 마감일은 오늘 또는 미래 날짜여야 합니다."),
+    CHAT_ROOM_THUMBNAIL_REQUIRED(HttpStatus.BAD_REQUEST, 40039, "채팅방 썸네일 이미지는 필수입니다."),
 
     // UNAUTHORIZED는 40100부터 시작
     UNAUTHORIZED(HttpStatus.UNAUTHORIZED, 40100, "인증되지 않은 사용자입니다."),

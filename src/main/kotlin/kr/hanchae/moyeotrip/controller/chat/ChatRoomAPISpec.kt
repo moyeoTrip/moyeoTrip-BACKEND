@@ -64,12 +64,13 @@ interface ChatRoomAPISpec {
             ),
             ApiResponse(
                 responseCode = "400",
-                description = "요청 본문·일정·나이 또는 커스텀 코스 구성 검증 실패",
+                description = "요청 본문·필수 썸네일·일정·나이 또는 커스텀 코스 구성 검증 실패",
                 content = [
                     Content(
                         schema = Schema(implementation = ErrorResponse::class),
                         examples = [
                             ExampleObject(name = "요청 본문 또는 enum 값 오류", value = ChatRoomSwaggerExamples.BAD_REQUEST),
+                            ExampleObject(name = "필수 썸네일 오류", value = ChatRoomSwaggerExamples.CHAT_ROOM_THUMBNAIL_REQUIRED),
                             ExampleObject(name = "당일·숙박 일정 입력 오류", value = ChatRoomSwaggerExamples.INVALID_TRIP_SCHEDULE),
                             ExampleObject(name = "최소 출발 인원 오류", value = ChatRoomSwaggerExamples.INVALID_MINIMUM_PARTICIPANTS),
                             ExampleObject(name = "과거 여행 시작일 오류", value = ChatRoomSwaggerExamples.PAST_CHAT_ROOM_START_DATE),
@@ -121,7 +122,7 @@ interface ChatRoomAPISpec {
     fun createRoom(
         @Parameter(hidden = true) userId: Long,
         @RequestBody(
-            description = "채팅방 생성 정보와 선택 썸네일을 multipart/form-data로 전송합니다. request 파트는 application/json입니다.",
+            description = "채팅방 생성 정보와 필수 썸네일을 multipart/form-data로 전송합니다. request 파트는 application/json입니다.",
             required = true,
             content = [
                 Content(
@@ -134,8 +135,8 @@ interface ChatRoomAPISpec {
             description = "채팅방 생성 JSON. 아래 예시는 바로 실행 가능한 1박 2일 커스텀 코스입니다.",
         )
         request: CreateChatRoomRequest,
-        @Parameter(description = "선택 썸네일 이미지 파일")
-        thumbnail: MultipartFile?,
+        @Parameter(description = "필수 채팅방 썸네일 이미지 파일", required = true)
+        thumbnail: MultipartFile,
     ): ResponseEntity<CreateChatRoomResponse>
 
     @Operation(summary = "내 채팅방 목록", description = "모집중·확정·종료 상태로 필터링하며 인원, 마감 D-day, 안 읽은 수와 최근 메시지를 반환합니다.")
@@ -1392,6 +1393,7 @@ private object ChatRoomSwaggerExamples {
     const val PAST_CHAT_ROOM_START_DATE = """{"code":40035,"errorMessage":"여행 시작일은 오늘 또는 미래 날짜여야 합니다."}"""
     const val INVALID_RECRUITMENT_DEADLINE = """{"code":40036,"errorMessage":"모집 마감일은 여행 시작일 이하여야 합니다."}"""
     const val PAST_RECRUITMENT_DEADLINE_DATE = """{"code":40038,"errorMessage":"모집 마감일은 오늘 또는 미래 날짜여야 합니다."}"""
+    const val CHAT_ROOM_THUMBNAIL_REQUIRED = """{"code":40039,"errorMessage":"채팅방 썸네일 이미지는 필수입니다."}"""
     const val CHAT_JOIN_APPLICATION_MESSAGE_REQUIRED = """{"code":40010,"errorMessage":"수동 승인 모임은 호스트에게 전할 말을 입력해야 합니다."}"""
     const val UNAUTHORIZED = """{"code":40100,"errorMessage":"인증되지 않은 사용자입니다."}"""
     const val FORBIDDEN = """{"code":40300,"errorMessage":"접근 권한이 없습니다."}"""

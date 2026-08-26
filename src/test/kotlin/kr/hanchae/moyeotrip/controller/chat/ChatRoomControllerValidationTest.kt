@@ -45,6 +45,24 @@ class ChatRoomControllerValidationTest {
     }
 
     @Test
+    fun `채팅방 생성은 필수 썸네일 파트가 없으면 거부한다`() {
+        mockMvc
+            .perform(
+                multipart("/api/v1/chat-rooms")
+                    .file(
+                        MockMultipartFile(
+                            "request",
+                            "request.json",
+                            MediaType.APPLICATION_JSON_VALUE,
+                            validCreateRoomJson.toByteArray(),
+                        ),
+                    ),
+            ).andExpect(status().isBadRequest)
+
+        verifyNoInteractions(chatRoomService)
+    }
+
+    @Test
     fun `채팅방 생성 DTO의 문자열 숫자 나이와 중첩 코스 경계를 검증한다`() {
         val invalidRequests =
             listOf(
@@ -256,6 +274,13 @@ class ChatRoomControllerValidationTest {
                         "request.json",
                         MediaType.APPLICATION_JSON_VALUE,
                         json.toByteArray(),
+                    ),
+                ).file(
+                    MockMultipartFile(
+                        "thumbnail",
+                        "thumbnail.webp",
+                        "image/webp",
+                        byteArrayOf(1),
                     ),
                 ),
         )

@@ -11,6 +11,7 @@ import org.mockito.Mockito.mock
 import org.mockito.Mockito.verify
 import org.mockito.Mockito.`when`
 import org.springframework.http.HttpStatus
+import org.springframework.web.multipart.MultipartFile
 
 class ChatRoomControllerContractTest {
     private val chatRoomService = mock(ChatRoomService::class.java)
@@ -19,13 +20,14 @@ class ChatRoomControllerContractTest {
     @Test
     fun `채팅방 생성은 생성된 roomId 본문의 201 응답을 반환한다`() {
         val request = mock(CreateChatRoomRequest::class.java)
-        `when`(chatRoomService.createRoom(7L, request, null)).thenReturn(CreateChatRoomResponse(roomId = 101L))
+        val thumbnail = mock(MultipartFile::class.java)
+        `when`(chatRoomService.createRoom(7L, request, thumbnail)).thenReturn(CreateChatRoomResponse(roomId = 101L))
 
-        val response = controller.createRoom(7L, request, null)
+        val response = controller.createRoom(7L, request, thumbnail)
 
         assertEquals(HttpStatus.CREATED, response.statusCode)
         assertEquals(CreateChatRoomResponse(roomId = 101L), response.body)
-        verify(chatRoomService).createRoom(7L, request, null)
+        verify(chatRoomService).createRoom(7L, request, thumbnail)
     }
 
     @Test

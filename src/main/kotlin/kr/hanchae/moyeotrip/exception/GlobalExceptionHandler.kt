@@ -12,6 +12,7 @@ import org.springframework.web.HttpRequestMethodNotSupportedException
 import org.springframework.web.bind.MethodArgumentNotValidException
 import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.bind.annotation.RestControllerAdvice
+import org.springframework.web.multipart.support.MissingServletRequestPartException
 import org.springframework.web.servlet.resource.NoResourceFoundException
 
 @RestControllerAdvice
@@ -54,6 +55,24 @@ class GlobalExceptionHandler(
             .status(HttpStatus.BAD_REQUEST)
             .contentType(MediaType.APPLICATION_JSON)
             .body(ErrorResponse.of(ErrorCode.MALFORMED_REQUEST_BODY, unreadableRequestMessage(exception)))
+            .apply {
+                traceManager.doErrorLog(exception)
+            }
+    }
+
+    @ExceptionHandler(MissingServletRequestPartException::class)
+    fun handleMissingRequestPart(exception: MissingServletRequestPartException): ResponseEntity<ErrorResponse> {
+        val errorCode =
+            if (exception.requestPartName == "thumbnail") {
+                ErrorCode.CHAT_ROOM_THUMBNAIL_REQUIRED
+            } else {
+                ErrorCode.BAD_REQUEST
+            }
+        sentryExceptionReporter.capture(exception, HttpStatus.BAD_REQUEST, errorCode.code)
+        return ResponseEntity
+            .status(HttpStatus.BAD_REQUEST)
+            .contentType(MediaType.APPLICATION_JSON)
+            .body(ErrorResponse.of(errorCode, errorCode.errorMessage))
             .apply {
                 traceManager.doErrorLog(exception)
             }

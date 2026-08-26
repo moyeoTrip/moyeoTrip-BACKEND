@@ -139,18 +139,16 @@ class ChatRoomService(
     fun createRoom(
         userId: Long,
         request: CreateChatRoomRequest,
-        thumbnail: MultipartFile? = null,
+        thumbnail: MultipartFile,
     ): CreateChatRoomResponse {
         validateTripSchedule(request)
         validateRoomDates(request)
         validateMinimumParticipants(request)
         validateAgeRestriction(request)
+        validateRequiredThumbnail(thumbnail)
         val host = findUser(userId)
         val course = resolveCourse(host, request)
-        val thumbnailUrl =
-            thumbnail
-                ?.takeUnless(MultipartFile::isEmpty)
-                ?.let(::uploadChatRoomThumbnail)
+        val thumbnailUrl = uploadChatRoomThumbnail(thumbnail)
         val room =
             roomRepository.saveAndFlush(
                 ChatRoom(
@@ -1599,6 +1597,10 @@ class ChatRoomService(
         )
 
     private fun User.nickname() = information?.nickname ?: "사용자 $id"
+
+    private fun validateRequiredThumbnail(thumbnail: MultipartFile) {
+        if (thumbnail.isEmpty) throw BaseException(ErrorCode.CHAT_ROOM_THUMBNAIL_REQUIRED)
+    }
 
     private fun uploadChatRoomThumbnail(file: MultipartFile): String {
         val extension = fileExtension(file)
