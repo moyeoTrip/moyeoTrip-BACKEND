@@ -80,6 +80,10 @@ class TourismContent(
         this.overview = overview
     }
 
+    fun updateThumbnail(thumbnail: String?) {
+        this.thumbnail = thumbnail
+    }
+
     fun update(
         contentType: TourismContentType,
         title: String,

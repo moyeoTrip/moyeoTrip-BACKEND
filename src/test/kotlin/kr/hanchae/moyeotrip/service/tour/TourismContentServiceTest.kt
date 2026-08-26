@@ -9,6 +9,7 @@ import kr.hanchae.moyeotrip.entity.tour.TourismContentImageType
 import kr.hanchae.moyeotrip.entity.tour.TourismContentType
 import kr.hanchae.moyeotrip.exception.BaseException
 import kr.hanchae.moyeotrip.exception.ErrorCode
+import kr.hanchae.moyeotrip.repository.ObjectStorageRepository
 import kr.hanchae.moyeotrip.repository.TourismContentImageRepository
 import kr.hanchae.moyeotrip.repository.TourismContentRepository
 import kr.hanchae.moyeotrip.repository.TourismContentTypeRepository
@@ -30,7 +31,17 @@ class TourismContentServiceTest {
     private val repository = mock(TourismContentRepository::class.java)
     private val contentTypeRepository = mock(TourismContentTypeRepository::class.java)
     private val imageRepository = mock(TourismContentImageRepository::class.java)
-    private val service = TourismContentService(tourApiClient, repository, contentTypeRepository, imageRepository)
+    private val tourismImageProxyService = mock(TourismImageProxyService::class.java)
+    private val objectStorageRepository = mock(ObjectStorageRepository::class.java)
+    private val service =
+        TourismContentService(
+            tourApiClient,
+            repository,
+            contentTypeRepository,
+            imageRepository,
+            tourismImageProxyService,
+            objectStorageRepository,
+        )
 
     @Test
     fun `여행코스를 제외한 관광 타입 목록을 반환한다`() {
@@ -149,6 +160,27 @@ class TourismContentServiceTest {
         assertEquals("https://content", response.contentImages.single().originalImageUrl)
         assertEquals("https://menu", response.menuImages.single().originalImageUrl)
         verifyNoInteractions(tourApiClient)
+    }
+
+    @Test
+    fun `Object Storage에 저장된 관광 이미지는 CDN URL을 우선 반환한다`() {
+        val content =
+            content(200L, 39, "맛집", telephoneName = "예약 문의").apply {
+                updateThumbnail("tourism/image/thumbnail.jpg")
+            }
+        val contentImage = image(content, TourismContentImageType.CONTENT, "tourism/image/content.jpg")
+        `when`(repository.findByContentId(200L)).thenReturn(content)
+        `when`(imageRepository.findAllByTourismContentIdAndTypeOrderByIdAsc(1L, TourismContentImageType.CONTENT))
+            .thenReturn(listOf(contentImage))
+        `when`(imageRepository.findAllByTourismContentIdAndTypeOrderByIdAsc(1L, TourismContentImageType.MENU))
+            .thenReturn(emptyList())
+        `when`(objectStorageRepository.getDownloadUrl("tourism/image/thumbnail.jpg")).thenReturn("https://cdn/thumbnail.jpg")
+        `when`(objectStorageRepository.getDownloadUrl("tourism/image/content.jpg")).thenReturn("https://cdn/content.jpg")
+
+        val response = service.getContent(200L)
+
+        assertEquals("https://cdn/thumbnail.jpg", response.thumbnail)
+        assertEquals("https://cdn/content.jpg", response.contentImages.single().originalImageUrl)
     }
 
     @Test

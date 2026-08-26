@@ -12,6 +12,7 @@ import kr.hanchae.moyeotrip.entity.tour.TourismContentImage
 import kr.hanchae.moyeotrip.entity.tour.TourismContentImageType
 import kr.hanchae.moyeotrip.exception.BaseException
 import kr.hanchae.moyeotrip.exception.ErrorCode
+import kr.hanchae.moyeotrip.repository.ObjectStorageRepository
 import kr.hanchae.moyeotrip.repository.TourismContentImageRepository
 import kr.hanchae.moyeotrip.repository.TourismContentRepository
 import kr.hanchae.moyeotrip.repository.TourismContentTypeRepository
@@ -26,6 +27,8 @@ class TourismContentService(
     private val repository: TourismContentRepository,
     private val contentTypeRepository: TourismContentTypeRepository,
     private val imageRepository: TourismContentImageRepository,
+    private val tourismImageProxyService: TourismImageProxyService,
+    private val objectStorageRepository: ObjectStorageRepository,
 ) {
     @Transactional(readOnly = true)
     fun getContentTypes(): List<TourismContentTypeResponse> =
@@ -52,7 +55,7 @@ class TourismContentService(
                 ?.let { "%$it%" }
         val contents = repository.searchListableContents(COURSE_CONTENT_TYPE_ID, contentTypeId, keywordPattern, pageable)
         return TourismContentPageResponse(
-            items = contents.content.map(TourismContent::toSummaryResponse),
+            items = contents.content.map { it.toSummaryResponse(objectStorageRepository) },
             page = contents.number,
             size = contents.size,
             totalElements = contents.totalElements,
@@ -81,7 +84,8 @@ class TourismContentService(
             contentImages = findImages(content, TourismContentImageType.CONTENT)
             menuImages = if (content.isRestaurant()) findImages(content, TourismContentImageType.MENU) else emptyList()
         }
-        return content.toDetailResponse(contentImages, menuImages)
+        (contentImages + menuImages).forEach(::storeImageIfNeeded)
+        return content.toDetailResponse(contentImages, menuImages, objectStorageRepository)
     }
 
     private fun findImages(
@@ -99,9 +103,21 @@ class TourismContentService(
                 emptyList()
             }
         imageRepository.saveAll(
-            contentImages.map { it.toEntity(content, TourismContentImageType.CONTENT) } +
-                menuImages.map { it.toEntity(content, TourismContentImageType.MENU) },
+            contentImages.map { it.toEntity(content, TourismContentImageType.CONTENT, ::storeImage) } +
+                menuImages.map { it.toEntity(content, TourismContentImageType.MENU, ::storeImage) },
         )
+    }
+
+    private fun storeImage(sourceUrl: String): String? =
+        runCatching {
+            val image = tourismImageProxyService.getImage(sourceUrl)
+            objectStorageRepository.uploadTourismImage(image.bytes, image.contentType.toString())
+        }.getOrNull()
+
+    private fun storeImageIfNeeded(image: TourismContentImage) {
+        val sourceUrl = image.originalImageUrl ?: return
+        if (sourceUrl.startsWith(ObjectStorageRepository.TOURISM_IMAGE_PATH)) return
+        storeImage(sourceUrl)?.let(image::updateOriginalImageUrl)
     }
 
     private fun String.nullIfBlank(): String? = trim().takeIf(String::isNotEmpty)
@@ -119,23 +135,27 @@ class TourismContentService(
 private fun TourImageItem.toEntity(
     content: TourismContent,
     type: TourismContentImageType,
-) = TourismContentImage(
-    tourismContent = content,
-    type = type,
-    imageName = imgname.nullIfBlank(),
-    originalImageUrl = originimgurl.nullIfBlank(),
-    serialNumber = serialnum.nullIfBlank(),
-    copyrightType = cpyrhtDivCd.nullIfBlank(),
-)
+    storeImage: (String) -> String?,
+): TourismContentImage {
+    val sourceUrl = originimgurl.nullIfBlank()
+    return TourismContentImage(
+        tourismContent = content,
+        type = type,
+        imageName = imgname.nullIfBlank(),
+        originalImageUrl = sourceUrl?.let { storeImage(it) ?: it },
+        serialNumber = serialnum.nullIfBlank(),
+        copyrightType = cpyrhtDivCd.nullIfBlank(),
+    )
+}
 
-private fun TourismContent.toSummaryResponse() =
+private fun TourismContent.toSummaryResponse(objectStorageRepository: ObjectStorageRepository) =
     TourismContentSummaryResponse(
         contentId = contentId,
         contentTypeId = contentType.code,
         title = title,
         address1 = address1,
         address2 = address2,
-        thumbnail = thumbnail,
+        thumbnail = thumbnail.toDownloadUrl(objectStorageRepository),
         longitude = longitude,
         latitude = latitude,
     )
@@ -143,6 +163,7 @@ private fun TourismContent.toSummaryResponse() =
 private fun TourismContent.toDetailResponse(
     contentImages: List<TourismContentImage>,
     menuImages: List<TourismContentImage>,
+    objectStorageRepository: ObjectStorageRepository,
 ) = TourismContentDetailResponse(
     contentId = contentId,
     contentTypeId = contentType.code,
@@ -154,18 +175,25 @@ private fun TourismContent.toDetailResponse(
     telephoneName = telephoneName,
     homepage = homepage,
     overview = overview,
-    thumbnail = thumbnail,
+    thumbnail = thumbnail.toDownloadUrl(objectStorageRepository),
     longitude = longitude,
     latitude = latitude,
-    contentImages = contentImages.map { it.toResponse(contentId) },
-    menuImages = menuImages.map { it.toResponse(contentId) },
+    contentImages = contentImages.map { it.toResponse(contentId, objectStorageRepository) },
+    menuImages = menuImages.map { it.toResponse(contentId, objectStorageRepository) },
 )
 
-private fun TourismContentImage.toResponse(contentId: Long) =
-    TourismContentImageResponse(
-        contentId = contentId,
-        imageName = imageName,
-        originalImageUrl = originalImageUrl,
-    )
+private fun TourismContentImage.toResponse(
+    contentId: Long,
+    objectStorageRepository: ObjectStorageRepository,
+) = TourismContentImageResponse(
+    contentId = contentId,
+    imageName = imageName,
+    originalImageUrl = originalImageUrl.toDownloadUrl(objectStorageRepository),
+)
 
 private fun String.nullIfBlank(): String? = trim().takeIf(String::isNotEmpty)
+
+private fun String?.toDownloadUrl(objectStorageRepository: ObjectStorageRepository): String? =
+    this?.let {
+        if (it.startsWith(ObjectStorageRepository.TOURISM_IMAGE_PATH)) objectStorageRepository.getDownloadUrl(it) else it
+    }

@@ -7,6 +7,7 @@ import kr.hanchae.moyeotrip.entity.tour.TourismContent
 import kr.hanchae.moyeotrip.entity.tour.TourismContentType
 import kr.hanchae.moyeotrip.exception.BaseException
 import kr.hanchae.moyeotrip.exception.ErrorCode
+import kr.hanchae.moyeotrip.repository.ObjectStorageRepository
 import kr.hanchae.moyeotrip.repository.TourismContentRepository
 import kr.hanchae.moyeotrip.repository.TourismContentTypeRepository
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -23,7 +24,16 @@ class TourismContentSyncServiceTest {
     private val tourApiClient = mock(TourApiClient::class.java)
     private val repository = mock(TourismContentRepository::class.java)
     private val contentTypeRepository = mock(TourismContentTypeRepository::class.java)
-    private val service = TourismContentSyncService(tourApiClient, repository, contentTypeRepository)
+    private val tourismImageProxyService = mock(TourismImageProxyService::class.java)
+    private val objectStorageRepository = mock(ObjectStorageRepository::class.java)
+    private val service =
+        TourismContentSyncService(
+            tourApiClient,
+            repository,
+            contentTypeRepository,
+            tourismImageProxyService,
+            objectStorageRepository,
+        )
 
     @Test
     fun `관광정보는 페이지를 모두 조회하고 중복 제거 후 기존 데이터와 신규 데이터를 저장한다`() {

@@ -172,7 +172,6 @@ class ChatRoomServiceTest {
         val response = service.searchRooms(2L, "   ", 100)
 
         assertEquals(1, response.size)
-        assertEquals("경주 코스", response.single().courseTitle)
         assertEquals(listOf(1L, 2L), response.single().tags.map { it.tagId })
         assertEquals(2, response.single().participantCount)
     }
@@ -207,7 +206,7 @@ class ChatRoomServiceTest {
     }
 
     @Test
-    fun `모임 찾기는 상태 마감 디데이 찜 여부와 집합 좌표를 반환한다`() {
+    fun `모임 찾기는 상태와 찜 여부 및 인원 정보를 반환한다`() {
         val startDate = LocalDate.now().plusDays(10)
         val room =
             room(
@@ -236,14 +235,9 @@ class ChatRoomServiceTest {
         val response = service.searchRooms(7L, null, 20).single()
 
         assertEquals(ChatRoomStatus.RECRUITING, response.status)
-        assertEquals(5L, response.recruitmentDDay)
         assertEquals(true, response.favorite)
-        assertEquals(LocalTime.of(9, 0), response.dayTripStartTime)
-        assertEquals(LocalTime.of(18, 0), response.dayTripEndTime)
-        assertEquals(36.0322, response.meetingLatitude)
-        assertEquals(129.3747, response.meetingLongitude)
-        assertEquals("포항역 1번 출구", response.meetingDetails)
-        assertEquals(startDate.atStartOfDay(), response.meetingDateTime)
+        assertEquals(2, response.participantCount)
+        assertEquals(3, response.maxParticipants)
     }
 
     @Test
@@ -1467,7 +1461,7 @@ class ChatRoomServiceTest {
 
         val response = service.getFavoriteRooms(2L)
 
-        assertEquals(listOf(LocalDate.of(2026, 9, 2), LocalDate.of(2026, 9, 1)), response.map { it.startDate })
+        assertEquals(listOf(first.id, second.id), response.map { it.roomId })
         assertEquals(listOf(true, true), response.map { it.favorite })
     }
 

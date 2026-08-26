@@ -6,6 +6,7 @@ import kr.hanchae.moyeotrip.entity.tour.TourismContent
 import kr.hanchae.moyeotrip.entity.tour.TourismContentType
 import kr.hanchae.moyeotrip.exception.BaseException
 import kr.hanchae.moyeotrip.exception.ErrorCode
+import kr.hanchae.moyeotrip.repository.ObjectStorageRepository
 import kr.hanchae.moyeotrip.repository.TourismContentRepository
 import kr.hanchae.moyeotrip.repository.TourismContentTypeRepository
 import org.springframework.stereotype.Service
@@ -18,6 +19,8 @@ class TourismContentSyncService(
     private val tourApiClient: TourApiClient,
     private val repository: TourismContentRepository,
     private val contentTypeRepository: TourismContentTypeRepository,
+    private val tourismImageProxyService: TourismImageProxyService,
+    private val objectStorageRepository: ObjectStorageRepository,
 ) {
     @Transactional
     fun syncGyeongsangbukdo(): Int {
@@ -29,8 +32,12 @@ class TourismContentSyncService(
                 val contentType =
                     contentTypes[item.contenttypeid.toInt()]
                         ?: throw BaseException(ErrorCode.TOURISM_CONTENT_TYPE_NOT_FOUND)
-                existingByContentId[item.contentid.toLong()]?.apply { updateFrom(item, contentType) }
-                    ?: item.toEntity(contentType)
+                val entity = existingByContentId[item.contentid.toLong()] ?: item.toEntity(contentType)
+                val previousThumbnail = entity.thumbnail
+                val previousSourceModifiedDateTime = entity.sourceModifiedDateTime
+                entity.updateFrom(item, contentType)
+                entity.storeThumbnailIfNeeded(previousThumbnail, previousSourceModifiedDateTime)
+                entity
             }
         repository.saveAll(entities)
         return entities.size
@@ -80,6 +87,23 @@ class TourismContentSyncService(
             level2Code = item.lclsSystm2.nullIfBlank(),
             level3Code = item.lclsSystm3.nullIfBlank(),
         )
+    }
+
+    private fun TourismContent.storeThumbnailIfNeeded(
+        previousThumbnail: String?,
+        previousSourceModifiedDateTime: LocalDateTime?,
+    ) {
+        val sourceUrl = thumbnail ?: return
+        if (previousThumbnail?.startsWith(ObjectStorageRepository.TOURISM_IMAGE_PATH) == true &&
+            previousSourceModifiedDateTime == sourceModifiedDateTime
+        ) {
+            updateThumbnail(previousThumbnail)
+            return
+        }
+        runCatching {
+            val image = tourismImageProxyService.getImage(sourceUrl)
+            objectStorageRepository.uploadTourismImage(image.bytes, image.contentType.toString())
+        }.onSuccess(::updateThumbnail)
     }
 
     private fun String.nullIfBlank(): String? = trim().takeIf(String::isNotEmpty)

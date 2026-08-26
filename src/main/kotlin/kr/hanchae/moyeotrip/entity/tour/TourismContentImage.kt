@@ -28,12 +28,16 @@ class TourismContentImage(
     @Column(name = "image_name", length = 500)
     val imageName: String?,
     @Column(name = "original_image_url", length = 1000)
-    val originalImageUrl: String?,
+    var originalImageUrl: String?,
     @Column(name = "serial_number", length = 100)
     val serialNumber: String?,
     @Column(name = "copyright_type", length = 20)
     val copyrightType: String?,
-) : BaseModifiableEntity()
+) : BaseModifiableEntity() {
+    fun updateOriginalImageUrl(originalImageUrl: String) {
+        this.originalImageUrl = originalImageUrl
+    }
+}
 
 enum class TourismContentImageType {
     CONTENT,
