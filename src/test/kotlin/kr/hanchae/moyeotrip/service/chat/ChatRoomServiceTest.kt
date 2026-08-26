@@ -829,14 +829,14 @@ class ChatRoomServiceTest {
     }
 
     @Test
-    fun `내용과 고정 여부를 모두 생략하면 기존 공지를 삭제한다`() {
+    fun `호스트는 기존 공지를 삭제할 수 있다`() {
         val host = user(1L)
         val room = room(host)
         val notice = ChatRoomNotice(id = 7L, chatRoom = room, author = host, content = "삭제할 공지", pinned = true)
         `when`(roomRepository.findByIdForUpdate(10L)).thenReturn(room)
         `when`(noticeRepository.findByIdAndChatRoomId(7L, 10L)).thenReturn(notice)
 
-        service.updateNotice(1L, 10L, 7L, notice = null, pinned = null)
+        service.deleteNotice(1L, 10L, 7L)
 
         verify(noticeRepository).delete(notice)
         verifyNoInteractions(messageRepository)

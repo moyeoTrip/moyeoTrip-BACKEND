@@ -121,7 +121,7 @@ interface TravelCompanionAPISpec {
         @Parameter(description = "함께 여행한 채팅방 ID", example = "101")
         roomId: Long,
         @Parameter(description = "평가할 함께 여행한 상대 사용자 ID", example = "202")
-        companionId: Long,
+        companionUserId: Long,
         @Parameter(description = "매너 점수와 한줄평", required = true)
         request: ReviewTravelCompanionRequest,
     ): TripCompanionResponse

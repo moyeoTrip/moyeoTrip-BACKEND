@@ -824,17 +824,28 @@ class ChatRoomService(
         val target =
             noticeRepository.findByIdAndChatRoomId(noticeId, roomId)
                 ?: throw BaseException(ErrorCode.CHAT_ROOM_NOTICE_NOT_FOUND)
-        if (notice == null && pinned == null) {
-            noticeRepository.delete(target)
-        } else {
-            normalizedNotice?.let {
-                target.updateContent(it)
-                saveSystemMessage(room, "공지가 수정되었어요.\n$it")
-            }
-            pinned?.let {
-                target.updatePinned(it)
-            }
+        normalizedNotice?.let {
+            target.updateContent(it)
+            saveSystemMessage(room, "공지가 수정되었어요.\n$it")
         }
+        pinned?.let {
+            target.updatePinned(it)
+        }
+    }
+
+    @Transactional
+    fun deleteNotice(
+        hostId: Long,
+        roomId: Long,
+        noticeId: Long,
+    ) {
+        val room = findRoomForUpdate(roomId)
+        requireHost(room, hostId)
+        requireChatEnabled(room)
+        val target =
+            noticeRepository.findByIdAndChatRoomId(noticeId, roomId)
+                ?: throw BaseException(ErrorCode.CHAT_ROOM_NOTICE_NOT_FOUND)
+        noticeRepository.delete(target)
     }
 
     @Transactional(readOnly = true)

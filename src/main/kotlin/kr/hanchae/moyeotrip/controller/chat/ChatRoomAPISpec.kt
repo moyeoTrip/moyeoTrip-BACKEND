@@ -858,10 +858,57 @@ interface ChatRoomAPISpec {
         @Parameter(hidden = true) userId: Long,
         @Parameter(description = "공지의 채팅방 ID", example = "101")
         roomId: Long,
-        @Parameter(description = "수정하거나 삭제할 공지 ID", example = "301")
+        @Parameter(description = "수정할 공지 ID", example = "301")
         noticeId: Long,
-        @RequestBody(description = "변경할 공지 내용과 고정 여부. 둘 다 생략하면 삭제합니다.", required = true)
+        @RequestBody(description = "변경할 공지 내용과 고정 여부", required = true)
         request: UpdateChatRoomNoticeRequest,
+    ): ResponseEntity<Void>
+
+    @Operation(summary = "채팅방 공지 삭제", description = "채팅방 호스트가 공지를 삭제합니다.")
+    @ApiResponses(
+        value = [
+            ApiResponse(responseCode = "204", description = "채팅방 공지 삭제 성공"),
+            ApiResponse(
+                responseCode = "403",
+                description = "채팅방 호스트가 아님",
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [ExampleObject(value = ChatRoomSwaggerExamples.CHAT_ROOM_HOST_REQUIRED)],
+                    ),
+                ],
+            ),
+            ApiResponse(
+                responseCode = "404",
+                description = "채팅방 또는 공지를 찾을 수 없음",
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [
+                            ExampleObject(name = "채팅방 없음", value = ChatRoomSwaggerExamples.CHAT_ROOM_NOT_FOUND),
+                            ExampleObject(name = "공지 없음", value = ChatRoomSwaggerExamples.CHAT_ROOM_NOTICE_NOT_FOUND),
+                        ],
+                    ),
+                ],
+            ),
+            ApiResponse(
+                responseCode = "409",
+                description = "종료된 방에는 공지를 삭제할 수 없음",
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [ExampleObject(value = ChatRoomSwaggerExamples.CHAT_DISABLED)],
+                    ),
+                ],
+            ),
+        ],
+    )
+    fun deleteNotice(
+        @Parameter(hidden = true) userId: Long,
+        @Parameter(description = "공지의 채팅방 ID", example = "101")
+        roomId: Long,
+        @Parameter(description = "삭제할 공지 ID", example = "301")
+        noticeId: Long,
     ): ResponseEntity<Void>
 
     @Operation(summary = "채팅방 공지 이력", description = "고정 공지와 고정하지 않은 공지를 각각 생성일 내림차순으로 반환합니다.")

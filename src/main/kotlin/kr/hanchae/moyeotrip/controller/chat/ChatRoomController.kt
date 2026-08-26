@@ -217,6 +217,16 @@ class ChatRoomController(
         return ResponseEntity.noContent().build()
     }
 
+    @DeleteMapping("/{roomId}/notices/{noticeId}")
+    override fun deleteNotice(
+        @LoginUserId userId: Long,
+        @PathVariable roomId: Long,
+        @PathVariable noticeId: Long,
+    ): ResponseEntity<Void> {
+        chatRoomService.deleteNotice(userId, roomId, noticeId)
+        return ResponseEntity.noContent().build()
+    }
+
     @GetMapping("/{roomId}/notices")
     override fun getNoticeHistory(
         @LoginUserId userId: Long,

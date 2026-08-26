@@ -114,7 +114,6 @@ class TravelCompanionService(
     private fun TravelCompanion.toTripResponse(): TripCompanionResponse {
         val information = checkNotNull(companion.information)
         return TripCompanionResponse(
-            companionRecordId = id,
             userId = companion.id,
             nickname = information.nickname,
             profileImageUrl = information.profileFileName?.let(objectStorageRepository::getDownloadUrl),

@@ -20,7 +20,7 @@ class JacksonConfig : WebMvcConfigurer {
             .registerModule(KotlinModule.Builder().build())
             .registerModule(JavaTimeModule())
             .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
-            .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
+            .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, true)
 
     override fun configureContentNegotiation(configurer: ContentNegotiationConfigurer) {
         configurer

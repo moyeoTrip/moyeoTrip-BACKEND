@@ -24,13 +24,13 @@ class TravelCompanionController(
         @PathVariable roomId: Long,
     ): List<TripCompanionResponse> = travelCompanionService.getTripCompanions(userId, roomId)
 
-    @PutMapping("/chat-rooms/{roomId}/companions/{companionId}/review")
+    @PutMapping("/chat-rooms/{roomId}/companions/{companionUserId}/review")
     override fun reviewCompanion(
         @LoginUserId userId: Long,
         @PathVariable roomId: Long,
-        @PathVariable companionId: Long,
+        @PathVariable companionUserId: Long,
         @Valid @RequestBody request: ReviewTravelCompanionRequest,
-    ): TripCompanionResponse = travelCompanionService.reviewCompanion(userId, roomId, companionId, request)
+    ): TripCompanionResponse = travelCompanionService.reviewCompanion(userId, roomId, companionUserId, request)
 
     @GetMapping("/users/me/travel-dex")
     override fun getMyTravelDex(

@@ -7,8 +7,6 @@ import java.time.LocalDateTime
 
 @Schema(description = "완료한 여행의 동행자 및 내 평가 정보")
 data class TripCompanionResponse(
-    @field:Schema(description = "동행자 기록 ID", example = "44")
-    val companionRecordId: Long,
     @field:Schema(description = "동행자 사용자 ID", example = "12")
     val userId: Long,
     @field:Schema(description = "동행자 닉네임", example = "따스한 사슴 3492")

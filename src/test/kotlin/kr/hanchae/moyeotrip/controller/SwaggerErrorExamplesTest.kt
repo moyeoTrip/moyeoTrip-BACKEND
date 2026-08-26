@@ -232,8 +232,14 @@ class SwaggerErrorExamplesTest {
 
             val expectedCodes =
                 ErrorCode.entries
-                    .filterNot { it in setOf(ErrorCode.RESOURCE_NOT_FOUND, ErrorCode.TOURISM_CONTENT_TYPE_NOT_FOUND) }
-                    .map { it.code }
+                    .filterNot {
+                        it in
+                            setOf(
+                                ErrorCode.RESOURCE_NOT_FOUND,
+                                ErrorCode.METHOD_NOT_ALLOWED,
+                                ErrorCode.TOURISM_CONTENT_TYPE_NOT_FOUND,
+                            )
+                    }.map { it.code }
                     .toSet()
 
             assertEquals(expectedCodes, documentedCodes)

@@ -8,6 +8,7 @@ import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
 import org.springframework.http.converter.HttpMessageNotReadableException
+import org.springframework.web.HttpRequestMethodNotSupportedException
 import org.springframework.web.bind.MethodArgumentNotValidException
 import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.bind.annotation.RestControllerAdvice
@@ -87,6 +88,16 @@ class GlobalExceptionHandler(
             .apply {
                 traceManager.doErrorLog(exception)
             }
+    }
+
+    @ExceptionHandler(HttpRequestMethodNotSupportedException::class)
+    fun handleMethodNotSupported(exception: HttpRequestMethodNotSupportedException): ResponseEntity<ErrorResponse> {
+        sentryExceptionReporter.capture(exception, HttpStatus.METHOD_NOT_ALLOWED, ErrorCode.METHOD_NOT_ALLOWED.code)
+        return ResponseEntity
+            .status(HttpStatus.METHOD_NOT_ALLOWED)
+            .contentType(MediaType.APPLICATION_JSON)
+            .body(ErrorResponse.of(ErrorCode.METHOD_NOT_ALLOWED, ErrorCode.METHOD_NOT_ALLOWED.errorMessage))
+            .apply { traceManager.doErrorLog(exception) }
     }
 
     @ExceptionHandler(Exception::class)

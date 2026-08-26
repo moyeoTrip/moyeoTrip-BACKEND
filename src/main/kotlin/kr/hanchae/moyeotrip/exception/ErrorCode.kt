@@ -78,6 +78,7 @@ enum class ErrorCode(
     TOURISM_CONTENT_TYPE_NOT_FOUND(HttpStatus.NOT_FOUND, 40409, "관광 콘텐츠 타입을 찾을 수 없습니다."),
     NOTIFICATION_NOT_FOUND(HttpStatus.NOT_FOUND, 40410, "알림을 찾을 수 없습니다."),
     CHAT_ROOM_NOTICE_NOT_FOUND(HttpStatus.NOT_FOUND, 40411, "채팅방 공지를 찾을 수 없습니다."),
+
     TRAVEL_COURSE_TAG_NOT_FOUND(HttpStatus.NOT_FOUND, 40412, "여행 코스 태그를 찾을 수 없습니다."),
     AGREEMENT_TERM_NOT_FOUND(HttpStatus.NOT_FOUND, 40413, "현재 활성 상태인 약관을 찾을 수 없습니다."),
     CHAT_POLL_NOT_FOUND(HttpStatus.NOT_FOUND, 40414, "해당 채팅방의 투표 메시지를 찾을 수 없습니다."),
@@ -88,6 +89,9 @@ enum class ErrorCode(
     FRIEND_REQUEST_NOT_FOUND(HttpStatus.NOT_FOUND, 40419, "친구 요청을 찾을 수 없습니다."),
     FRIENDSHIP_NOT_FOUND(HttpStatus.NOT_FOUND, 40420, "친구 관계를 찾을 수 없습니다."),
     TRAVEL_COMPANION_NOT_FOUND(HttpStatus.NOT_FOUND, 40421, "해당 여행에서 평가할 동행자 기록을 찾을 수 없습니다."),
+
+    // METHOD NOT ALLOWED는 40500부터 시작
+    METHOD_NOT_ALLOWED(HttpStatus.METHOD_NOT_ALLOWED, 40500, "지원하지 않는 HTTP 메서드입니다."),
 
     // 리소스 충돌은 40900부터 시작
     ALREADY_EXIST_NICKNAME(HttpStatus.CONFLICT, 40900, "이미 사용중인 닉네임입니다."),

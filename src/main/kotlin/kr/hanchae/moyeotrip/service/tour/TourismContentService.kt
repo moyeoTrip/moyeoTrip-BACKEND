@@ -166,8 +166,6 @@ private fun TourismContentImage.toResponse(contentId: Long) =
         contentId = contentId,
         imageName = imageName,
         originalImageUrl = originalImageUrl,
-        serialNumber = serialNumber,
-        copyrightType = copyrightType,
     )
 
 private fun String.nullIfBlank(): String? = trim().takeIf(String::isNotEmpty)

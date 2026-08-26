@@ -88,8 +88,4 @@ data class TourismContentImageResponse(
     val imageName: String?,
     @field:Schema(description = "원본 이미지 URL", nullable = true)
     val originalImageUrl: String?,
-    @field:Schema(description = "한국관광공사 이미지 일련번호", nullable = true)
-    val serialNumber: String?,
-    @field:Schema(description = "이미지 저작권 유형", nullable = true)
-    val copyrightType: String?,
 )

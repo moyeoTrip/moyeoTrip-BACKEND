@@ -12,12 +12,24 @@ import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
 import org.springframework.http.converter.HttpMessageNotReadableException
 import org.springframework.mock.http.MockHttpInputMessage
+import org.springframework.web.HttpRequestMethodNotSupportedException
 import org.springframework.web.servlet.resource.NoResourceFoundException
 
 class GlobalExceptionHandlerTest {
     private val traceManager = mock(TraceManager::class.java)
     private val sentryExceptionReporter = mock(SentryExceptionReporter::class.java)
     private val handler = GlobalExceptionHandler(traceManager, sentryExceptionReporter)
+
+    @Test
+    fun `지원하지 않는 HTTP 메서드는 405를 반환한다`() {
+        val exception = HttpRequestMethodNotSupportedException("PATCH")
+
+        val response = handler.handleMethodNotSupported(exception)
+
+        assertEquals(HttpStatus.METHOD_NOT_ALLOWED, response.statusCode)
+        assertEquals(ErrorCode.METHOD_NOT_ALLOWED.code, response.body?.code)
+        verify(traceManager).doErrorLog(exception)
+    }
 
     @Test
     fun `존재하지 않는 API 경로는 404를 반환한다`() {
