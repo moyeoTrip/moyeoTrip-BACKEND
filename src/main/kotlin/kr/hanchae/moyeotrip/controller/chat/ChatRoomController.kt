@@ -56,7 +56,7 @@ class ChatRoomController(
     override fun createRoom(
         @LoginUserId userId: Long,
         @Valid @RequestPart("request") request: CreateChatRoomRequest,
-        @RequestPart("thumbnail", required = false) thumbnail: MultipartFile?,
+        @RequestPart("thumbnail", required = true) thumbnail: MultipartFile?,
     ): ResponseEntity<CreateChatRoomResponse> =
         ResponseEntity.status(HttpStatus.CREATED).body(chatRoomService.createRoom(userId, request, thumbnail))
 
