@@ -87,6 +87,8 @@ class UserServiceTest {
 
         val response = service.getProfile(7L)
 
+        assertEquals(7L, response.userId)
+        assertEquals(NicknameColor.BLUE, response.nicknameColor)
         assertEquals(ChatNotificationMode.MENTIONS_AND_REPLIES, response.chatNotificationMode)
         assertFalse(response.recruitmentDeadlineEnabled)
         assertFalse(response.marketingEnabled)

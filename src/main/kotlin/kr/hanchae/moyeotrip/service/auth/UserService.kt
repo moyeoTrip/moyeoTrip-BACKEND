@@ -248,7 +248,9 @@ class UserService(
         val information = checkNotNull(information)
         val notificationSetting = notificationSettingRepository.findByUserId(id)
         return MyProfileResponse(
+            userId = id,
             nickname = information.nickname,
+            nicknameColor = information.nicknameColor,
             profileImageUrl = information.profileFileName?.let(objectStorageRepository::getDownloadUrl),
             introduction = information.introduction,
             travelStyles = travelStyles.sortedBy { it.label }.map { TravelStyleResponse(it.id, it.label) },

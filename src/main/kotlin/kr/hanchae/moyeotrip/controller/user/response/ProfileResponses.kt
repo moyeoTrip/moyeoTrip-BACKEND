@@ -8,8 +8,12 @@ import java.time.LocalDate
 
 @Schema(description = "로그인 사용자의 프로필 정보")
 data class MyProfileResponse(
+    @field:Schema(description = "사용자 ID", example = "12")
+    val userId: Long,
     @field:Schema(description = "사용자 닉네임", example = "따스한 사슴 3492")
     val nickname: String,
+    @field:Schema(description = "닉네임 표시 색상", example = "MINT")
+    val nicknameColor: NicknameColor,
     @field:Schema(description = "현재 프로필 이미지 URL", nullable = true)
     val profileImageUrl: String?,
     @field:Schema(description = "자기소개", nullable = true)
