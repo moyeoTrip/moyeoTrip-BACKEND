@@ -3,6 +3,7 @@ package kr.hanchae.moyeotrip.controller.feed.request
 import io.swagger.v3.oas.annotations.media.Schema
 import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.Size
+import kr.hanchae.moyeotrip.entity.feed.FeedReportReason
 import kr.hanchae.moyeotrip.entity.feed.FeedVisibility
 
 @Schema(description = "여행 피드 작성 요청. 사진은 multipart images 파트로 최대 10장을 함께 전송합니다.")
@@ -25,6 +26,15 @@ data class CreateFeedCommentRequest(
     val content: String,
     @field:Schema(description = "대댓글을 작성할 부모 댓글 ID. 생략하면 최상위 댓글입니다.", example = "45", nullable = true)
     val parentCommentId: Long? = null,
+)
+
+@Schema(description = "피드 신고 요청")
+data class CreateFeedReportRequest(
+    @field:Schema(description = "신고 사유", example = "SPAM")
+    val reason: FeedReportReason,
+    @field:Schema(description = "기타 신고 상세 내용", nullable = true, maxLength = 300)
+    @field:Size(max = 300)
+    val details: String? = null,
 )
 
 @Schema(

@@ -10,11 +10,13 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse
 import io.swagger.v3.oas.annotations.responses.ApiResponses
 import io.swagger.v3.oas.annotations.tags.Tag
 import kr.hanchae.moyeotrip.controller.feed.request.CreateFeedCommentRequest
+import kr.hanchae.moyeotrip.controller.feed.request.CreateFeedReportRequest
 import kr.hanchae.moyeotrip.controller.feed.request.CreateFeedRequest
 import kr.hanchae.moyeotrip.controller.feed.request.FeedTab
 import kr.hanchae.moyeotrip.controller.feed.response.FeedCommentResponse
 import kr.hanchae.moyeotrip.controller.feed.response.FeedLikeResponse
 import kr.hanchae.moyeotrip.controller.feed.response.FeedPageResponse
+import kr.hanchae.moyeotrip.controller.feed.response.FeedReportReasonResponse
 import kr.hanchae.moyeotrip.controller.feed.response.FeedResponse
 import kr.hanchae.moyeotrip.exception.ErrorResponse
 import org.springframework.http.ResponseEntity
@@ -22,6 +24,18 @@ import org.springframework.web.multipart.MultipartFile
 
 @Tag(name = "피드", description = "완료한 여행 피드, 댓글 및 좋아요 API")
 interface FeedAPISpec {
+    @Operation(summary = "피드 신고 사유 목록 조회", description = "신고 시트에 표시할 신고 사유 코드와 한글 표시명을 반환합니다.")
+    @ApiResponses(
+        value = [
+            ApiResponse(
+                responseCode = "200",
+                description = "피드 신고 사유 목록 조회 성공",
+                content = [Content(array = ArraySchema(schema = Schema(implementation = FeedReportReasonResponse::class)))],
+            ),
+        ],
+    )
+    fun getReportReasons(): List<FeedReportReasonResponse>
+
     @Operation(summary = "여행 피드 작성", description = "완료한 본인 여행 채팅방을 선택해 본문, 공개 범위와 최대 10장의 사진을 등록합니다.")
     @ApiResponses(
         value = [
@@ -197,6 +211,58 @@ interface FeedAPISpec {
         feedId: Long,
     ): FeedLikeResponse
 
+    @Operation(summary = "피드 신고", description = "피드를 신고합니다. 서로 다른 사용자의 신고가 3건 누적되면 피드는 비공개 처리됩니다.")
+    @ApiResponses(
+        value = [
+            ApiResponse(responseCode = "204", description = "피드 신고 성공"),
+            ApiResponse(
+                responseCode = "400",
+                description = "본인이 작성한 피드를 신고함",
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [ExampleObject(value = FeedSwaggerExamples.SELF_REPORT)],
+                    ),
+                ],
+            ),
+            ApiResponse(
+                responseCode = "403",
+                description = "차단 관계이거나 조회할 수 없는 피드",
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [ExampleObject(value = FeedSwaggerExamples.FEED_NOT_VISIBLE)],
+                    ),
+                ],
+            ),
+            ApiResponse(
+                responseCode = "404",
+                description = "피드 또는 사용자를 찾을 수 없음",
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [ExampleObject(value = FeedSwaggerExamples.FEED_NOT_FOUND)],
+                    ),
+                ],
+            ),
+            ApiResponse(
+                responseCode = "409",
+                description = "이미 신고한 피드",
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [ExampleObject(value = FeedSwaggerExamples.ALREADY_REPORTED)],
+                    ),
+                ],
+            ),
+        ],
+    )
+    fun reportFeed(
+        @Parameter(hidden = true) userId: Long,
+        @Parameter(description = "신고할 피드 ID", example = "100") feedId: Long,
+        @Parameter(description = "신고 사유와 선택적 상세 내용", required = true) request: CreateFeedReportRequest,
+    ): ResponseEntity<Void>
+
     @Operation(summary = "피드 댓글 목록 조회", description = "최상위 댓글과 각 댓글의 대댓글을 함께 반환합니다.")
     @ApiResponses(
         value = [
@@ -305,4 +371,6 @@ private object FeedSwaggerExamples {
     const val PARENT_COMMENT_NOT_FOUND = """{"code":40418,"errorMessage":"답글을 달 원본 댓글을 찾을 수 없습니다."}"""
     const val USER_NOT_FOUND = """{"code":40400,"errorMessage":"해당 유저를 찾을 수 없습니다."}"""
     const val CHAT_ROOM_NOT_FOUND = """{"code":40405,"errorMessage":"채팅방을 찾을 수 없습니다."}"""
+    const val SELF_REPORT = """{"code":40039,"errorMessage":"본인이 작성한 피드는 신고할 수 없습니다."}"""
+    const val ALREADY_REPORTED = """{"code":40917,"errorMessage":"이미 신고한 피드입니다."}"""
 }

@@ -47,6 +47,7 @@ enum class ErrorCode(
     INVALID_RECRUITMENT_DEADLINE(HttpStatus.BAD_REQUEST, 40036, "모집 마감일은 여행 시작일 이하여야 합니다."),
     INVALID_TOURISM_IMAGE_URL(HttpStatus.BAD_REQUEST, 40037, "관광 이미지 URL은 공식 VisitKorea HTTPS 이미지 주소여야 합니다."),
     PAST_RECRUITMENT_DEADLINE_DATE(HttpStatus.BAD_REQUEST, 40038, "모집 마감일은 오늘 또는 미래 날짜여야 합니다."),
+    SELF_FEED_REPORT_NOT_ALLOWED(HttpStatus.BAD_REQUEST, 40039, "본인이 작성한 피드는 신고할 수 없습니다."),
     CHAT_ROOM_THUMBNAIL_REQUIRED(HttpStatus.BAD_REQUEST, 40039, "채팅방 썸네일 이미지는 필수입니다."),
 
     // UNAUTHORIZED는 40100부터 시작
@@ -111,6 +112,7 @@ enum class ErrorCode(
     TRAVEL_COURSE_PUBLICATION_NOT_ALLOWED(HttpStatus.CONFLICT, 40914, "공개 여부를 선택할 수 있는 완료 코스가 아닙니다."),
     TRIP_NOT_COMPLETED(HttpStatus.CONFLICT, 40915, "아직 완료되지 않은 여행입니다."),
     FEED_ALREADY_CREATED_FOR_TRIP(HttpStatus.CONFLICT, 40916, "같은 여행에는 피드를 한 번만 작성할 수 있습니다."),
+    FEED_ALREADY_REPORTED(HttpStatus.CONFLICT, 40917, "이미 신고한 피드입니다."),
 
     // 요청 한도 초과는 42900부터 시작
     PROFILE_IMAGE_GENERATION_LIMIT(HttpStatus.TOO_MANY_REQUESTS, 42900, "프로필 이미지는 사용자당 최대 3번까지 생성할 수 있습니다."),

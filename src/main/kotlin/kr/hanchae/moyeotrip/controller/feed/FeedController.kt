@@ -2,11 +2,13 @@ package kr.hanchae.moyeotrip.controller.feed
 
 import jakarta.validation.Valid
 import kr.hanchae.moyeotrip.controller.feed.request.CreateFeedCommentRequest
+import kr.hanchae.moyeotrip.controller.feed.request.CreateFeedReportRequest
 import kr.hanchae.moyeotrip.controller.feed.request.CreateFeedRequest
 import kr.hanchae.moyeotrip.controller.feed.request.FeedTab
 import kr.hanchae.moyeotrip.controller.feed.response.FeedCommentResponse
 import kr.hanchae.moyeotrip.controller.feed.response.FeedLikeResponse
 import kr.hanchae.moyeotrip.controller.feed.response.FeedPageResponse
+import kr.hanchae.moyeotrip.controller.feed.response.FeedReportReasonResponse
 import kr.hanchae.moyeotrip.controller.feed.response.FeedResponse
 import kr.hanchae.moyeotrip.service.feed.FeedService
 import kr.hanchae.moyeotrip.utils.LoginUserId
@@ -28,6 +30,9 @@ import org.springframework.web.multipart.MultipartFile
 class FeedController(
     private val feedService: FeedService,
 ) : FeedAPISpec {
+    @GetMapping("/report-reasons")
+    override fun getReportReasons(): List<FeedReportReasonResponse> = feedService.getReportReasons()
+
     @PostMapping(consumes = [MediaType.MULTIPART_FORM_DATA_VALUE])
     override fun createFeed(
         @LoginUserId userId: Long,
@@ -54,6 +59,16 @@ class FeedController(
         @LoginUserId userId: Long,
         @PathVariable feedId: Long,
     ): FeedLikeResponse = feedService.toggleLike(userId, feedId)
+
+    @PostMapping("/{feedId}/reports")
+    override fun reportFeed(
+        @LoginUserId userId: Long,
+        @PathVariable feedId: Long,
+        @Valid @RequestBody request: CreateFeedReportRequest,
+    ): ResponseEntity<Void> {
+        feedService.reportFeed(userId, feedId, request)
+        return ResponseEntity.noContent().build()
+    }
 
     @GetMapping("/{feedId}/comments")
     override fun getComments(

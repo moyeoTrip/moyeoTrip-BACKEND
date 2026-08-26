@@ -1,19 +1,30 @@
 package kr.hanchae.moyeotrip.repository
 
 import com.linecorp.kotlinjdsl.support.spring.data.jpa.repository.KotlinJdslJpqlExecutor
+import jakarta.persistence.LockModeType
 import kr.hanchae.moyeotrip.entity.feed.Feed
 import kr.hanchae.moyeotrip.entity.feed.FeedComment
 import kr.hanchae.moyeotrip.entity.feed.FeedLike
+import kr.hanchae.moyeotrip.entity.feed.FeedReport
 import kr.hanchae.moyeotrip.entity.feed.FeedVisibility
 import kr.hanchae.moyeotrip.entity.user.Friendship
 import kr.hanchae.moyeotrip.entity.user.User
 import kr.hanchae.moyeotrip.entity.user.UserBlock
 import org.springframework.data.domain.Pageable
 import org.springframework.data.jpa.repository.JpaRepository
+import org.springframework.data.jpa.repository.Lock
+import org.springframework.data.jpa.repository.Query
+import org.springframework.data.repository.query.Param
 
 interface FeedRepository :
     JpaRepository<Feed, Long>,
     FeedCustomRepository {
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT feed FROM Feed feed WHERE feed.id = :feedId")
+    fun findByIdForUpdate(
+        @Param("feedId") feedId: Long,
+    ): Feed?
+
     fun countByAuthorIdAndVisibility(
         authorId: Long,
         visibility: FeedVisibility,
@@ -23,6 +34,15 @@ interface FeedRepository :
         chatRoomId: Long,
         authorId: Long,
     ): Boolean
+}
+
+interface FeedReportRepository : JpaRepository<FeedReport, Long> {
+    fun existsByFeedIdAndReporterId(
+        feedId: Long,
+        reporterId: Long,
+    ): Boolean
+
+    fun countByFeedId(feedId: Long): Long
 }
 
 interface FeedCustomRepository {

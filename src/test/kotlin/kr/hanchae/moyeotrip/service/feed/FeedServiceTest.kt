@@ -1,12 +1,15 @@
 package kr.hanchae.moyeotrip.service.feed
 
 import kr.hanchae.moyeotrip.controller.feed.request.CreateFeedCommentRequest
+import kr.hanchae.moyeotrip.controller.feed.request.CreateFeedReportRequest
 import kr.hanchae.moyeotrip.controller.feed.request.CreateFeedRequest
 import kr.hanchae.moyeotrip.controller.feed.request.FeedTab
 import kr.hanchae.moyeotrip.entity.chat.ChatRoom
 import kr.hanchae.moyeotrip.entity.feed.Feed
 import kr.hanchae.moyeotrip.entity.feed.FeedComment
 import kr.hanchae.moyeotrip.entity.feed.FeedLike
+import kr.hanchae.moyeotrip.entity.feed.FeedReport
+import kr.hanchae.moyeotrip.entity.feed.FeedReportReason
 import kr.hanchae.moyeotrip.entity.feed.FeedVisibility
 import kr.hanchae.moyeotrip.entity.tour.TravelCourse
 import kr.hanchae.moyeotrip.entity.tour.TravelCourseType
@@ -21,6 +24,7 @@ import kr.hanchae.moyeotrip.repository.ChatRoomParticipantRepository
 import kr.hanchae.moyeotrip.repository.ChatRoomRepository
 import kr.hanchae.moyeotrip.repository.FeedCommentRepository
 import kr.hanchae.moyeotrip.repository.FeedLikeRepository
+import kr.hanchae.moyeotrip.repository.FeedReportRepository
 import kr.hanchae.moyeotrip.repository.FeedRepository
 import kr.hanchae.moyeotrip.repository.FriendshipRepository
 import kr.hanchae.moyeotrip.repository.ObjectStorageRepository
@@ -29,6 +33,7 @@ import kr.hanchae.moyeotrip.repository.UserRepository
 import kr.hanchae.moyeotrip.service.notification.NotificationService
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertThrows
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.mockito.Mockito.mock
 import org.mockito.Mockito.verify
@@ -51,6 +56,7 @@ class FeedServiceTest {
     private val friendshipRepository = mock(FriendshipRepository::class.java)
     private val storageRepository = mock(ObjectStorageRepository::class.java)
     private val notificationService = mock(NotificationService::class.java)
+    private val reportRepository = mock(FeedReportRepository::class.java)
     private val service =
         FeedService(
             feedRepository,
@@ -63,7 +69,57 @@ class FeedServiceTest {
             friendshipRepository,
             storageRepository,
             notificationService,
+            reportRepository,
         )
+
+    @Test
+    fun `신고 사유 목록을 표시명과 함께 반환한다`() {
+        val response = service.getReportReasons()
+
+        assertEquals(FeedReportReason.entries, response.map { it.reason })
+        assertEquals("스팸 또는 광고", response.first().displayName)
+    }
+
+    @Test
+    fun `세 번째 신고가 누적되면 피드를 비공개 처리한다`() {
+        val author = user(2L)
+        val reporter = user(1L)
+        val feed =
+            Feed(
+                id = 3L,
+                author = author,
+                chatRoom = mock(ChatRoom::class.java),
+                content = "신고 대상",
+                visibility = FeedVisibility.PUBLIC,
+            )
+        `when`(feedRepository.findByIdForUpdate(3L)).thenReturn(feed)
+        `when`(userRepository.findById(1L)).thenReturn(Optional.of(reporter))
+        `when`(reportRepository.existsByFeedIdAndReporterId(3L, 1L)).thenReturn(false)
+        `when`(reportRepository.countByFeedId(3L)).thenReturn(3L)
+
+        service.reportFeed(1L, 3L, CreateFeedReportRequest(FeedReportReason.SPAM, " 반복 광고 "))
+
+        assertEquals(FeedVisibility.PRIVATE, feed.visibility)
+        assertTrue(feed.hiddenByReports)
+        verify(reportRepository).saveAndFlush(org.mockito.ArgumentMatchers.any(FeedReport::class.java))
+    }
+
+    @Test
+    fun `같은 사용자는 동일 피드를 중복 신고할 수 없다`() {
+        val feed = mock(Feed::class.java)
+        `when`(feed.author).thenReturn(user(2L))
+        `when`(feed.visibility).thenReturn(FeedVisibility.PUBLIC)
+        `when`(feedRepository.findByIdForUpdate(3L)).thenReturn(feed)
+        `when`(reportRepository.existsByFeedIdAndReporterId(3L, 1L)).thenReturn(true)
+
+        val exception =
+            assertThrows(BaseException::class.java) {
+                service.reportFeed(1L, 3L, CreateFeedReportRequest(FeedReportReason.SPAM))
+            }
+
+        assertEquals(ErrorCode.FEED_ALREADY_REPORTED, exception.errorCode)
+        verifyNoInteractions(userRepository)
+    }
 
     @Test
     fun `이미지가 아닌 파일로 피드를 작성할 수 없다`() {
@@ -252,6 +308,18 @@ class FeedServiceTest {
         val exception = assertThrows(BaseException::class.java) { service.getFeed(1L, 3L) }
 
         assertEquals(ErrorCode.FEED_NOT_VISIBLE_TO_USER, exception.errorCode)
+    }
+
+    @Test
+    fun `신고로 비공개된 피드는 작성자가 조회하면 신고 비공개 여부를 내려준다`() {
+        val feed = responseFeed(3L)
+        `when`(feed.visibility).thenReturn(FeedVisibility.PRIVATE)
+        `when`(feed.hiddenByReports).thenReturn(true)
+        `when`(feedRepository.findById(3L)).thenReturn(Optional.of(feed))
+
+        val response = service.getFeed(2L, 3L)
+
+        assertTrue(response.hiddenByReports)
     }
 
     @Test

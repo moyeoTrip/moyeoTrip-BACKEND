@@ -36,10 +36,18 @@ class Feed(
     val chatRoom: ChatRoom,
     @Column(nullable = false, length = 500)
     val content: String,
+    visibility: FeedVisibility,
+    hiddenByReports: Boolean = false,
+) : BaseTimeEntity() {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
-    val visibility: FeedVisibility,
-) : BaseTimeEntity() {
+    var visibility: FeedVisibility = visibility
+        protected set
+
+    @Column(name = "hidden_by_reports", nullable = false, columnDefinition = "NUMBER(1)")
+    var hiddenByReports: Boolean = hiddenByReports
+        protected set
+
     @OneToMany(mappedBy = "feed", cascade = [CascadeType.ALL], orphanRemoval = true)
     @OrderBy("sequence ASC")
     private val feedImages: MutableList<FeedImage> = mutableListOf()
@@ -52,6 +60,11 @@ class Feed(
         sequence: Int,
     ) {
         feedImages += FeedImage(feed = this, fileName = fileName, sequence = sequence)
+    }
+
+    fun hideByReports() {
+        visibility = FeedVisibility.PRIVATE
+        hiddenByReports = true
     }
 }
 

@@ -1,6 +1,7 @@
 package kr.hanchae.moyeotrip.service.feed
 
 import kr.hanchae.moyeotrip.controller.feed.request.CreateFeedCommentRequest
+import kr.hanchae.moyeotrip.controller.feed.request.CreateFeedReportRequest
 import kr.hanchae.moyeotrip.controller.feed.request.CreateFeedRequest
 import kr.hanchae.moyeotrip.controller.feed.request.FeedTab
 import kr.hanchae.moyeotrip.controller.feed.response.FeedAuthorResponse
@@ -9,11 +10,14 @@ import kr.hanchae.moyeotrip.controller.feed.response.FeedImageResponse
 import kr.hanchae.moyeotrip.controller.feed.response.FeedLikeResponse
 import kr.hanchae.moyeotrip.controller.feed.response.FeedPageResponse
 import kr.hanchae.moyeotrip.controller.feed.response.FeedPlaceResponse
+import kr.hanchae.moyeotrip.controller.feed.response.FeedReportReasonResponse
 import kr.hanchae.moyeotrip.controller.feed.response.FeedResponse
 import kr.hanchae.moyeotrip.controller.feed.response.FeedTripResponse
 import kr.hanchae.moyeotrip.entity.feed.Feed
 import kr.hanchae.moyeotrip.entity.feed.FeedComment
 import kr.hanchae.moyeotrip.entity.feed.FeedLike
+import kr.hanchae.moyeotrip.entity.feed.FeedReport
+import kr.hanchae.moyeotrip.entity.feed.FeedReportReason
 import kr.hanchae.moyeotrip.entity.feed.FeedVisibility
 import kr.hanchae.moyeotrip.entity.user.User
 import kr.hanchae.moyeotrip.exception.BaseException
@@ -23,6 +27,7 @@ import kr.hanchae.moyeotrip.repository.ChatRoomParticipantRepository
 import kr.hanchae.moyeotrip.repository.ChatRoomRepository
 import kr.hanchae.moyeotrip.repository.FeedCommentRepository
 import kr.hanchae.moyeotrip.repository.FeedLikeRepository
+import kr.hanchae.moyeotrip.repository.FeedReportRepository
 import kr.hanchae.moyeotrip.repository.FeedRepository
 import kr.hanchae.moyeotrip.repository.FriendshipRepository
 import kr.hanchae.moyeotrip.repository.ObjectStorageRepository
@@ -47,7 +52,12 @@ class FeedService(
     private val friendshipRepository: FriendshipRepository,
     private val objectStorageRepository: ObjectStorageRepository,
     private val notificationService: NotificationService,
+    private val feedReportRepository: FeedReportRepository,
 ) {
+    @Transactional(readOnly = true)
+    fun getReportReasons(): List<FeedReportReasonResponse> =
+        FeedReportReason.entries.map { FeedReportReasonResponse(reason = it, displayName = it.displayName) }
+
     @Transactional
     fun createFeed(
         userId: Long,
@@ -138,6 +148,32 @@ class FeedService(
         return FeedLikeResponse(liked = true, likeCount = likeCount + 1L)
     }
 
+    @Transactional
+    fun reportFeed(
+        userId: Long,
+        feedId: Long,
+        request: CreateFeedReportRequest,
+    ) {
+        val feed = feedRepository.findByIdForUpdate(feedId) ?: throw BaseException(ErrorCode.FEED_NOT_FOUND)
+        if (feed.author.id == userId) throw BaseException(ErrorCode.SELF_FEED_REPORT_NOT_ALLOWED)
+        if (userBlockRepository.existsBetween(userId, feed.author.id)) throw BaseException(ErrorCode.USER_BLOCK_RELATIONSHIP)
+        if (!feed.isVisibleTo(userId)) throw BaseException(ErrorCode.FEED_NOT_VISIBLE_TO_USER)
+        if (feedReportRepository.existsByFeedIdAndReporterId(feedId, userId)) {
+            throw BaseException(ErrorCode.FEED_ALREADY_REPORTED)
+        }
+        feedReportRepository.saveAndFlush(
+            FeedReport(
+                feed = feed,
+                reporter = findUser(userId),
+                reason = request.reason,
+                details = request.details?.trim()?.takeIf(String::isNotEmpty),
+            ),
+        )
+        if (feedReportRepository.countByFeedId(feedId) >= REPORT_HIDE_THRESHOLD) {
+            feed.hideByReports()
+        }
+    }
+
     @Transactional(readOnly = true)
     fun getComments(
         userId: Long,
@@ -182,6 +218,7 @@ class FeedService(
                 ),
             content = content,
             visibility = visibility,
+            hiddenByReports = hiddenByReports && author.id == userId,
             images = images.map { FeedImageResponse(it.id, objectStorageRepository.getDownloadUrl(it.fileName), it.sequence) },
             trip =
                 FeedTripResponse(
@@ -274,6 +311,7 @@ class FeedService(
     companion object {
         private const val MAX_PAGE_SIZE = 50
         private const val MAX_IMAGE_COUNT = 10
+        private const val REPORT_HIDE_THRESHOLD = 3L
         private const val MAX_IMAGE_SIZE = 20L * 1024L * 1024L
         private const val FEED_IMAGE_PATH = "feed/image/"
         private val ALLOWED_EXTENSIONS = setOf("jpg", "jpeg", "png", "webp", "heic")

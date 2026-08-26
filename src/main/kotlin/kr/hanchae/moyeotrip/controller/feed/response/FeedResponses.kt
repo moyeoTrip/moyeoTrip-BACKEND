@@ -1,6 +1,7 @@
 package kr.hanchae.moyeotrip.controller.feed.response
 
 import io.swagger.v3.oas.annotations.media.Schema
+import kr.hanchae.moyeotrip.entity.feed.FeedReportReason
 import kr.hanchae.moyeotrip.entity.feed.FeedVisibility
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -24,6 +25,8 @@ data class FeedResponse(
     val content: String,
     @field:Schema(description = "피드 공개 범위", example = "PUBLIC")
     val visibility: FeedVisibility,
+    @field:Schema(description = "신고 누적으로 비공개 처리된 피드인지 여부", example = "false")
+    val hiddenByReports: Boolean,
     @field:Schema(description = "최대 10장의 피드 첨부 사진 목록")
     val images: List<FeedImageResponse>,
     @field:Schema(description = "피드로 기록한 완료 여행 정보")
@@ -98,6 +101,14 @@ data class FeedLikeResponse(
     val liked: Boolean,
     @field:Schema(description = "변경 후 피드의 전체 좋아요 수", example = "13")
     val likeCount: Long,
+)
+
+@Schema(description = "피드 신고 사유 선택지")
+data class FeedReportReasonResponse(
+    @field:Schema(description = "신고 요청에 전달할 사유 코드", example = "SPAM")
+    val reason: FeedReportReason,
+    @field:Schema(description = "화면에 표시할 신고 사유명", example = "스팸 또는 광고")
+    val displayName: String,
 )
 
 @Schema(description = "피드 댓글 또는 대댓글 정보")
