@@ -48,8 +48,8 @@ enum class ErrorCode(
     INVALID_TOURISM_IMAGE_URL(HttpStatus.BAD_REQUEST, 40037, "관광 이미지 URL은 공식 VisitKorea HTTPS 이미지 주소여야 합니다."),
     PAST_RECRUITMENT_DEADLINE_DATE(HttpStatus.BAD_REQUEST, 40038, "모집 마감일은 오늘 또는 미래 날짜여야 합니다."),
     SELF_FEED_REPORT_NOT_ALLOWED(HttpStatus.BAD_REQUEST, 40039, "본인이 작성한 피드는 신고할 수 없습니다."),
-    CHAT_ROOM_THUMBNAIL_REQUIRED(HttpStatus.BAD_REQUEST, 40039, "채팅방 썸네일 이미지는 필수입니다."),
     INVALID_MAP_SEARCH_AREA(HttpStatus.BAD_REQUEST, 40040, "위도, 경도 또는 검색 반경이 유효하지 않습니다."),
+    CHAT_ROOM_THUMBNAIL_REQUIRED(HttpStatus.BAD_REQUEST, 40041, "채팅방 썸네일 이미지는 필수입니다."),
 
     // UNAUTHORIZED는 40100부터 시작
     UNAUTHORIZED(HttpStatus.UNAUTHORIZED, 40100, "인증되지 않은 사용자입니다."),

@@ -9,8 +9,8 @@ import kr.hanchae.moyeotrip.exception.ErrorCode
 import kr.hanchae.moyeotrip.repository.ObjectStorageRepository
 import kr.hanchae.moyeotrip.repository.TourismContentRepository
 import kr.hanchae.moyeotrip.repository.TourismContentTypeRepository
+import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
-import org.springframework.transaction.annotation.Transactional
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 
@@ -22,25 +22,29 @@ class TourismContentSyncService(
     private val tourismImageProxyService: TourismImageProxyService,
     private val objectStorageRepository: ObjectStorageRepository,
 ) {
-    @Transactional
     fun syncGyeongsangbukdo(): Int {
         val contentTypes = contentTypeRepository.findAll().associateBy { it.code }
         val apiItems = contentTypes.keys.flatMap(::fetchAllItems)
         val existingByContentId = repository.findAll().associateBy(TourismContent::contentId)
-        val entities =
-            apiItems.distinctBy(TourAreaBasedItem::contentid).map { item ->
-                val contentType =
-                    contentTypes[item.contenttypeid.toInt()]
-                        ?: throw BaseException(ErrorCode.TOURISM_CONTENT_TYPE_NOT_FOUND)
-                val entity = existingByContentId[item.contentid.toLong()] ?: item.toEntity(contentType)
-                val previousThumbnail = entity.thumbnail
-                val previousSourceModifiedDateTime = entity.sourceModifiedDateTime
-                entity.updateFrom(item, contentType)
-                entity.storeThumbnailIfNeeded(previousThumbnail, previousSourceModifiedDateTime)
-                entity
-            }
-        repository.saveAll(entities)
-        return entities.size
+        val uniqueItems = apiItems.distinctBy(TourAreaBasedItem::contentid)
+        uniqueItems.chunked(SAVE_BATCH_SIZE).forEachIndexed { index, items ->
+            val entities =
+                items.map { item ->
+                    val contentType =
+                        contentTypes[item.contenttypeid.toInt()]
+                            ?: throw BaseException(ErrorCode.TOURISM_CONTENT_TYPE_NOT_FOUND)
+                    val entity = existingByContentId[item.contentid.toLong()] ?: item.toEntity(contentType)
+                    val previousThumbnail = entity.thumbnail
+                    val previousSourceModifiedDateTime = entity.sourceModifiedDateTime
+                    entity.updateFrom(item, contentType)
+                    entity.storeThumbnailIfNeeded(previousThumbnail, previousSourceModifiedDateTime)
+                    entity
+                }
+            repository.saveAllAndFlush(entities)
+            val completedCount = ((index + 1) * SAVE_BATCH_SIZE).coerceAtMost(uniqueItems.size)
+            logger.info("관광 콘텐츠와 썸네일 이관 진행: {}/{}건", completedCount, uniqueItems.size)
+        }
+        return uniqueItems.size
     }
 
     private fun fetchAllItems(contentTypeId: Int): List<TourAreaBasedItem> {
@@ -104,6 +108,9 @@ class TourismContentSyncService(
             val image = tourismImageProxyService.getImage(sourceUrl)
             objectStorageRepository.uploadTourismImage(image.bytes, image.contentType.toString())
         }.onSuccess(::updateThumbnail)
+            .onFailure { exception ->
+                logger.warn("관광 콘텐츠 {} 썸네일의 Object Storage 이관에 실패했습니다. sourceUrl={}", contentId, sourceUrl, exception)
+            }
     }
 
     private fun String.nullIfBlank(): String? = trim().takeIf(String::isNotEmpty)
@@ -113,7 +120,9 @@ class TourismContentSyncService(
             ?.let { runCatching { LocalDateTime.parse(it, TOUR_API_DATE_TIME_FORMATTER) }.getOrNull() }
 
     companion object {
+        private val logger = LoggerFactory.getLogger(TourismContentSyncService::class.java)
         private const val PAGE_SIZE = 1000
+        private const val SAVE_BATCH_SIZE = 50
         private val TOUR_API_DATE_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyyMMddHHmmss")
     }
 }

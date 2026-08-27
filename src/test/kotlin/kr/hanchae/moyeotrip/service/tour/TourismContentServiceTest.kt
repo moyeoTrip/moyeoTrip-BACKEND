@@ -57,7 +57,7 @@ class TourismContentServiceTest {
     fun `여행코스 타입은 관광지 목록으로 조회할 수 없다`() {
         val exception =
             assertThrows(BaseException::class.java) {
-                service.getContents(contentTypeId = 25, keyword = null, page = 0, size = 20)
+                service.getContents(contentTypeId = 25, keyword = null, page = 1, size = 20)
             }
 
         assertEquals(ErrorCode.TOURISM_COURSE_CONTENT_NOT_LISTED, exception.errorCode)
@@ -71,9 +71,9 @@ class TourismContentServiceTest {
         `when`(repository.searchListableContents(25, 12, null, pageable))
             .thenReturn(PageImpl(listOf(content), pageable, 5))
 
-        val response = service.getContents(contentTypeId = 12, keyword = null, page = 1, size = 2)
+        val response = service.getContents(contentTypeId = 12, keyword = null, page = 2, size = 2)
 
-        assertEquals(1, response.page)
+        assertEquals(2, response.page)
         assertEquals(5, response.totalElements)
         assertEquals("주산지", response.items.single().title)
         verify(repository).searchListableContents(25, 12, null, pageable)
@@ -85,21 +85,24 @@ class TourismContentServiceTest {
         `when`(repository.searchListableContents(25, null, null, pageable))
             .thenReturn(PageImpl(emptyList(), pageable, 0))
 
-        val response = service.getContents(contentTypeId = null, keyword = null, page = 0, size = 20)
+        val response = service.getContents(contentTypeId = null, keyword = null, page = 1, size = 20)
 
+        assertEquals(1, response.page)
         assertEquals(0, response.totalElements)
         verify(repository).searchListableContents(25, null, null, pageable)
     }
 
     @Test
-    fun `여행지 검색어는 앞뒤 공백을 제거하고 제목과 주소 검색 패턴으로 전달한다`() {
+    fun `여행지 검색어와 관광 타입을 함께 적용해 제목과 주소 검색 패턴으로 전달한다`() {
         val pageable = PageRequest.of(0, 20, Sort.by("title").ascending())
-        `when`(repository.searchListableContents(25, 12, "%주왕산%", pageable)).thenReturn(PageImpl(emptyList()))
+        val content = content(100L, 12, "토박이 식당")
+        `when`(repository.searchListableContents(25, 12, "%토박이%", pageable))
+            .thenReturn(PageImpl(listOf(content), pageable, 1))
 
-        val response = service.getContents(contentTypeId = 12, keyword = "  주왕산  ", page = 0, size = 20)
+        val response = service.getContents(contentTypeId = 12, keyword = "  토박이  ", page = 1, size = 20)
 
-        assertEquals(0, response.totalElements)
-        verify(repository).searchListableContents(25, 12, "%주왕산%", pageable)
+        assertEquals("토박이 식당", response.items.single().title)
+        verify(repository).searchListableContents(25, 12, "%토박이%", pageable)
     }
 
     @Test
@@ -107,7 +110,7 @@ class TourismContentServiceTest {
         val pageable = PageRequest.of(0, 20, Sort.by("title").ascending())
         `when`(repository.searchListableContents(25, null, null, pageable)).thenReturn(PageImpl(emptyList()))
 
-        service.getContents(contentTypeId = null, keyword = "  ", page = 0, size = 20)
+        service.getContents(contentTypeId = null, keyword = "  ", page = 1, size = 20)
 
         verify(repository).searchListableContents(25, null, null, pageable)
     }
@@ -181,6 +184,25 @@ class TourismContentServiceTest {
 
         assertEquals("https://cdn/thumbnail.jpg", response.thumbnail)
         assertEquals("https://cdn/content.jpg", response.contentImages.single().originalImageUrl)
+    }
+
+    @Test
+    fun `기존 HTTP 관광 이미지 URL은 원본 URL을 유지하다 Object Storage 저장 성공 시에만 교체한다`() {
+        val content =
+            content(200L, 12, "주산지", telephoneName = "관광 안내").apply {
+                updateThumbnail("http://tong.visitkorea.or.kr/thumbnail.jpg")
+            }
+        val contentImage =
+            image(content, TourismContentImageType.CONTENT, "http://tong.visitkorea.or.kr/content.jpg")
+        `when`(repository.findByContentId(200L)).thenReturn(content)
+        `when`(imageRepository.findAllByTourismContentIdAndTypeOrderByIdAsc(1L, TourismContentImageType.CONTENT))
+            .thenReturn(listOf(contentImage))
+
+        val response = service.getContent(200L)
+
+        assertEquals("http://tong.visitkorea.or.kr/thumbnail.jpg", response.thumbnail)
+        assertEquals("http://tong.visitkorea.or.kr/content.jpg", response.contentImages.single().originalImageUrl)
+        assertEquals("http://tong.visitkorea.or.kr/content.jpg", contentImage.originalImageUrl)
     }
 
     @Test

@@ -14,7 +14,7 @@ data class TourismContentTypeResponse(
 data class TourismContentPageResponse(
     @field:Schema(description = "현재 페이지의 관광 콘텐츠 목록")
     val items: List<TourismContentSummaryResponse>,
-    @field:Schema(description = "0부터 시작하는 현재 페이지 번호", example = "0")
+    @field:Schema(description = "1부터 시작하는 현재 페이지 번호", example = "1")
     val page: Int,
     @field:Schema(description = "현재 페이지 크기", example = "20")
     val size: Int,

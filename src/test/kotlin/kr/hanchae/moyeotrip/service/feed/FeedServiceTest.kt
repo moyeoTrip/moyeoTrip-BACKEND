@@ -78,6 +78,10 @@ class FeedServiceTest {
 
         assertEquals(FeedReportReason.entries, response.map { it.reason })
         assertEquals("스팸 또는 광고", response.first().displayName)
+        assertEquals(
+            "돈거래 유도",
+            response.single { it.reason == FeedReportReason.MONEY_TRANSACTION_SOLICITATION }.displayName,
+        )
     }
 
     @Test

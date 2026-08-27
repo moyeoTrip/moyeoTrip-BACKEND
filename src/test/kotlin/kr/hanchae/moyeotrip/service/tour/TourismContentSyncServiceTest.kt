@@ -18,6 +18,7 @@ import org.mockito.ArgumentCaptor
 import org.mockito.Mockito.mock
 import org.mockito.Mockito.verify
 import org.mockito.Mockito.`when`
+import org.springframework.http.MediaType
 import java.time.LocalDateTime
 
 class TourismContentSyncServiceTest {
@@ -55,7 +56,7 @@ class TourismContentSyncServiceTest {
         assertEquals(2, count)
         assertEquals("새 제목", existing.title)
         assertEquals(LocalDateTime.of(2026, 8, 22, 18, 27, 38), existing.sourceCreatedDateTime)
-        verify(repository).saveAll(captor.capture())
+        verify(repository).saveAllAndFlush(captor.capture())
         assertNull(captor.value.single { it.contentId == 101L }.sourceCreatedDateTime)
     }
 
@@ -72,11 +73,50 @@ class TourismContentSyncServiceTest {
         assertEquals(ErrorCode.TOURISM_CONTENT_TYPE_NOT_FOUND, exception.errorCode)
     }
 
+    @Test
+    fun `동기화할 때 HTTP 관광 썸네일 원본 URL을 유지한다`() {
+        val contentType = TourismContentType(12, "관광지")
+        val item = areaItem(100L, "주산지", thumbnail = "http://tong.visitkorea.or.kr/thumbnail.jpg")
+        `when`(contentTypeRepository.findAll()).thenReturn(listOf(contentType))
+        `when`(tourApiClient.getAreaBasedTourismInformation(12, 1, 1000))
+            .thenReturn(TourAreaBasedPage(listOf(item), 1))
+        `when`(repository.findAll()).thenReturn(emptyList())
+        val captor = iterableCaptor<TourismContent>()
+
+        service.syncGyeongsangbukdo()
+
+        verify(repository).saveAllAndFlush(captor.capture())
+        assertEquals("http://tong.visitkorea.or.kr/thumbnail.jpg", captor.value.single().thumbnail)
+    }
+
+    @Test
+    fun `동기화할 때 외부 썸네일을 Object Storage에 저장하고 키로 교체한다`() {
+        val contentType = TourismContentType(12, "관광지")
+        val sourceUrl = "https://tong.visitkorea.or.kr/cms/resource/31/3474431_image2_1.jpg"
+        val imageBytes = byteArrayOf(1, 2, 3)
+        val item = areaItem(100L, "토박이 식당", thumbnail = sourceUrl)
+        `when`(contentTypeRepository.findAll()).thenReturn(listOf(contentType))
+        `when`(tourApiClient.getAreaBasedTourismInformation(12, 1, 1000))
+            .thenReturn(TourAreaBasedPage(listOf(item), 1))
+        `when`(repository.findAll()).thenReturn(emptyList())
+        `when`(tourismImageProxyService.getImage(sourceUrl))
+            .thenReturn(TourismImageBinary(MediaType.IMAGE_JPEG, imageBytes))
+        `when`(objectStorageRepository.uploadTourismImage(imageBytes, "image/jpeg"))
+            .thenReturn("tourism/image/stored.jpg")
+        val captor = iterableCaptor<TourismContent>()
+
+        service.syncGyeongsangbukdo()
+
+        verify(repository).saveAllAndFlush(captor.capture())
+        assertEquals("tourism/image/stored.jpg", captor.value.single().thumbnail)
+    }
+
     private fun areaItem(
         contentId: Long,
         title: String,
         contentTypeId: Int = 12,
         createdTime: String = "",
+        thumbnail: String = "",
     ) = TourAreaBasedItem(
         contentid = contentId.toString(),
         contenttypeid = contentTypeId.toString(),
@@ -86,6 +126,7 @@ class TourismContentSyncServiceTest {
         mapx = "129.2247",
         mapy = "35.8562",
         createdtime = createdTime,
+        firstimage = thumbnail,
     )
 
     @Suppress("UNCHECKED_CAST")

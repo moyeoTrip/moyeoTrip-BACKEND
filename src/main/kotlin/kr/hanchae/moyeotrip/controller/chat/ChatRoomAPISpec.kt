@@ -1437,7 +1437,7 @@ private object ChatRoomSwaggerExamples {
     const val PAST_CHAT_ROOM_START_DATE = """{"code":40035,"errorMessage":"여행 시작일은 오늘 또는 미래 날짜여야 합니다."}"""
     const val INVALID_RECRUITMENT_DEADLINE = """{"code":40036,"errorMessage":"모집 마감일은 여행 시작일 이하여야 합니다."}"""
     const val PAST_RECRUITMENT_DEADLINE_DATE = """{"code":40038,"errorMessage":"모집 마감일은 오늘 또는 미래 날짜여야 합니다."}"""
-    const val CHAT_ROOM_THUMBNAIL_REQUIRED = """{"code":40039,"errorMessage":"채팅방 썸네일 이미지는 필수입니다."}"""
+    const val CHAT_ROOM_THUMBNAIL_REQUIRED = """{"code":40041,"errorMessage":"채팅방 썸네일 이미지는 필수입니다."}"""
     const val CHAT_JOIN_APPLICATION_MESSAGE_REQUIRED = """{"code":40010,"errorMessage":"수동 승인 모임은 호스트에게 전할 말을 입력해야 합니다."}"""
     const val UNAUTHORIZED = """{"code":40100,"errorMessage":"인증되지 않은 사용자입니다."}"""
     const val FORBIDDEN = """{"code":40300,"errorMessage":"접근 권한이 없습니다."}"""

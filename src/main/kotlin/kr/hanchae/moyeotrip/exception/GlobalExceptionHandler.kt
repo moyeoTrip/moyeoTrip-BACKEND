@@ -12,6 +12,7 @@ import org.springframework.web.HttpRequestMethodNotSupportedException
 import org.springframework.web.bind.MethodArgumentNotValidException
 import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.bind.annotation.RestControllerAdvice
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException
 import org.springframework.web.multipart.support.MissingServletRequestPartException
 import org.springframework.web.servlet.resource.NoResourceFoundException
 
@@ -55,6 +56,18 @@ class GlobalExceptionHandler(
             .status(HttpStatus.BAD_REQUEST)
             .contentType(MediaType.APPLICATION_JSON)
             .body(ErrorResponse.of(ErrorCode.MALFORMED_REQUEST_BODY, unreadableRequestMessage(exception)))
+            .apply {
+                traceManager.doErrorLog(exception)
+            }
+    }
+
+    @ExceptionHandler(MethodArgumentTypeMismatchException::class)
+    fun handleArgumentTypeMismatch(exception: MethodArgumentTypeMismatchException): ResponseEntity<ErrorResponse> {
+        sentryExceptionReporter.capture(exception, HttpStatus.BAD_REQUEST, ErrorCode.BAD_REQUEST.code)
+        return ResponseEntity
+            .status(HttpStatus.BAD_REQUEST)
+            .contentType(MediaType.APPLICATION_JSON)
+            .body(ErrorResponse.of(ErrorCode.BAD_REQUEST, "${exception.name} 파라미터의 형식이 올바르지 않습니다."))
             .apply {
                 traceManager.doErrorLog(exception)
             }

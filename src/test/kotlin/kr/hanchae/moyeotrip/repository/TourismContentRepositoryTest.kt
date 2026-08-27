@@ -36,6 +36,16 @@ class TourismContentRepositoryTest : RepositoryIntegrationTestSupport() {
 
             assertEquals(listOf(attraction.id), result.content.map(TourismContent::id))
         }
+
+        @Test
+        fun `음식점 제목은 일부 검색어만 입력해도 조회한다`() {
+            val restaurantType = tourismContentTypeRepository.saveAndFlush(TourismContentType(39, "음식점"))
+            val restaurant = savedContent(3001L, restaurantType, title = "토박이 식당")
+
+            val result = tourismContentRepository.searchListableContents(25, null, "%토박이%", PageRequest.of(0, 10))
+
+            assertEquals(listOf(restaurant.id), result.content.map(TourismContent::id))
+        }
     }
 
     private fun savedContent(

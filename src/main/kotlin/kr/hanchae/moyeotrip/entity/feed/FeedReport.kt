@@ -42,6 +42,7 @@ enum class FeedReportReason(
     SPAM("스팸 또는 광고"),
     INAPPROPRIATE_CONTENT("부적절한 콘텐츠"),
     HARASSMENT("괴롭힘 또는 혐오 표현"),
+    MONEY_TRANSACTION_SOLICITATION("돈거래 유도"),
     FALSE_INFORMATION("허위 정보"),
     OTHER("기타"),
 }

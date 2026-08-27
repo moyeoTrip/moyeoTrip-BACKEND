@@ -14,6 +14,7 @@ import org.springframework.http.MediaType
 import org.springframework.http.converter.HttpMessageNotReadableException
 import org.springframework.mock.http.MockHttpInputMessage
 import org.springframework.web.HttpRequestMethodNotSupportedException
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException
 import org.springframework.web.multipart.support.MissingServletRequestPartException
 import org.springframework.web.servlet.resource.NoResourceFoundException
 
@@ -30,6 +31,21 @@ class GlobalExceptionHandlerTest {
 
         assertEquals(HttpStatus.METHOD_NOT_ALLOWED, response.statusCode)
         assertEquals(ErrorCode.METHOD_NOT_ALLOWED.code, response.body?.code)
+        verify(traceManager).doErrorLog(exception)
+    }
+
+    @Test
+    fun `숫자 파라미터에 문자열이 전달되면 400을 반환한다`() {
+        val exception = mock(MethodArgumentTypeMismatchException::class.java)
+        `when`(exception.name).thenReturn("roomId")
+
+        val response = handler.handleArgumentTypeMismatch(exception)
+
+        assertEquals(HttpStatus.BAD_REQUEST, response.statusCode)
+        assertEquals(MediaType.APPLICATION_JSON, response.headers.contentType)
+        assertEquals(ErrorCode.BAD_REQUEST.code, response.body?.code)
+        assertEquals("roomId 파라미터의 형식이 올바르지 않습니다.", response.body?.errorMessage)
+        verify(sentryExceptionReporter).capture(exception, HttpStatus.BAD_REQUEST, ErrorCode.BAD_REQUEST.code)
         verify(traceManager).doErrorLog(exception)
     }
 

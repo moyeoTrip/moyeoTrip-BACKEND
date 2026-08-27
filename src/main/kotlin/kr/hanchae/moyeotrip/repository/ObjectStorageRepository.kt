@@ -72,6 +72,11 @@ class ObjectStorageRepository(
 
         fun generateFileName(extension: String): String = "${UUID.randomUUID()}.$extension" // 중복나지 않도록 UUID 사용
 
-        private fun String.imageExtension(): String = if (equals("image/png", ignoreCase = true)) "png" else "jpg"
+        private fun String.imageExtension(): String =
+            when {
+                equals("image/png", ignoreCase = true) -> "png"
+                equals("image/webp", ignoreCase = true) -> "webp"
+                else -> "jpg"
+            }
     }
 }

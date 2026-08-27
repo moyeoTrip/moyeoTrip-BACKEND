@@ -46,7 +46,7 @@ class TourismContentService(
         if (contentTypeId == COURSE_CONTENT_TYPE_ID) {
             throw BaseException(ErrorCode.TOURISM_COURSE_CONTENT_NOT_LISTED)
         }
-        val pageable = PageRequest.of(page, size, Sort.by("title").ascending())
+        val pageable = PageRequest.of(page.coerceAtLeast(1) - 1, size, Sort.by("title").ascending())
         val keywordPattern =
             keyword
                 ?.trim()
@@ -56,7 +56,7 @@ class TourismContentService(
         val contents = repository.searchListableContents(COURSE_CONTENT_TYPE_ID, contentTypeId, keywordPattern, pageable)
         return TourismContentPageResponse(
             items = contents.content.map { it.toSummaryResponse(objectStorageRepository) },
-            page = contents.number,
+            page = contents.number + 1,
             size = contents.size,
             totalElements = contents.totalElements,
             totalPages = contents.totalPages,
@@ -195,5 +195,9 @@ private fun String.nullIfBlank(): String? = trim().takeIf(String::isNotEmpty)
 
 private fun String?.toDownloadUrl(objectStorageRepository: ObjectStorageRepository): String? =
     this?.let {
-        if (it.startsWith(ObjectStorageRepository.TOURISM_IMAGE_PATH)) objectStorageRepository.getDownloadUrl(it) else it
+        if (it.startsWith(ObjectStorageRepository.TOURISM_IMAGE_PATH)) {
+            objectStorageRepository.getDownloadUrl(it)
+        } else {
+            it
+        }
     }

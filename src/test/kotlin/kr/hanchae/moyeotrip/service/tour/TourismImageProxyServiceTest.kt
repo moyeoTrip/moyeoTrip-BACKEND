@@ -15,12 +15,16 @@ import org.springframework.test.web.client.response.MockRestResponseCreators.wit
 import org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess
 import org.springframework.web.client.ResourceAccessException
 import org.springframework.web.client.RestClient
+import java.awt.image.BufferedImage
+import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
+import javax.imageio.ImageIO
 
 class TourismImageProxyServiceTest {
     @ParameterizedTest
     @ValueSource(
         strings = [
-            "http://tong.visitkorea.or.kr/cms/resource/image.jpg",
+            "ftp://tong.visitkorea.or.kr/cms/resource/image.jpg",
             "https://example.com/image.jpg",
             "https://visitkorea.or.kr.evil.example/image.jpg",
             "https://tong.visitkorea.or.kr:8443/cms/resource/image.jpg",
@@ -53,6 +57,34 @@ class TourismImageProxyServiceTest {
     }
 
     @Test
+    fun `공식 VisitKorea HTTP 이미지는 Object Storage 이관을 위해 조회할 수 있다`() {
+        val builder = RestClient.builder()
+        val server = MockRestServiceServer.bindTo(builder).build()
+        val service = TourismImageProxyService(builder)
+        server
+            .expect { request -> assertEquals("http", request.uri.scheme) }
+            .andRespond(withSuccess(byteArrayOf(1, 2, 3), MediaType.IMAGE_JPEG))
+
+        val result = service.getImage("http://tong.visitkorea.or.kr/cms/resource/image.jpg")
+
+        assertEquals(MediaType.IMAGE_JPEG, result.contentType)
+        server.verify()
+    }
+
+    @Test
+    fun `VisitKorea image jpg 응답은 표준 image jpeg로 정규화한다`() {
+        val builder = RestClient.builder()
+        val server = MockRestServiceServer.bindTo(builder).build()
+        val service = TourismImageProxyService(builder)
+        server.expect { _ -> }.andRespond(withSuccess(byteArrayOf(1, 2, 3), MediaType.parseMediaType("image/jpg")))
+
+        val result = service.getImage(OFFICIAL_IMAGE_URL)
+
+        assertEquals(MediaType.IMAGE_JPEG, result.contentType)
+        server.verify()
+    }
+
+    @Test
     fun `공식 이미지 요청도 성공 응답이 아니면 프록시하지 않는다`() {
         val builder = RestClient.builder()
         val server = MockRestServiceServer.bindTo(builder).build()
@@ -66,15 +98,38 @@ class TourismImageProxyServiceTest {
     }
 
     @Test
-    fun `JPEG가 아닌 응답은 프록시하지 않는다`() {
+    fun `공식 VisitKorea PNG 이미지는 바이너리로 반환한다`() {
         val builder = RestClient.builder()
         val server = MockRestServiceServer.bindTo(builder).build()
         val service = TourismImageProxyService(builder)
-        server.expect { _ -> }.andRespond(withSuccess("png", MediaType.IMAGE_PNG))
+        val expected = byteArrayOf(1, 2, 3)
+        server.expect { _ -> }.andRespond(withSuccess(expected, MediaType.IMAGE_PNG))
 
-        val exception = assertThrows(BaseException::class.java) { service.getImage(OFFICIAL_IMAGE_URL) }
+        val result = service.getImage(OFFICIAL_IMAGE_URL)
 
-        assertEquals(ErrorCode.TOURISM_IMAGE_FETCH_FAILED, exception.errorCode)
+        assertEquals(MediaType.IMAGE_PNG, result.contentType)
+        assertArrayEquals(expected, result.bytes)
+        server.verify()
+    }
+
+    @Test
+    fun `공식 VisitKorea BMP 이미지는 WebP로 변환한다`() {
+        val builder = RestClient.builder()
+        val server = MockRestServiceServer.bindTo(builder).build()
+        val service = TourismImageProxyService(builder)
+        val bmp =
+            ByteArrayOutputStream().use { output ->
+                ImageIO.write(BufferedImage(100, 50, BufferedImage.TYPE_INT_RGB), "bmp", output)
+                output.toByteArray()
+            }
+        server.expect { _ -> }.andRespond(withSuccess(bmp, MediaType.parseMediaType("image/bmp")))
+
+        val result = service.getImage(OFFICIAL_IMAGE_URL)
+
+        assertEquals(MediaType.parseMediaType("image/webp"), result.contentType)
+        val converted = ByteArrayInputStream(result.bytes).use(ImageIO::read)
+        assertEquals(100, converted.width)
+        assertEquals(50, converted.height)
         server.verify()
     }
 
