@@ -139,7 +139,13 @@ class UserService(
         }
 
         val information = checkNotNull(user.information)
-        val prompt = profileImagePromptFactory.create(information.nickname, information.nicknameColor)
+        val prompt =
+            profileImagePromptFactory.create(
+                nickname = information.nickname,
+                color = information.nicknameColor,
+                userId = user.id,
+                generationNumber = user.profileImageGenerationCount + 1,
+            )
         val imageBytes = profileImageGenerationClient.generate(prompt)
         val generatedImageKey =
             objectStorageRepository.uploadGeneratedProfileImage(

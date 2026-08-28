@@ -107,7 +107,7 @@ class UserServiceTest {
         val imageBytes = byteArrayOf(1, 2, 3)
         val optimizedImageBytes = byteArrayOf(4, 5, 6)
         val imageKey = "user/profile/image/generated.webp"
-        val prompt = promptFactory.create("따스한 사슴 2347", NicknameColor.BLUE)
+        val prompt = promptFactory.create("따스한 사슴 2347", NicknameColor.BLUE, userId = 7L, generationNumber = 1)
         `when`(userRepository.findByIdForUpdate(7L)).thenReturn(user)
         `when`(profileImageGenerationClient.generate(prompt)).thenReturn(imageBytes)
         `when`(
@@ -136,7 +136,7 @@ class UserServiceTest {
         val imageBytes = byteArrayOf(1, 2, 3)
         val optimizedImageBytes = byteArrayOf(4, 5, 6)
         val imageKey = "user/profile/image/rollback.webp"
-        val prompt = promptFactory.create("따스한 사슴 2347", NicknameColor.BLUE)
+        val prompt = promptFactory.create("따스한 사슴 2347", NicknameColor.BLUE, userId = 7L, generationNumber = 1)
         `when`(userRepository.findByIdForUpdate(7L)).thenReturn(user)
         `when`(profileImageGenerationClient.generate(prompt)).thenReturn(imageBytes)
         `when`(

@@ -1,5 +1,6 @@
 package kr.hanchae.moyeotrip.config
 
+import com.openai.client.OpenAIClient
 import org.junit.jupiter.api.Test
 import org.springframework.ai.model.openai.autoconfigure.OpenAiAudioSpeechAutoConfiguration
 import org.springframework.ai.model.openai.autoconfigure.OpenAiAudioTranscriptionAutoConfiguration
@@ -24,7 +25,8 @@ class OpenAiModelAutoConfigurationTest {
                     OpenAiAudioTranscriptionAutoConfiguration::class.java,
                     OpenAiModerationAutoConfiguration::class.java,
                 ),
-            ).withPropertyValues(
+            ).withUserConfiguration(ProfileImageOpenAiConfiguration::class.java)
+            .withPropertyValues(
                 "spring.ai.model.image=openai",
                 "spring.ai.model.audio.speech=none",
                 "spring.ai.model.audio.transcription=none",
@@ -43,6 +45,7 @@ class OpenAiModelAutoConfigurationTest {
             assertTrue(context.getBeansOfType(OpenAiAudioSpeechModel::class.java).isEmpty())
             assertTrue(context.getBeansOfType(OpenAiAudioTranscriptionModel::class.java).isEmpty())
             assertTrue(context.getBeansOfType(OpenAiModerationModel::class.java).isEmpty())
+            assertEquals(1, context.getBeansOfType(OpenAIClient::class.java).size)
         }
     }
 }
