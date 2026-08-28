@@ -22,6 +22,24 @@ class ObjectStorageRepository(
         return result.filename
     }
 
+    fun upload(
+        path: String,
+        key: String,
+        bytes: ByteArray,
+        contentType: String,
+    ): String =
+        s3Template
+            .upload(
+                storageS3Properties.bucket,
+                path + key,
+                ByteArrayInputStream(bytes),
+                ObjectMetadata
+                    .builder()
+                    .contentType(contentType)
+                    .contentLength(bytes.size.toLong())
+                    .build(),
+            ).filename
+
     fun getDownloadUrl(key: String): String = "${storageS3Properties.cdnUrl}/$key"
 
     fun uploadGeneratedProfileImage(imageBytes: ByteArray): String =

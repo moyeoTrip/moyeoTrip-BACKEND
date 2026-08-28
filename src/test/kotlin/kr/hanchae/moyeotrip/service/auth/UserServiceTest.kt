@@ -27,7 +27,7 @@ import kr.hanchae.moyeotrip.repository.TravelStyleRepository
 import kr.hanchae.moyeotrip.repository.UserProfileImageRepository
 import kr.hanchae.moyeotrip.repository.UserRepository
 import kr.hanchae.moyeotrip.repository.UserWithdrawalDataRepository
-import kr.hanchae.moyeotrip.utils.ProfileImageOptimizer
+import kr.hanchae.moyeotrip.utils.FhdWebpImageOptimizer
 import kr.hanchae.moyeotrip.utils.jwt.JwtUtil
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -55,7 +55,7 @@ class UserServiceTest {
     private val legalDongCodeRepository = mock(LegalDongCodeRepository::class.java)
     private val travelStyleRepository = mock(TravelStyleRepository::class.java)
     private val notificationSettingRepository = mock(NotificationSettingRepository::class.java)
-    private val profileImageOptimizer = mock(ProfileImageOptimizer::class.java)
+    private val fhdWebpImageOptimizer = mock(FhdWebpImageOptimizer::class.java)
     private val promptFactory = ProfileImagePromptFactory()
     private val jwtUtil = mock(JwtUtil::class.java)
     private val userWithdrawalDataRepository = mock(UserWithdrawalDataRepository::class.java)
@@ -71,7 +71,7 @@ class UserServiceTest {
             legalDongCodeRepository,
             travelStyleRepository,
             notificationSettingRepository,
-            profileImageOptimizer,
+            fhdWebpImageOptimizer,
             jwtUtil,
             userWithdrawalDataRepository,
             chatRoomParticipantRepository,
@@ -106,16 +106,18 @@ class UserServiceTest {
         val user = profileImageRequiredUser()
         val imageBytes = byteArrayOf(1, 2, 3)
         val optimizedImageBytes = byteArrayOf(4, 5, 6)
-        val imageKey = "user/profile/image/generated.png"
+        val imageKey = "user/profile/image/generated.webp"
         val prompt = promptFactory.create("따스한 사슴 2347", NicknameColor.BLUE)
         `when`(userRepository.findByIdForUpdate(7L)).thenReturn(user)
         `when`(profileImageGenerationClient.generate(prompt)).thenReturn(imageBytes)
-        `when`(profileImageOptimizer.optimizeToHdWebp(imageBytes)).thenReturn(optimizedImageBytes)
+        `when`(
+            fhdWebpImageOptimizer.optimizeToFhdWebp(imageBytes, ErrorCode.PROFILE_IMAGE_GENERATION_FAILED),
+        ).thenReturn(optimizedImageBytes)
         `when`(objectStorageRepository.uploadGeneratedProfileImage(optimizedImageBytes)).thenReturn(imageKey)
         `when`(userProfileImageRepository.save(any(UserProfileImage::class.java)))
             .thenReturn(UserProfileImage(id = 12L, user = user, fileName = imageKey))
         `when`(objectStorageRepository.getDownloadUrl(imageKey))
-            .thenReturn("https://cdn.example.com/user/profile/image/generated.png")
+            .thenReturn("https://cdn.example.com/user/profile/image/generated.webp")
 
         val response = service.generateProfileImage(7L)
 
@@ -137,7 +139,9 @@ class UserServiceTest {
         val prompt = promptFactory.create("따스한 사슴 2347", NicknameColor.BLUE)
         `when`(userRepository.findByIdForUpdate(7L)).thenReturn(user)
         `when`(profileImageGenerationClient.generate(prompt)).thenReturn(imageBytes)
-        `when`(profileImageOptimizer.optimizeToHdWebp(imageBytes)).thenReturn(optimizedImageBytes)
+        `when`(
+            fhdWebpImageOptimizer.optimizeToFhdWebp(imageBytes, ErrorCode.PROFILE_IMAGE_GENERATION_FAILED),
+        ).thenReturn(optimizedImageBytes)
         `when`(objectStorageRepository.uploadGeneratedProfileImage(optimizedImageBytes)).thenReturn(imageKey)
         `when`(userProfileImageRepository.save(any(UserProfileImage::class.java)))
             .thenReturn(UserProfileImage(id = 12L, user = user, fileName = imageKey))
@@ -158,10 +162,10 @@ class UserServiceTest {
     @Test
     fun `생성한 후보를 선택하면 프로필에 적용하고 회원가입을 완료한다`() {
         val user = profileImageRequiredUser()
-        val image = UserProfileImage(id = 12L, user = user, fileName = "user/profile/image/generated.png")
+        val image = UserProfileImage(id = 12L, user = user, fileName = "user/profile/image/generated.webp")
         `when`(userRepository.findByIdForUpdate(7L)).thenReturn(user)
         `when`(userProfileImageRepository.findByIdAndUserId(12L, 7L)).thenReturn(image)
-        `when`(objectStorageRepository.getDownloadUrl(image.fileName)).thenReturn("https://cdn.example.com/generated.png")
+        `when`(objectStorageRepository.getDownloadUrl(image.fileName)).thenReturn("https://cdn.example.com/generated.webp")
 
         val response = service.selectProfileImage(7L, 12L)
 
@@ -174,10 +178,10 @@ class UserServiceTest {
     @Test
     fun `기존 후보 목록은 회원가입을 중단했다가 이어서 진행해도 조회할 수 있다`() {
         val user = profileImageRequiredUser().also { it.recordProfileImageGeneration() }
-        val image = UserProfileImage(id = 12L, user = user, fileName = "user/profile/image/generated.png")
+        val image = UserProfileImage(id = 12L, user = user, fileName = "user/profile/image/generated.webp")
         `when`(userRepository.findById(7L)).thenReturn(Optional.of(user))
         `when`(userProfileImageRepository.findAllByUserIdOrderByCreatedDateTimeAsc(7L)).thenReturn(listOf(image))
-        `when`(objectStorageRepository.getDownloadUrl(image.fileName)).thenReturn("https://cdn.example.com/generated.png")
+        `when`(objectStorageRepository.getDownloadUrl(image.fileName)).thenReturn("https://cdn.example.com/generated.webp")
 
         val response = service.getProfileImages(7L)
 

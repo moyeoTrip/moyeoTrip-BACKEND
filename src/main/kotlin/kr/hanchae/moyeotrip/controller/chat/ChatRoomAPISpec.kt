@@ -54,6 +54,7 @@ interface ChatRoomAPISpec {
             생성한 사용자가 호스트이자 첫 참가자가 됩니다.
             `DAY_TRIP`은 종료 날짜 없이 시작·종료 시각을, `OVERNIGHT`은 시작일 이후의 종료 날짜만 입력합니다.
             `PUBLIC` 코스는 courseId만, `CUSTOM` 코스는 customCourse만 입력합니다.
+            thumbnail 파트는 20MB 이하 이미지 파일로 전송하며, 서버가 비율을 유지한 최대 FHD(1920×1080) WebP로 변환해 저장합니다.
         """,
     )
     @ApiResponses(
@@ -72,6 +73,7 @@ interface ChatRoomAPISpec {
                         examples = [
                             ExampleObject(name = "요청 본문 또는 enum 값 오류", value = ChatRoomSwaggerExamples.BAD_REQUEST),
                             ExampleObject(name = "필수 썸네일 오류", value = ChatRoomSwaggerExamples.CHAT_ROOM_THUMBNAIL_REQUIRED),
+                            ExampleObject(name = "썸네일 파일 오류", value = ChatRoomSwaggerExamples.INVALID_CHAT_ROOM_THUMBNAIL),
                             ExampleObject(name = "당일·숙박 일정 입력 오류", value = ChatRoomSwaggerExamples.INVALID_TRIP_SCHEDULE),
                             ExampleObject(name = "최소 출발 인원 오류", value = ChatRoomSwaggerExamples.INVALID_MINIMUM_PARTICIPANTS),
                             ExampleObject(name = "과거 여행 시작일 오류", value = ChatRoomSwaggerExamples.PAST_CHAT_ROOM_START_DATE),
@@ -1438,6 +1440,7 @@ private object ChatRoomSwaggerExamples {
     const val INVALID_RECRUITMENT_DEADLINE = """{"code":40036,"errorMessage":"모집 마감일은 여행 시작일 이하여야 합니다."}"""
     const val PAST_RECRUITMENT_DEADLINE_DATE = """{"code":40038,"errorMessage":"모집 마감일은 오늘 또는 미래 날짜여야 합니다."}"""
     const val CHAT_ROOM_THUMBNAIL_REQUIRED = """{"code":40041,"errorMessage":"채팅방 썸네일 이미지는 필수입니다."}"""
+    const val INVALID_CHAT_ROOM_THUMBNAIL = """{"code":40042,"errorMessage":"채팅방 썸네일은 비어 있지 않은 20MB 이하 이미지 파일이어야 합니다."}"""
     const val CHAT_JOIN_APPLICATION_MESSAGE_REQUIRED = """{"code":40010,"errorMessage":"수동 승인 모임은 호스트에게 전할 말을 입력해야 합니다."}"""
     const val UNAUTHORIZED = """{"code":40100,"errorMessage":"인증되지 않은 사용자입니다."}"""
     const val FORBIDDEN = """{"code":40300,"errorMessage":"접근 권한이 없습니다."}"""

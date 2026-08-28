@@ -188,6 +188,7 @@ interface UserAPISpec {
         description = """
             로그인 사용자의 닉네임 형용사·동물·색상으로 1:1 AI 프로필 이미지 후보 한 장을 생성합니다.
             생성된 이미지는 후보로만 영구 보관되며 현재 프로필 이미지가 자동으로 변경되지 않습니다.
+            이미지는 비율을 유지한 최대 FHD(1920×1080) WebP로 최적화해 저장합니다.
             프롬프트는 서버가 전적으로 구성하고, 귀여운 비사실적 의인화 동물의 상반신 구도로 생성합니다.
             문자, 숫자, 로고와 워터마크는 금지합니다.
             성공한 생성은 사용자당 평생 최대 3회이며 동시 요청도 하나씩 직렬화됩니다.
@@ -400,11 +401,11 @@ private object UserSwaggerExamples {
     const val USER_INFO_REQUIRED = """{"code":40902,"errorMessage":"추가 정보 입력이 필요합니다.(닉네임, 성별, 생년월일)"}"""
     const val INTERNAL_SERVER_ERROR = """{"code":50000,"errorMessage":"서버에러입니다."}"""
     const val PROFILE_IMAGE_GENERATED =
-        """{"candidate":{"profileImageId":12,"profileImageUrl":"https://cdn.example.com/user/profile/image/generated.png","selected":false},"generationCount":1,"remainingGenerationCount":2,"signupState":"PROFILE_IMAGE_REQUIRED"}"""
+        """{"candidate":{"profileImageId":12,"profileImageUrl":"https://cdn.example.com/user/profile/image/generated.webp","selected":false},"generationCount":1,"remainingGenerationCount":2,"signupState":"PROFILE_IMAGE_REQUIRED"}"""
     const val PROFILE_IMAGE_CANDIDATES =
-        """{"candidates":[{"profileImageId":12,"profileImageUrl":"https://cdn.example.com/user/profile/image/first.png","selected":false},{"profileImageId":15,"profileImageUrl":"https://cdn.example.com/user/profile/image/second.png","selected":true}],"generationCount":2,"remainingGenerationCount":1,"signupState":"SIGNUP_COMPLETE"}"""
+        """{"candidates":[{"profileImageId":12,"profileImageUrl":"https://cdn.example.com/user/profile/image/first.webp","selected":false},{"profileImageId":15,"profileImageUrl":"https://cdn.example.com/user/profile/image/second.webp","selected":true}],"generationCount":2,"remainingGenerationCount":1,"signupState":"SIGNUP_COMPLETE"}"""
     const val PROFILE_IMAGE_SELECTED =
-        """{"selectedImage":{"profileImageId":15,"profileImageUrl":"https://cdn.example.com/user/profile/image/second.png","selected":true},"signupState":"SIGNUP_COMPLETE"}"""
+        """{"selectedImage":{"profileImageId":15,"profileImageUrl":"https://cdn.example.com/user/profile/image/second.webp","selected":true},"signupState":"SIGNUP_COMPLETE"}"""
     const val PROFILE_IMAGE_NOT_FOUND =
         """{"code":40401,"errorMessage":"선택할 수 있는 프로필 이미지를 찾을 수 없습니다."}"""
     const val MINIMUM_SIGNUP_AGE_NOT_MET = """{"code":40011,"errorMessage":"만 20세 이상만 가입할 수 있습니다."}"""

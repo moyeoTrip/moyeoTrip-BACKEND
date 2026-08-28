@@ -50,6 +50,7 @@ enum class ErrorCode(
     SELF_FEED_REPORT_NOT_ALLOWED(HttpStatus.BAD_REQUEST, 40039, "본인이 작성한 피드는 신고할 수 없습니다."),
     INVALID_MAP_SEARCH_AREA(HttpStatus.BAD_REQUEST, 40040, "위도, 경도 또는 검색 반경이 유효하지 않습니다."),
     CHAT_ROOM_THUMBNAIL_REQUIRED(HttpStatus.BAD_REQUEST, 40041, "채팅방 썸네일 이미지는 필수입니다."),
+    INVALID_CHAT_ROOM_THUMBNAIL(HttpStatus.BAD_REQUEST, 40042, "채팅방 썸네일은 비어 있지 않은 20MB 이하 이미지 파일이어야 합니다."),
 
     // UNAUTHORIZED는 40100부터 시작
     UNAUTHORIZED(HttpStatus.UNAUTHORIZED, 40100, "인증되지 않은 사용자입니다."),

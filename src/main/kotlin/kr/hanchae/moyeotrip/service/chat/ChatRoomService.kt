@@ -98,6 +98,7 @@ import kr.hanchae.moyeotrip.repository.UserBlockRepository
 import kr.hanchae.moyeotrip.repository.UserRepository
 import kr.hanchae.moyeotrip.service.notification.NotificationService
 import kr.hanchae.moyeotrip.service.realtime.RealtimeMessagingService
+import kr.hanchae.moyeotrip.utils.FhdWebpImageOptimizer
 import org.springframework.data.domain.PageRequest
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -132,6 +133,7 @@ class ChatRoomService(
     private val userRepository: UserRepository,
     private val userBlockRepository: UserBlockRepository,
     private val objectStorageRepository: ObjectStorageRepository,
+    private val fhdWebpImageOptimizer: FhdWebpImageOptimizer,
     private val noticeRepository: ChatRoomNoticeRepository,
     private val notificationService: NotificationService,
     private val realtimeMessagingService: RealtimeMessagingService,
@@ -149,7 +151,14 @@ class ChatRoomService(
         validateRequiredThumbnail(thumbnail)
         val host = findUser(userId)
         val course = resolveCourse(host, request)
-        val thumbnailUrl = uploadChatRoomThumbnail(thumbnail)
+        val thumbnailKey =
+            objectStorageRepository.upload(
+                CHAT_ROOM_THUMBNAIL_PATH,
+                ObjectStorageRepository.generateFileName(WEBP_EXTENSION),
+                fhdWebpImageOptimizer.optimizeToFhdWebp(thumbnail.bytes, ErrorCode.INVALID_CHAT_ROOM_THUMBNAIL),
+                WEBP_CONTENT_TYPE,
+            )
+        val thumbnailUrl = objectStorageRepository.getDownloadUrl(thumbnailKey)
         val room =
             roomRepository.saveAndFlush(
                 ChatRoom(
@@ -1672,17 +1681,9 @@ class ChatRoomService(
 
     private fun validateRequiredThumbnail(thumbnail: MultipartFile) {
         if (thumbnail.isEmpty) throw BaseException(ErrorCode.CHAT_ROOM_THUMBNAIL_REQUIRED)
-    }
-
-    private fun uploadChatRoomThumbnail(file: MultipartFile): String {
-        val extension = fileExtension(file)
-        val key =
-            objectStorageRepository.upload(
-                CHAT_ROOM_THUMBNAIL_PATH,
-                ObjectStorageRepository.generateFileName(extension),
-                file.inputStream,
-            )
-        return objectStorageRepository.getDownloadUrl(key)
+        if (thumbnail.size > MAX_CHAT_ROOM_THUMBNAIL_BYTES || thumbnail.contentType?.startsWith("image/") != true) {
+            throw BaseException(ErrorCode.INVALID_CHAT_ROOM_THUMBNAIL)
+        }
     }
 
     private fun uploadChatImage(file: MultipartFile): String {
@@ -1825,10 +1826,13 @@ class ChatRoomService(
         private const val MIN_PLACES_PER_DAY = 2
         private const val CHAT_ROOM_THUMBNAIL_PATH = "chat-room/thumbnail/"
         private const val CHAT_IMAGE_PATH = "chat/message/image/"
+        private const val MAX_CHAT_ROOM_THUMBNAIL_BYTES = 20L * 1024 * 1024
         private const val MAX_CHAT_IMAGE_BYTES = 20L * 1024 * 1024
         private const val MAX_DISCOVER_ROOM_LIMIT = 20
         private const val NO_USER_ID = -1L
         private const val DEFAULT_IMAGE_EXTENSION = "jpg"
+        private const val WEBP_EXTENSION = "webp"
+        private const val WEBP_CONTENT_TYPE = "image/webp"
         private val FILE_EXTENSION_PATTERN = Regex("[a-z0-9]{1,10}")
         private val ACTIVE_APPLICATION_STATUSES = listOf(JoinApplicationStatus.PENDING, JoinApplicationStatus.WAITLISTED)
     }

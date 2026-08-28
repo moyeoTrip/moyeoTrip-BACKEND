@@ -12,12 +12,15 @@ import javax.imageio.ImageIO
 import javax.imageio.ImageWriteParam
 
 @Component
-class ProfileImageOptimizer {
-    fun optimizeToHdWebp(source: ByteArray): ByteArray =
+class FhdWebpImageOptimizer {
+    fun optimizeToFhdWebp(
+        source: ByteArray,
+        failureErrorCode: ErrorCode,
+    ): ByteArray =
         try {
             val original =
                 ByteArrayInputStream(source).use(ImageIO::read)
-                    ?: throw BaseException(ErrorCode.PROFILE_IMAGE_GENERATION_FAILED)
+                    ?: throw BaseException(failureErrorCode)
             val (width, height) = resizedDimensions(original.width, original.height)
             val optimized = BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB)
             val graphics = optimized.createGraphics()
@@ -29,11 +32,11 @@ class ProfileImageOptimizer {
             } finally {
                 graphics.dispose()
             }
-            encodeWebp(optimized)
+            encodeWebp(optimized, failureErrorCode)
         } catch (exception: BaseException) {
             throw exception
         } catch (exception: Exception) {
-            throw BaseException(ErrorCode.PROFILE_IMAGE_GENERATION_FAILED)
+            throw BaseException(failureErrorCode)
         }
 
     private fun resizedDimensions(
@@ -49,10 +52,13 @@ class ProfileImageOptimizer {
         return (originalWidth * scale).toInt().coerceAtLeast(1) to (originalHeight * scale).toInt().coerceAtLeast(1)
     }
 
-    private fun encodeWebp(image: BufferedImage): ByteArray {
+    private fun encodeWebp(
+        image: BufferedImage,
+        failureErrorCode: ErrorCode,
+    ): ByteArray {
         val writer =
             ImageIO.getImageWritersByMIMEType(WEBP_MIME_TYPE).asSequence().firstOrNull()
-                ?: throw BaseException(ErrorCode.PROFILE_IMAGE_GENERATION_FAILED)
+                ?: throw BaseException(failureErrorCode)
         try {
             return ByteArrayOutputStream().use { output ->
                 ImageIO.createImageOutputStream(output).use { imageOutput ->
@@ -76,8 +82,8 @@ class ProfileImageOptimizer {
     }
 
     companion object {
-        private const val MAX_WIDTH = 1280
-        private const val MAX_HEIGHT = 720
+        private const val MAX_WIDTH = 1920
+        private const val MAX_HEIGHT = 1080
         private const val COMPRESSION_QUALITY = 0.82f
         private const val LOSSY_COMPRESSION_TYPE = "Lossy"
         private const val WEBP_MIME_TYPE = "image/webp"

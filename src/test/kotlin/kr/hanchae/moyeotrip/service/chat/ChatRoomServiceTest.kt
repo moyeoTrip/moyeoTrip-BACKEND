@@ -62,8 +62,10 @@ import kr.hanchae.moyeotrip.repository.UserBlockRepository
 import kr.hanchae.moyeotrip.repository.UserRepository
 import kr.hanchae.moyeotrip.service.notification.NotificationService
 import kr.hanchae.moyeotrip.service.realtime.RealtimeMessagingService
+import kr.hanchae.moyeotrip.utils.FhdWebpImageOptimizer
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertThrows
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.mockito.ArgumentCaptor
 import org.mockito.ArgumentMatchers.any
@@ -98,6 +100,7 @@ class ChatRoomServiceTest {
     private val userRepository = mock(UserRepository::class.java)
     private val userBlockRepository = mock(UserBlockRepository::class.java)
     private val objectStorageRepository = mock(ObjectStorageRepository::class.java)
+    private val fhdWebpImageOptimizer = mock(FhdWebpImageOptimizer::class.java)
     private val noticeRepository = mock(ChatRoomNoticeRepository::class.java)
     private val notificationService = mock(NotificationService::class.java)
     private val realtimeMessagingService = mock(RealtimeMessagingService::class.java)
@@ -119,6 +122,7 @@ class ChatRoomServiceTest {
             userRepository,
             userBlockRepository,
             objectStorageRepository,
+            fhdWebpImageOptimizer,
             noticeRepository,
             notificationService,
             realtimeMessagingService,
@@ -1522,8 +1526,10 @@ class ChatRoomServiceTest {
 
     @Test
     fun `내 채팅방 찜 목록은 찜 저장소의 최신순 결과만 반환한다`() {
-        val first = room(user(1L), startDate = LocalDate.of(2026, 9, 2))
-        val second = room(user(1L), startDate = LocalDate.of(2026, 9, 1))
+        val firstStartDate = LocalDate.of(2026, 9, 2)
+        val secondStartDate = LocalDate.of(2026, 9, 1)
+        val first = room(user(1L), startDate = firstStartDate, recruitmentDeadlineDate = firstStartDate.minusDays(1))
+        val second = room(user(1L), startDate = secondStartDate, recruitmentDeadlineDate = secondStartDate.minusDays(1))
         `when`(favoriteRepository.findChatRoomsByUserIdOrderByFavoritedAtDesc(2L)).thenReturn(listOf(first, second))
 
         val response = service.getFavoriteRooms(2L)
@@ -1729,6 +1735,22 @@ class ChatRoomServiceTest {
     }
 
     @Test
+    fun `이미지가 아닌 채팅방 썸네일은 생성할 수 없다`() {
+        val thumbnail = mock(MultipartFile::class.java)
+        `when`(thumbnail.isEmpty).thenReturn(false)
+        `when`(thumbnail.size).thenReturn(10L)
+        `when`(thumbnail.contentType).thenReturn("text/plain")
+
+        val exception =
+            assertThrows(BaseException::class.java) {
+                service.createRoom(1L, createRoomRequest(TripType.DAY_TRIP, endDate = null), thumbnail)
+            }
+
+        assertEquals(ErrorCode.INVALID_CHAT_ROOM_THUMBNAIL, exception.errorCode)
+        verifyNoInteractions(userRepository, fhdWebpImageOptimizer, objectStorageRepository)
+    }
+
+    @Test
     fun `커스텀 코스로 채팅방을 만들면 코스 장소 태그 호스트와 개설 메시지를 저장한다`() {
         val host = profiledUser(1L, Gender.F, LocalDate.now().minusYears(30))
         val contentType = TourismContentType(12, "관광지")
@@ -1736,7 +1758,8 @@ class ChatRoomServiceTest {
         val second = TourismContent(contentId = 101L, contentType = contentType, title = "남산")
         val tag = TravelCourseTag(id = 7L, name = "힐링")
         val thumbnail = mock(MultipartFile::class.java)
-        val thumbnailStream = ByteArrayInputStream(byteArrayOf(1, 2, 3))
+        val thumbnailBytes = byteArrayOf(1, 2, 3)
+        val optimizedThumbnailBytes = byteArrayOf(4, 5, 6)
         val startDate = LocalDate.now().plusDays(10)
         val request =
             CreateChatRoomRequest(
@@ -1767,13 +1790,18 @@ class ChatRoomServiceTest {
         `when`(tourismContentRepository.findByContentId(101L)).thenReturn(second)
         `when`(tagRepository.findAllById(setOf(7L))).thenReturn(listOf(tag))
         `when`(thumbnail.isEmpty).thenReturn(false)
-        `when`(thumbnail.originalFilename).thenReturn("cover.webp")
-        `when`(thumbnail.inputStream).thenReturn(thumbnailStream)
+        `when`(thumbnail.size).thenReturn(thumbnailBytes.size.toLong())
+        `when`(thumbnail.contentType).thenReturn("image/png")
+        `when`(thumbnail.bytes).thenReturn(thumbnailBytes)
+        `when`(
+            fhdWebpImageOptimizer.optimizeToFhdWebp(thumbnailBytes, ErrorCode.INVALID_CHAT_ROOM_THUMBNAIL),
+        ).thenReturn(optimizedThumbnailBytes)
         `when`(
             objectStorageRepository.upload(
                 org.mockito.ArgumentMatchers.anyString(),
                 org.mockito.ArgumentMatchers.anyString(),
-                anyInputStream(),
+                anyByteArray(),
+                org.mockito.ArgumentMatchers.anyString(),
             ),
         ).thenReturn("chat-room/thumbnail/cover.webp")
         `when`(objectStorageRepository.getDownloadUrl("chat-room/thumbnail/cover.webp"))
@@ -1792,6 +1820,16 @@ class ChatRoomServiceTest {
         assertEquals(2, roomCaptor.value.course.places.size)
         assertEquals(540L, roomCaptor.value.course.durationMinutes)
         assertEquals("https://cdn.example.com/cover.webp", roomCaptor.value.thumbnail)
+        verify(fhdWebpImageOptimizer).optimizeToFhdWebp(thumbnailBytes, ErrorCode.INVALID_CHAT_ROOM_THUMBNAIL)
+        val uploadInvocation =
+            org.mockito.Mockito
+                .mockingDetails(objectStorageRepository)
+                .invocations
+                .single { it.method.name == "upload" && it.arguments.size == 4 }
+        assertEquals("chat-room/thumbnail/", uploadInvocation.arguments[0])
+        assertTrue((uploadInvocation.arguments[1] as String).endsWith(".webp"))
+        assertEquals(optimizedThumbnailBytes.toList(), (uploadInvocation.arguments[2] as ByteArray).toList())
+        assertEquals("image/webp", uploadInvocation.arguments[3])
         verify(placeRepository, org.mockito.Mockito.times(2)).save(any())
         verify(notificationService).notifyRoomCreated(roomCaptor.value)
     }
@@ -1801,7 +1839,8 @@ class ChatRoomServiceTest {
         val host = profiledUser(1L, Gender.M, LocalDate.now().minusYears(30))
         val publicCourse = TravelCourse(id = 5L, type = TravelCourseType.PUBLIC, title = "공개 코스")
         val thumbnail = mock(MultipartFile::class.java)
-        val thumbnailStream = ByteArrayInputStream(byteArrayOf(1, 2, 3))
+        val thumbnailBytes = byteArrayOf(1, 2, 3)
+        val optimizedThumbnailBytes = byteArrayOf(4, 5, 6)
         val startDate = LocalDate.now().plusDays(10)
         val request =
             CreateChatRoomRequest(
@@ -1821,13 +1860,18 @@ class ChatRoomServiceTest {
         `when`(userRepository.findById(1L)).thenReturn(Optional.of(host))
         `when`(courseRepository.findByIdAndType(5L, TravelCourseType.PUBLIC)).thenReturn(publicCourse)
         `when`(thumbnail.isEmpty).thenReturn(false)
-        `when`(thumbnail.originalFilename).thenReturn("cover.webp")
-        `when`(thumbnail.inputStream).thenReturn(thumbnailStream)
+        `when`(thumbnail.size).thenReturn(thumbnailBytes.size.toLong())
+        `when`(thumbnail.contentType).thenReturn("image/jpeg")
+        `when`(thumbnail.bytes).thenReturn(thumbnailBytes)
+        `when`(
+            fhdWebpImageOptimizer.optimizeToFhdWebp(thumbnailBytes, ErrorCode.INVALID_CHAT_ROOM_THUMBNAIL),
+        ).thenReturn(optimizedThumbnailBytes)
         `when`(
             objectStorageRepository.upload(
                 org.mockito.ArgumentMatchers.anyString(),
                 org.mockito.ArgumentMatchers.anyString(),
-                anyInputStream(),
+                anyByteArray(),
+                org.mockito.ArgumentMatchers.anyString(),
             ),
         ).thenReturn("chat-room/thumbnail/cover.webp")
         `when`(objectStorageRepository.getDownloadUrl("chat-room/thumbnail/cover.webp"))
@@ -2452,6 +2496,8 @@ class ChatRoomServiceTest {
     ) = CustomCoursePlaceRequest(contentId, dayNumber, sequence, LocalTime.of(hour, minute))
 
     private fun nonEmptyThumbnail(): MultipartFile = mock(MultipartFile::class.java)
+
+    private fun anyByteArray(): ByteArray = org.mockito.ArgumentMatchers.any(ByteArray::class.java) ?: ByteArray(0)
 
     private fun createRoomRequest(
         tripType: TripType,

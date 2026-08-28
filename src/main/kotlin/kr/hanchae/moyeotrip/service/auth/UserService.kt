@@ -28,7 +28,7 @@ import kr.hanchae.moyeotrip.repository.TravelStyleRepository
 import kr.hanchae.moyeotrip.repository.UserProfileImageRepository
 import kr.hanchae.moyeotrip.repository.UserRepository
 import kr.hanchae.moyeotrip.repository.UserWithdrawalDataRepository
-import kr.hanchae.moyeotrip.utils.ProfileImageOptimizer
+import kr.hanchae.moyeotrip.utils.FhdWebpImageOptimizer
 import kr.hanchae.moyeotrip.utils.jwt.JwtUtil
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
@@ -49,7 +49,7 @@ class UserService(
     private val legalDongCodeRepository: LegalDongCodeRepository,
     private val travelStyleRepository: TravelStyleRepository,
     private val notificationSettingRepository: NotificationSettingRepository,
-    private val profileImageOptimizer: ProfileImageOptimizer,
+    private val fhdWebpImageOptimizer: FhdWebpImageOptimizer,
     private val jwtUtil: JwtUtil,
     private val userWithdrawalDataRepository: UserWithdrawalDataRepository,
     private val chatRoomParticipantRepository: ChatRoomParticipantRepository,
@@ -141,7 +141,10 @@ class UserService(
         val information = checkNotNull(user.information)
         val prompt = profileImagePromptFactory.create(information.nickname, information.nicknameColor)
         val imageBytes = profileImageGenerationClient.generate(prompt)
-        val generatedImageKey = objectStorageRepository.uploadGeneratedProfileImage(profileImageOptimizer.optimizeToHdWebp(imageBytes))
+        val generatedImageKey =
+            objectStorageRepository.uploadGeneratedProfileImage(
+                fhdWebpImageOptimizer.optimizeToFhdWebp(imageBytes, ErrorCode.PROFILE_IMAGE_GENERATION_FAILED),
+            )
         scheduleGeneratedImageCleanupOnRollback(generatedImageKey)
         val profileImage =
             userProfileImageRepository.save(

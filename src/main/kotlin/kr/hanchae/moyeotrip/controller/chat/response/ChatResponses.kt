@@ -35,7 +35,11 @@ data class ChatRoomDetailResponse(
     val title: String,
     @field:Schema(description = "채팅방 소개", example = "가을 단풍을 함께 즐길 동행자를 구해요.", nullable = true)
     val description: String?,
-    @field:Schema(description = "채팅방 썸네일 이미지 URL", example = "https://cdn.example.com/chat-rooms/101/thumbnail.jpg", nullable = true)
+    @field:Schema(
+        description = "채팅방 썸네일 이미지 URL (업로드 시 최대 FHD WebP로 변환됨)",
+        example = "https://cdn.example.com/chat-rooms/101/thumbnail.webp",
+        nullable = true,
+    )
     val thumbnail: String?,
     @field:Schema(description = "당일 또는 숙박 여행 유형", example = "OVERNIGHT")
     val tripType: TripType,
