@@ -100,15 +100,15 @@ class TourismContentSyncServiceTest {
             .thenReturn(TourAreaBasedPage(listOf(item), 1))
         `when`(repository.findAll()).thenReturn(emptyList())
         `when`(tourismImageProxyService.getImage(sourceUrl))
-            .thenReturn(TourismImageBinary(MediaType.IMAGE_JPEG, imageBytes))
-        `when`(objectStorageRepository.uploadTourismImage(imageBytes, "image/jpeg"))
-            .thenReturn("tourism/image/stored.jpg")
+            .thenReturn(TourismImageBinary(MediaType.parseMediaType("image/webp"), imageBytes))
+        `when`(objectStorageRepository.uploadTourismImage(imageBytes, "image/webp"))
+            .thenReturn("tourism/image/stored.webp")
         val captor = iterableCaptor<TourismContent>()
 
         service.syncGyeongsangbukdo()
 
         verify(repository).saveAllAndFlush(captor.capture())
-        assertEquals("tourism/image/stored.jpg", captor.value.single().thumbnail)
+        assertEquals("tourism/image/stored.webp", captor.value.single().thumbnail)
     }
 
     private fun areaItem(

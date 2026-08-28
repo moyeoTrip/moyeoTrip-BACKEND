@@ -1,7 +1,6 @@
 package kr.hanchae.moyeotrip.service.tour
 
 import kr.hanchae.moyeotrip.client.TourApiClient
-import kr.hanchae.moyeotrip.client.TourImageItem
 import kr.hanchae.moyeotrip.controller.tour.response.TourismContentDetailResponse
 import kr.hanchae.moyeotrip.controller.tour.response.TourismContentImageResponse
 import kr.hanchae.moyeotrip.controller.tour.response.TourismContentPageResponse
@@ -27,7 +26,6 @@ class TourismContentService(
     private val repository: TourismContentRepository,
     private val contentTypeRepository: TourismContentTypeRepository,
     private val imageRepository: TourismContentImageRepository,
-    private val tourismImageProxyService: TourismImageProxyService,
     private val objectStorageRepository: ObjectStorageRepository,
 ) {
     @Transactional(readOnly = true)
@@ -77,14 +75,8 @@ class TourismContentService(
                 )
             }
         }
-        var contentImages = findImages(content, TourismContentImageType.CONTENT)
-        var menuImages = if (content.isRestaurant()) findImages(content, TourismContentImageType.MENU) else emptyList()
-        if (contentImages.isEmpty() && menuImages.isEmpty()) {
-            fetchAndSaveImages(content)
-            contentImages = findImages(content, TourismContentImageType.CONTENT)
-            menuImages = if (content.isRestaurant()) findImages(content, TourismContentImageType.MENU) else emptyList()
-        }
-        (contentImages + menuImages).forEach(::storeImageIfNeeded)
+        val contentImages = findImages(content, TourismContentImageType.CONTENT)
+        val menuImages = if (content.isRestaurant()) findImages(content, TourismContentImageType.MENU) else emptyList()
         return content.toDetailResponse(contentImages, menuImages, objectStorageRepository)
     }
 
@@ -93,33 +85,6 @@ class TourismContentService(
         type: TourismContentImageType,
     ): List<TourismContentImage> = imageRepository.findAllByTourismContentIdAndTypeOrderByIdAsc(content.id, type)
 
-    private fun fetchAndSaveImages(content: TourismContent) {
-        val contentId = content.contentId
-        val contentImages = tourApiClient.getImages(contentId, CONTENT_IMAGE_YES)
-        val menuImages =
-            if (content.isRestaurant()) {
-                tourApiClient.getImages(contentId, MENU_IMAGE_NO)
-            } else {
-                emptyList()
-            }
-        imageRepository.saveAll(
-            contentImages.map { it.toEntity(content, TourismContentImageType.CONTENT, ::storeImage) } +
-                menuImages.map { it.toEntity(content, TourismContentImageType.MENU, ::storeImage) },
-        )
-    }
-
-    private fun storeImage(sourceUrl: String): String? =
-        runCatching {
-            val image = tourismImageProxyService.getImage(sourceUrl)
-            objectStorageRepository.uploadTourismImage(image.bytes, image.contentType.toString())
-        }.getOrNull()
-
-    private fun storeImageIfNeeded(image: TourismContentImage) {
-        val sourceUrl = image.originalImageUrl ?: return
-        if (sourceUrl.startsWith(ObjectStorageRepository.TOURISM_IMAGE_PATH)) return
-        storeImage(sourceUrl)?.let(image::updateOriginalImageUrl)
-    }
-
     private fun String.nullIfBlank(): String? = trim().takeIf(String::isNotEmpty)
 
     private fun TourismContent.isRestaurant(): Boolean = contentType.code == RESTAURANT_CONTENT_TYPE_ID
@@ -127,25 +92,7 @@ class TourismContentService(
     companion object {
         private const val COURSE_CONTENT_TYPE_ID = 25
         private const val RESTAURANT_CONTENT_TYPE_ID = 39
-        private const val CONTENT_IMAGE_YES = "Y"
-        private const val MENU_IMAGE_NO = "N"
     }
-}
-
-private fun TourImageItem.toEntity(
-    content: TourismContent,
-    type: TourismContentImageType,
-    storeImage: (String) -> String?,
-): TourismContentImage {
-    val sourceUrl = originimgurl.nullIfBlank()
-    return TourismContentImage(
-        tourismContent = content,
-        type = type,
-        imageName = imgname.nullIfBlank(),
-        originalImageUrl = sourceUrl?.let { storeImage(it) ?: it },
-        serialNumber = serialnum.nullIfBlank(),
-        copyrightType = cpyrhtDivCd.nullIfBlank(),
-    )
 }
 
 private fun TourismContent.toSummaryResponse(objectStorageRepository: ObjectStorageRepository) =

@@ -1,8 +1,8 @@
 package kr.hanchae.moyeotrip.service.tour
 
+import kr.hanchae.moyeotrip.client.TourApiRateLimitExceededException
 import kr.hanchae.moyeotrip.exception.BaseException
 import kr.hanchae.moyeotrip.exception.ErrorCode
-import org.junit.jupiter.api.Assertions.assertArrayEquals
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
@@ -40,19 +40,19 @@ class TourismImageProxyServiceTest {
     }
 
     @Test
-    fun `공식 VisitKorea JPEG 이미지는 바이너리로 반환한다`() {
+    fun `공식 VisitKorea JPEG 이미지는 WebP로 변환한다`() {
         val builder = RestClient.builder()
         val server = MockRestServiceServer.bindTo(builder).build()
         val service = TourismImageProxyService(builder)
-        val expected = byteArrayOf(1, 2, 3)
+        val original = imageBytes("jpg")
         server
             .expect { request -> assertEquals("https", request.uri.scheme) }
-            .andRespond(withSuccess(expected, MediaType.IMAGE_JPEG))
+            .andRespond(withSuccess(original, MediaType.IMAGE_JPEG))
 
         val result = service.getImage(OFFICIAL_IMAGE_URL)
 
-        assertEquals(MediaType.IMAGE_JPEG, result.contentType)
-        assertArrayEquals(expected, result.bytes)
+        assertEquals(MediaType.parseMediaType("image/webp"), result.contentType)
+        assertEquals(100, ByteArrayInputStream(result.bytes).use(ImageIO::read).width)
         server.verify()
     }
 
@@ -63,24 +63,36 @@ class TourismImageProxyServiceTest {
         val service = TourismImageProxyService(builder)
         server
             .expect { request -> assertEquals("http", request.uri.scheme) }
-            .andRespond(withSuccess(byteArrayOf(1, 2, 3), MediaType.IMAGE_JPEG))
+            .andRespond(withSuccess(imageBytes("jpg"), MediaType.IMAGE_JPEG))
 
         val result = service.getImage("http://tong.visitkorea.or.kr/cms/resource/image.jpg")
 
-        assertEquals(MediaType.IMAGE_JPEG, result.contentType)
+        assertEquals(MediaType.parseMediaType("image/webp"), result.contentType)
         server.verify()
     }
 
     @Test
-    fun `VisitKorea image jpg 응답은 표준 image jpeg로 정규화한다`() {
+    fun `관광공사 이미지 요청이 429이면 이관 작업을 재개할 수 있도록 요청 한도 예외를 던진다`() {
         val builder = RestClient.builder()
         val server = MockRestServiceServer.bindTo(builder).build()
         val service = TourismImageProxyService(builder)
-        server.expect { _ -> }.andRespond(withSuccess(byteArrayOf(1, 2, 3), MediaType.parseMediaType("image/jpg")))
+        server.expect { _ -> }.andRespond(withStatus(HttpStatus.TOO_MANY_REQUESTS))
+
+        assertThrows(TourApiRateLimitExceededException::class.java) { service.getImage(OFFICIAL_IMAGE_URL) }
+
+        server.verify()
+    }
+
+    @Test
+    fun `VisitKorea image jpg 응답도 WebP로 변환한다`() {
+        val builder = RestClient.builder()
+        val server = MockRestServiceServer.bindTo(builder).build()
+        val service = TourismImageProxyService(builder)
+        server.expect { _ -> }.andRespond(withSuccess(imageBytes("jpg"), MediaType.parseMediaType("image/jpg")))
 
         val result = service.getImage(OFFICIAL_IMAGE_URL)
 
-        assertEquals(MediaType.IMAGE_JPEG, result.contentType)
+        assertEquals(MediaType.parseMediaType("image/webp"), result.contentType)
         server.verify()
     }
 
@@ -98,17 +110,16 @@ class TourismImageProxyServiceTest {
     }
 
     @Test
-    fun `공식 VisitKorea PNG 이미지는 바이너리로 반환한다`() {
+    fun `공식 VisitKorea PNG 이미지는 WebP로 변환한다`() {
         val builder = RestClient.builder()
         val server = MockRestServiceServer.bindTo(builder).build()
         val service = TourismImageProxyService(builder)
-        val expected = byteArrayOf(1, 2, 3)
-        server.expect { _ -> }.andRespond(withSuccess(expected, MediaType.IMAGE_PNG))
+        server.expect { _ -> }.andRespond(withSuccess(imageBytes("png"), MediaType.IMAGE_PNG))
 
         val result = service.getImage(OFFICIAL_IMAGE_URL)
 
-        assertEquals(MediaType.IMAGE_PNG, result.contentType)
-        assertArrayEquals(expected, result.bytes)
+        assertEquals(MediaType.parseMediaType("image/webp"), result.contentType)
+        assertEquals(100, ByteArrayInputStream(result.bytes).use(ImageIO::read).width)
         server.verify()
     }
 
@@ -168,5 +179,15 @@ class TourismImageProxyServiceTest {
 
     companion object {
         private const val OFFICIAL_IMAGE_URL = "https://tong.visitkorea.or.kr/cms/resource/image.jpg"
+
+        private fun imageBytes(
+            format: String,
+            width: Int = 100,
+            height: Int = 50,
+        ): ByteArray =
+            ByteArrayOutputStream().use { output ->
+                ImageIO.write(BufferedImage(width, height, BufferedImage.TYPE_INT_RGB), format, output)
+                output.toByteArray()
+            }
     }
 }

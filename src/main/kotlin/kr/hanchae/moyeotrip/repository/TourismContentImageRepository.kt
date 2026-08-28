@@ -9,4 +9,6 @@ interface TourismContentImageRepository : JpaRepository<TourismContentImage, Lon
         tourismContentId: Long,
         type: TourismContentImageType,
     ): List<TourismContentImage>
+
+    fun deleteAllByTourismContentId(tourismContentId: Long)
 }

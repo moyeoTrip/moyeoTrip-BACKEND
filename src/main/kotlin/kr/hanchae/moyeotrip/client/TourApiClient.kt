@@ -8,6 +8,7 @@ import kr.hanchae.moyeotrip.config.properties.TourApiProperties
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.stereotype.Component
+import org.springframework.web.client.HttpClientErrorException
 import org.springframework.web.client.RestClient
 import java.net.URI
 import java.net.URLEncoder
@@ -171,26 +172,29 @@ class TourApiClient
         fun getImages(
             contentId: Long,
             imageYn: String,
-        ): List<TourImageItem> {
-            val rawResponse =
-                restClient
-                    .get()
-                    .uri(createImageDetailUri(contentId, imageYn))
-                    .retrieve()
-                    .body(String::class.java)
-                    ?: throw IllegalStateException("한국관광공사 이미지정보 응답이 비어 있습니다.")
-            val response = readTourApiResponse(rawResponse, TourImageApiResponse::class.java)
+        ): List<TourImageItem> =
+            try {
+                val rawResponse =
+                    restClient
+                        .get()
+                        .uri(createImageDetailUri(contentId, imageYn))
+                        .retrieve()
+                        .body(String::class.java)
+                        ?: throw IllegalStateException("한국관광공사 이미지정보 응답이 비어 있습니다.")
+                val response = readTourApiResponse(rawResponse, TourImageApiResponse::class.java)
 
-            val tourResponse =
-                response.response
-                    ?: throw IllegalStateException(response.openApiServiceResponse?.errorMessage() ?: "알 수 없는 공공데이터포털 오류입니다.")
-            check(tourResponse.header.resultCode == SUCCESS_RESULT_CODE) {
-                "한국관광공사 이미지정보 조회에 실패했습니다: ${tourResponse.header.resultMsg}"
+                val tourResponse =
+                    response.response
+                        ?: throw IllegalStateException(response.openApiServiceResponse?.errorMessage() ?: "알 수 없는 공공데이터포털 오류입니다.")
+                check(tourResponse.header.resultCode == SUCCESS_RESULT_CODE) {
+                    "한국관광공사 이미지정보 조회에 실패했습니다: ${tourResponse.header.resultMsg}"
+                }
+                tourResponse.body.items
+                    ?.item
+                    .orEmpty()
+            } catch (exception: HttpClientErrorException.TooManyRequests) {
+                throw TourApiRateLimitExceededException(exception)
             }
-            return tourResponse.body.items
-                ?.item
-                .orEmpty()
-        }
 
         private fun <T> readTourApiResponse(
             rawResponse: String,
@@ -312,6 +316,10 @@ data class TourApiRawJsonResponse(
     val statusCode: Int,
     val body: String,
 )
+
+class TourApiRateLimitExceededException(
+    cause: Throwable,
+) : RuntimeException("한국관광공사 이미지 API 요청 한도를 초과했습니다.", cause)
 
 data class TourLegalDongApiResponse(
     val response: TourLegalDongResponse,

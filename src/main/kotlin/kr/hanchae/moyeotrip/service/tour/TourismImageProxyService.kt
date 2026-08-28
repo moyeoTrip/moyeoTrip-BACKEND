@@ -1,5 +1,6 @@
 package kr.hanchae.moyeotrip.service.tour
 
+import kr.hanchae.moyeotrip.client.TourApiRateLimitExceededException
 import kr.hanchae.moyeotrip.exception.BaseException
 import kr.hanchae.moyeotrip.exception.ErrorCode
 import org.springframework.http.MediaType
@@ -33,6 +34,9 @@ class TourismImageProxyService(
                 .get()
                 .uri(uri)
                 .exchange { _, response ->
+                    if (response.statusCode.value() == TOO_MANY_REQUESTS_STATUS) {
+                        throw TourApiRateLimitExceededException(IllegalStateException("VisitKorea image request rate limit exceeded"))
+                    }
                     if (!response.statusCode.is2xxSuccessful) {
                         throw BaseException(ErrorCode.TOURISM_IMAGE_FETCH_FAILED)
                     }
@@ -45,15 +49,15 @@ class TourismImageProxyService(
                     if (bytes.size > MAXIMUM_IMAGE_BYTES) {
                         throw BaseException(ErrorCode.TOURISM_IMAGE_FETCH_FAILED)
                     }
-                    if (normalizedContentType ==
-                        BMP_MEDIA_TYPE
-                    ) {
-                        convertBmpToWebp(bytes)
+                    if (normalizedContentType == WEBP_MEDIA_TYPE) {
+                        TourismImageBinary(WEBP_MEDIA_TYPE, bytes)
                     } else {
-                        TourismImageBinary(normalizedContentType, bytes)
+                        convertToWebp(bytes)
                     }
                 }
         } catch (exception: BaseException) {
+            throw exception
+        } catch (exception: TourApiRateLimitExceededException) {
             throw exception
         } catch (exception: RestClientException) {
             throw BaseException(ErrorCode.TOURISM_IMAGE_FETCH_FAILED)
@@ -93,17 +97,18 @@ class TourismImageProxyService(
             in JPEG_SUBTYPES -> MediaType.IMAGE_JPEG
             PNG_SUBTYPE -> MediaType.IMAGE_PNG
             BMP_SUBTYPE, X_MS_BMP_SUBTYPE -> BMP_MEDIA_TYPE
+            WEBP_SUBTYPE -> WEBP_MEDIA_TYPE
             else -> throw BaseException(ErrorCode.TOURISM_IMAGE_FETCH_FAILED)
         }
     }
 
-    private fun convertBmpToWebp(source: ByteArray): TourismImageBinary {
+    private fun convertToWebp(source: ByteArray): TourismImageBinary {
         val original = ByteArrayInputStream(source).use(ImageIO::read) ?: throw BaseException(ErrorCode.TOURISM_IMAGE_FETCH_FAILED)
         if (original.width.toLong() * original.height > MAXIMUM_IMAGE_PIXELS) throw BaseException(ErrorCode.TOURISM_IMAGE_FETCH_FAILED)
         val scale = minOf(1.0, MAX_WEBP_WIDTH.toDouble() / original.width, MAX_WEBP_HEIGHT.toDouble() / original.height)
         val width = (original.width * scale).toInt().coerceAtLeast(1)
         val height = (original.height * scale).toInt().coerceAtLeast(1)
-        val resized = BufferedImage(width, height, BufferedImage.TYPE_INT_RGB)
+        val resized = BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB)
         val graphics = resized.createGraphics()
         try {
             graphics.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC)
@@ -144,12 +149,14 @@ class TourismImageProxyService(
         private const val DEFAULT_HTTP_PORT = 80
         private const val DEFAULT_HTTPS_PORT = 443
         private const val NO_EXPLICIT_PORT = -1
+        private const val TOO_MANY_REQUESTS_STATUS = 429
         private const val VISIT_KOREA_DOMAIN = "visitkorea.or.kr"
         private const val MAXIMUM_IMAGE_BYTES = 20 * 1024 * 1024
         private const val IMAGE_TYPE = "image"
         private const val PNG_SUBTYPE = "png"
         private const val BMP_SUBTYPE = "bmp"
         private const val X_MS_BMP_SUBTYPE = "x-ms-bmp"
+        private const val WEBP_SUBTYPE = "webp"
         private const val MAXIMUM_IMAGE_PIXELS = 40_000_000L
         private const val MAX_WEBP_WIDTH = 1280
         private const val MAX_WEBP_HEIGHT = 720

@@ -4,6 +4,7 @@ import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import kr.hanchae.moyeotrip.config.properties.TourApiProperties
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.springframework.http.HttpStatus
@@ -86,6 +87,20 @@ class TourApiClientTest {
         val result = client.getImages(2599344L, "Y")
 
         assertTrue(result.isEmpty())
+        server.verify()
+    }
+
+    @Test
+    fun `이미지정보 조회가 429이면 요청 한도 예외로 변환한다`() {
+        val builder = RestClient.builder()
+        val server = MockRestServiceServer.bindTo(builder).build()
+        val client = TourApiClient(builder, jacksonObjectMapper(), TourApiProperties(tourApiKey = "test-key"))
+        server.expect { _ -> }.andRespond(withStatus(HttpStatus.TOO_MANY_REQUESTS))
+
+        assertThrows(TourApiRateLimitExceededException::class.java) {
+            client.getImages(2599344L, "Y")
+        }
+
         server.verify()
     }
 

@@ -2,7 +2,6 @@ package kr.hanchae.moyeotrip.service.tour
 
 import kr.hanchae.moyeotrip.client.TourApiClient
 import kr.hanchae.moyeotrip.client.TourCommonDetailItem
-import kr.hanchae.moyeotrip.client.TourImageItem
 import kr.hanchae.moyeotrip.entity.tour.TourismContent
 import kr.hanchae.moyeotrip.entity.tour.TourismContentImage
 import kr.hanchae.moyeotrip.entity.tour.TourismContentImageType
@@ -16,7 +15,6 @@ import kr.hanchae.moyeotrip.repository.TourismContentTypeRepository
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
-import org.mockito.ArgumentMatchers.anyList
 import org.mockito.Mockito.mock
 import org.mockito.Mockito.never
 import org.mockito.Mockito.verify
@@ -31,7 +29,6 @@ class TourismContentServiceTest {
     private val repository = mock(TourismContentRepository::class.java)
     private val contentTypeRepository = mock(TourismContentTypeRepository::class.java)
     private val imageRepository = mock(TourismContentImageRepository::class.java)
-    private val tourismImageProxyService = mock(TourismImageProxyService::class.java)
     private val objectStorageRepository = mock(ObjectStorageRepository::class.java)
     private val service =
         TourismContentService(
@@ -39,7 +36,6 @@ class TourismContentServiceTest {
             repository,
             contentTypeRepository,
             imageRepository,
-            tourismImageProxyService,
             objectStorageRepository,
         )
 
@@ -125,26 +121,24 @@ class TourismContentServiceTest {
     }
 
     @Test
-    fun `일반 관광지 상세가 비어 있으면 공통 상세와 콘텐츠 이미지를 한 번 수집한다`() {
+    fun `상세 조회는 저장된 이미지가 없어도 외부 이미지 API를 호출하지 않는다`() {
         val content = content(100L, 12, "주산지")
-        val savedImage = image(content, TourismContentImageType.CONTENT, "https://image")
         `when`(repository.findByContentId(100L)).thenReturn(content)
         `when`(tourApiClient.getCommonDetail(100L))
             .thenReturn(TourCommonDetailItem(contentid = "100", telname = " 안내 ", homepage = " ", overview = " 소개 "))
         `when`(imageRepository.findAllByTourismContentIdAndTypeOrderByIdAsc(1L, TourismContentImageType.CONTENT))
-            .thenReturn(emptyList(), listOf(savedImage))
-        `when`(tourApiClient.getImages(100L, "Y"))
-            .thenReturn(listOf(TourImageItem(contentid = "100", imgname = " 전경 ", originimgurl = "https://image")))
+            .thenReturn(emptyList())
 
         val response = service.getContent(100L)
 
         assertEquals("안내", response.telephoneName)
         assertEquals(null, response.homepage)
         assertEquals("소개", response.overview)
-        assertEquals("https://image", response.contentImages.single().originalImageUrl)
+        assertEquals(emptyList<Any>(), response.contentImages)
         assertEquals(emptyList<Any>(), response.menuImages)
+        verify(tourApiClient, never()).getImages(100L, "Y")
         verify(tourApiClient, never()).getImages(100L, "N")
-        verify(imageRepository).saveAll(anyList())
+        verify(imageRepository, never()).saveAll(org.mockito.ArgumentMatchers.anyList())
     }
 
     @Test
