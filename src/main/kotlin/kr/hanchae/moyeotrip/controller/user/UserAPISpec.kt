@@ -8,6 +8,7 @@ import io.swagger.v3.oas.annotations.media.Schema
 import io.swagger.v3.oas.annotations.parameters.RequestBody
 import io.swagger.v3.oas.annotations.responses.ApiResponse
 import io.swagger.v3.oas.annotations.responses.ApiResponses
+import io.swagger.v3.oas.annotations.security.SecurityRequirements
 import io.swagger.v3.oas.annotations.tags.Tag
 import kr.hanchae.moyeotrip.config.swagger.SwaggerTag
 import kr.hanchae.moyeotrip.controller.user.request.ProfileImageSelectionRequest
@@ -129,24 +130,15 @@ interface UserAPISpec {
 
     @Operation(
         summary = "프로필 선택 항목 조회",
-        description = "프로필 수정 화면에 필요한 여행 스타일과 관심 지역 선택지를 반환합니다. 유효한 서비스 Access Token이 필요합니다.",
+        description = "회원가입과 프로필 수정 화면에 필요한 여행 스타일과 관심 지역 선택지를 반환합니다. 회원가입 전에 Access Token 없이 호출할 수 있습니다.",
     )
+    @SecurityRequirements
     @ApiResponses(
         value = [
             ApiResponse(
                 responseCode = "200",
                 description = "프로필 선택 항목 조회 성공",
                 content = [Content(schema = Schema(implementation = ProfileOptionsResponse::class))],
-            ),
-            ApiResponse(
-                responseCode = "401",
-                description = "서비스 Access Token이 없거나 유효하지 않음",
-                content = [
-                    Content(
-                        schema = Schema(implementation = ErrorResponse::class),
-                        examples = [ExampleObject(value = UserSwaggerExamples.UNAUTHORIZED)],
-                    ),
-                ],
             ),
             ApiResponse(
                 responseCode = "500",

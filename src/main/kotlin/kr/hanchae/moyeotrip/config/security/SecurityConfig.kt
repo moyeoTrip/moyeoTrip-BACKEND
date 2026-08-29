@@ -45,6 +45,8 @@ class SecurityConfig(
                 it
                     .requestMatchers(HttpMethod.OPTIONS, "/**")
                     .permitAll()
+                    .requestMatchers(HttpMethod.GET, "/api/v1/users/me/profile/options")
+                    .permitAll()
                     .requestMatchers("/api/v1/auth/providers", "/api/v1/auth/providers/**")
                     .authenticated()
                     .requestMatchers(*PERMITTED_URL_PATTERNS)
