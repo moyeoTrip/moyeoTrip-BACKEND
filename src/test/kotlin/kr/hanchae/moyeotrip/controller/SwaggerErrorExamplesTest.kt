@@ -55,7 +55,16 @@ class SwaggerErrorExamplesTest {
         @Test
         fun `회원가입 400은 모든 도메인 검증 오류를 구분한다`() {
             assertEquals(
-                setOf("요청 검증 실패", "지원하지 않는 Firebase 제공자", "최소 가입 연령 미달", "닉네임 선택 오류", "사용할 수 없는 약관 포함", "필수 약관 미동의"),
+                setOf(
+                    "요청 검증 실패",
+                    "지원하지 않는 Firebase 제공자",
+                    "최소 가입 연령 미달",
+                    "닉네임 선택 오류",
+                    "사용할 수 없는 약관 포함",
+                    "필수 약관 미동의",
+                    "여행 스타일 ID 오류",
+                    "관심 지역 ID 오류",
+                ),
                 examples(AuthAPISpec::class.java, "signup", "400"),
             )
         }

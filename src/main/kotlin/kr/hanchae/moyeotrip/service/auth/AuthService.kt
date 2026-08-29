@@ -18,9 +18,11 @@ import kr.hanchae.moyeotrip.entity.notification.NotificationSetting
 import kr.hanchae.moyeotrip.entity.terms.AgreementTerm
 import kr.hanchae.moyeotrip.entity.terms.AgreementTermCode
 import kr.hanchae.moyeotrip.entity.terms.UserTermsAgreement
+import kr.hanchae.moyeotrip.entity.tour.LegalDongCode
 import kr.hanchae.moyeotrip.entity.user.NicknameColor
 import kr.hanchae.moyeotrip.entity.user.ProviderType
 import kr.hanchae.moyeotrip.entity.user.SignupState
+import kr.hanchae.moyeotrip.entity.user.TravelStyle
 import kr.hanchae.moyeotrip.entity.user.User
 import kr.hanchae.moyeotrip.entity.user.UserInformation
 import kr.hanchae.moyeotrip.entity.user.UserRole
@@ -32,8 +34,10 @@ import kr.hanchae.moyeotrip.exception.InvalidRefreshTokenException
 import kr.hanchae.moyeotrip.exception.KakaoClientException
 import kr.hanchae.moyeotrip.exception.UserNotFoundException
 import kr.hanchae.moyeotrip.repository.AgreementTermRepository
+import kr.hanchae.moyeotrip.repository.LegalDongCodeRepository
 import kr.hanchae.moyeotrip.repository.NicknameCandidateRepository
 import kr.hanchae.moyeotrip.repository.NotificationSettingRepository
+import kr.hanchae.moyeotrip.repository.TravelStyleRepository
 import kr.hanchae.moyeotrip.repository.UserAuthIdentityRepository
 import kr.hanchae.moyeotrip.repository.UserRepository
 import kr.hanchae.moyeotrip.repository.UserTermsAgreementRepository
@@ -58,6 +62,8 @@ class AuthService(
     private val notificationSettingRepository: NotificationSettingRepository,
     private val agreementTermRepository: AgreementTermRepository,
     private val userTermsAgreementRepository: UserTermsAgreementRepository,
+    private val travelStyleRepository: TravelStyleRepository,
+    private val legalDongCodeRepository: LegalDongCodeRepository,
     private val userService: UserService,
 ) {
     fun createKakaoCustomToken(request: KakaoCustomTokenRequest): FirebaseCustomTokenResponse = createKakaoCustomToken(request.accessToken)
@@ -140,9 +146,7 @@ class AuthService(
             )
         }
 
-        request.fcmToken
-            ?.takeIf { it != user.fcmToken }
-            ?.let(user::changeFcmToken)
+        request.fcmToken?.let { transferFcmToken(user, it) }
         user.recordLogin()
 
         if (user.signupState == SignupState.USER_INFO_REQUIRED) {
@@ -177,6 +181,8 @@ class AuthService(
 
         validateMinimumSignupAge(request.birthDate)
         val agreedTerms = validateAndFindAgreedTerms(request.agreedTermIds)
+        val travelStyles = validateAndFindTravelStyles(request.travelStyleIds)
+        val interestedRegions = validateAndFindInterestedRegions(request.interestedRegionIds)
 
         val nicknameColor = validateNicknameSelection(request.nicknameSelectionToken, request.nickname)
         val nickname = request.nickname
@@ -192,7 +198,8 @@ class AuthService(
                     birthDate = request.birthDate,
                 ),
             )
-            request.fcmToken?.let(existingUser::changeFcmToken)
+            existingUser.updateProfile(null, travelStyles.toSet(), interestedRegions.toSet(), request.birthDate, request.gender)
+            request.fcmToken?.let { transferFcmToken(existingUser, it) }
             existingUser.recordLogin()
             recordMissingAgreements(existingUser, agreedTerms)
             updateMarketingNotification(existingUser, agreedTerms.hasMarketingConsent())
@@ -208,8 +215,9 @@ class AuthService(
                 birthDate = request.birthDate,
                 userRole = UserRole.ROLE_USER,
             )
+        user.updateProfile(null, travelStyles.toSet(), interestedRegions.toSet(), request.birthDate, request.gender)
         user.addAuthIdentity(identity.providerType, identity.uid)
-        request.fcmToken?.let(user::changeFcmToken)
+        request.fcmToken?.let { transferFcmToken(user, it) }
         user.recordLogin()
         val savedUser = userRepository.save(user)
         userTermsAgreementRepository.saveAll(agreedTerms.map { UserTermsAgreement(user = savedUser, agreementTerm = it) })
@@ -222,9 +230,46 @@ class AuthService(
         return makeTokens(savedUser)
     }
 
+    private fun transferFcmToken(
+        user: User,
+        requestedToken: String,
+    ) {
+        val normalizedToken =
+            requestedToken.trim().takeIf(String::isNotEmpty)
+                ?: throw BaseException(ErrorCode.FCM_TOKEN_BLANK, ErrorCode.FCM_TOKEN_BLANK.errorMessage)
+        if (user.fcmToken == normalizedToken) return
+
+        userRepository
+            .findByFcmToken(normalizedToken)
+            ?.takeIf { it.id != user.id }
+            ?.let { previousOwner ->
+                previousOwner.clearFcmToken()
+                userRepository.flush()
+            }
+        user.changeFcmToken(normalizedToken)
+    }
+
     private fun validateMinimumSignupAge(birthDate: LocalDate) {
         if (birthDate.isAfter(LocalDate.now().minusYears(MINIMUM_SIGNUP_AGE.toLong()))) {
             throw BaseException(ErrorCode.MINIMUM_SIGNUP_AGE_NOT_MET)
+        }
+    }
+
+    private fun validateAndFindTravelStyles(ids: Set<Long>?): List<TravelStyle> {
+        if (ids.isNullOrEmpty()) return emptyList()
+        return travelStyleRepository.findAllById(ids).also { travelStyles ->
+            if (travelStyles.map { it.id }.toSet() != ids) {
+                throw BaseException(ErrorCode.INVALID_TRAVEL_STYLE_SELECTION)
+            }
+        }
+    }
+
+    private fun validateAndFindInterestedRegions(ids: Set<Long>?): List<LegalDongCode> {
+        if (ids.isNullOrEmpty()) return emptyList()
+        return legalDongCodeRepository.findAllById(ids).also { regions ->
+            if (regions.map { it.id }.toSet() != ids || regions.any { it.regionCode != GYEONGSANGBUKDO_REGION_CODE }) {
+                throw BaseException(ErrorCode.INVALID_INTERESTED_REGION_SELECTION)
+            }
         }
     }
 
@@ -366,5 +411,6 @@ class AuthService(
 
     private companion object {
         const val MINIMUM_SIGNUP_AGE = 20
+        const val GYEONGSANGBUKDO_REGION_CODE = "47"
     }
 }

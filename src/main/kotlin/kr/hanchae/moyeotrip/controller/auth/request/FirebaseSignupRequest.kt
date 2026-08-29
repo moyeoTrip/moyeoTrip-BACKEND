@@ -53,6 +53,20 @@ data class FirebaseSignupRequest(
     @field:Past(message = "생년월일은 과거 날짜여야 합니다.")
     val birthDate: LocalDate,
     @field:Schema(
+        description = "선택한 여행 스타일 ID 목록. GET /api/v1/users/me/profile/options 응답의 ID를 사용합니다.",
+        example = "[1, 3]",
+        requiredMode = Schema.RequiredMode.NOT_REQUIRED,
+        nullable = true,
+    )
+    val travelStyleIds: Set<Long>? = null,
+    @field:Schema(
+        description = "선택한 관심 경북 지역 ID 목록. GET /api/v1/users/me/profile/options 응답의 ID를 사용합니다.",
+        example = "[1, 17]",
+        requiredMode = Schema.RequiredMode.NOT_REQUIRED,
+        nullable = true,
+    )
+    val interestedRegionIds: Set<Long>? = null,
+    @field:Schema(
         description = "푸시 알림에 사용할 최신 Firebase Cloud Messaging 등록 토큰",
         example = "fcm_registration_token_example",
         requiredMode = Schema.RequiredMode.NOT_REQUIRED,

@@ -16,6 +16,7 @@ interface UserRepository :
 
     fun findByEmail(email: String): User?
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
     fun findByFcmToken(fcmToken: String): User?
 
     fun findAllByWithdrawnDateTimeLessThanEqual(withdrawnDateTime: LocalDateTime): List<User>

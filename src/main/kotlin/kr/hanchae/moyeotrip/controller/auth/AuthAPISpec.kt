@@ -280,8 +280,9 @@ interface AuthAPISpec {
             **FE 호출 순서**
             1. /api/v1/auth/login에서 isNewUser=true와 USER_INFO_REQUIRED를 확인합니다.
             2. /api/v1/auth/nickname-candidates에서 후보와 selectionToken을 발급받습니다.
-            3. /api/v1/terms에서 현재 약관을 조회한 뒤, 필수 약관 ID 전체와 선택 동의한 약관 ID를 agreedTermIds에 담아 선택한 닉네임·성별·생년월일·Firebase ID Token과 함께 전달합니다.
-            4. 응답의 PROFILE_IMAGE_REQUIRED에 따라 프로필 이미지 생성·선택 단계를 이어갑니다.
+            3. /api/v1/terms에서 현재 약관을, /api/v1/users/me/profile/options에서 여행 스타일·관심 지역 선택지를 조회합니다.
+            4. 선택한 닉네임·성별·생년월일·약관 ID와 Firebase ID Token을 전달합니다. 여행 스타일 ID와 관심 지역 ID는 선택 사항입니다.
+            5. 응답의 PROFILE_IMAGE_REQUIRED에 따라 프로필 이미지 생성·선택 단계를 이어갑니다.
 
             Kakao도 Custom Token으로 Firebase 로그인한 뒤 받은 Firebase ID Token을 사용합니다.
             이미 다른 사용자에게 연결된 인증 수단이나 기존 이메일 계정을 자동 병합하지 않습니다.
@@ -313,6 +314,8 @@ interface AuthAPISpec {
                             ExampleObject(name = "닉네임 선택 오류", value = AuthSwaggerExamples.INVALID_NICKNAME_SELECTION),
                             ExampleObject(name = "사용할 수 없는 약관 포함", value = AuthSwaggerExamples.INVALID_TERMS_AGREEMENT),
                             ExampleObject(name = "필수 약관 미동의", value = AuthSwaggerExamples.REQUIRED_TERMS_NOT_AGREED),
+                            ExampleObject(name = "여행 스타일 ID 오류", value = AuthSwaggerExamples.INVALID_TRAVEL_STYLE_SELECTION),
+                            ExampleObject(name = "관심 지역 ID 오류", value = AuthSwaggerExamples.INVALID_INTERESTED_REGION_SELECTION),
                         ],
                     ),
                 ],
@@ -545,6 +548,8 @@ private object AuthSwaggerExamples {
     const val INVALID_PROVIDER = """{"code":40002,"errorMessage":"지원하지 않거나 유효하지 않은 Firebase 로그인 제공자입니다."}"""
     const val INVALID_NICKNAME_SELECTION = """{"code":40003,"errorMessage":"닉네임 선택이 만료되었거나 발급된 후보와 일치하지 않습니다."}"""
     const val REQUIRED_TERMS_NOT_AGREED = """{"code":40012,"errorMessage":"필수 약관에 모두 동의해야 회원가입할 수 있습니다."}"""
+    const val INVALID_INTERESTED_REGION_SELECTION = """{"code":40014,"errorMessage":"관심 지역으로 선택할 수 없는 지역 ID가 포함되어 있습니다."}"""
+    const val INVALID_TRAVEL_STYLE_SELECTION = """{"code":40015,"errorMessage":"선택할 수 없는 여행 스타일 ID가 포함되어 있습니다."}"""
     const val UNAUTHORIZED = """{"code":40100,"errorMessage":"인증되지 않은 사용자입니다."}"""
     const val INVALID_FIREBASE_TOKEN = """{"code":40101,"errorMessage":"유효하지 않은 Firebase ID 토큰입니다."}"""
     const val KAKAO_CLIENT_EXCEPTION = """{"code":40102,"errorMessage":"유효하지 않은 카카오 액세스 토큰입니다."}"""

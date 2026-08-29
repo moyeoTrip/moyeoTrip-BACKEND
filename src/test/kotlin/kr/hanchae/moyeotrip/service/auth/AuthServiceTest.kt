@@ -13,10 +13,12 @@ import kr.hanchae.moyeotrip.controller.client.KakaoTokenInfoResponse
 import kr.hanchae.moyeotrip.entity.notification.NotificationSetting
 import kr.hanchae.moyeotrip.entity.terms.AgreementTerm
 import kr.hanchae.moyeotrip.entity.terms.AgreementTermCode
+import kr.hanchae.moyeotrip.entity.tour.LegalDongCode
 import kr.hanchae.moyeotrip.entity.user.Gender
 import kr.hanchae.moyeotrip.entity.user.NicknameColor
 import kr.hanchae.moyeotrip.entity.user.ProviderType
 import kr.hanchae.moyeotrip.entity.user.SignupState
+import kr.hanchae.moyeotrip.entity.user.TravelStyle
 import kr.hanchae.moyeotrip.entity.user.User
 import kr.hanchae.moyeotrip.entity.user.UserAuthIdentity
 import kr.hanchae.moyeotrip.entity.user.UserRole
@@ -26,14 +28,17 @@ import kr.hanchae.moyeotrip.exception.InvalidRefreshTokenException
 import kr.hanchae.moyeotrip.exception.KakaoClientException
 import kr.hanchae.moyeotrip.exception.UserNotFoundException
 import kr.hanchae.moyeotrip.repository.AgreementTermRepository
+import kr.hanchae.moyeotrip.repository.LegalDongCodeRepository
 import kr.hanchae.moyeotrip.repository.NicknameCandidateRepository
 import kr.hanchae.moyeotrip.repository.NotificationSettingRepository
+import kr.hanchae.moyeotrip.repository.TravelStyleRepository
 import kr.hanchae.moyeotrip.repository.UserAuthIdentityRepository
 import kr.hanchae.moyeotrip.repository.UserRepository
 import kr.hanchae.moyeotrip.repository.UserTermsAgreementRepository
 import kr.hanchae.moyeotrip.utils.jwt.JwtUtil
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
@@ -60,6 +65,8 @@ class AuthServiceTest {
     private lateinit var notificationSettingRepository: NotificationSettingRepository
     private lateinit var agreementTermRepository: AgreementTermRepository
     private lateinit var userTermsAgreementRepository: UserTermsAgreementRepository
+    private lateinit var travelStyleRepository: TravelStyleRepository
+    private lateinit var legalDongCodeRepository: LegalDongCodeRepository
     private lateinit var userService: UserService
     private lateinit var authService: AuthService
 
@@ -74,7 +81,22 @@ class AuthServiceTest {
         notificationSettingRepository = mock(NotificationSettingRepository::class.java)
         agreementTermRepository = mock(AgreementTermRepository::class.java)
         userTermsAgreementRepository = mock(UserTermsAgreementRepository::class.java)
+        travelStyleRepository = mock(TravelStyleRepository::class.java)
+        legalDongCodeRepository = mock(LegalDongCodeRepository::class.java)
         userService = mock(UserService::class.java)
+        `when`(travelStyleRepository.findAllById(setOf(1L))).thenReturn(listOf(TravelStyle(id = 1L, label = "자연")))
+        `when`(legalDongCodeRepository.findAllById(setOf(1L)))
+            .thenReturn(
+                listOf(
+                    LegalDongCode(
+                        id = 1L,
+                        regionCode = "47",
+                        signguCode = "47170",
+                        regionName = "경상북도",
+                        signguName = "안동시",
+                    ),
+                ),
+            )
         authService =
             AuthService(
                 userRepository,
@@ -92,6 +114,8 @@ class AuthServiceTest {
                 notificationSettingRepository,
                 agreementTermRepository,
                 userTermsAgreementRepository,
+                travelStyleRepository,
+                legalDongCodeRepository,
                 userService,
             )
     }
@@ -114,6 +138,10 @@ class AuthServiceTest {
     fun `Firebase 회원가입은 완성된 사용자와 서비스 토큰을 생성한다`() {
         val minimumAgeBirthDate = LocalDate.now().minusYears(20)
         val identity = FirebaseIdentity("firebase-uid", "user@example.com", ProviderType.EMAIL)
+        val previousTokenOwner =
+            User(id = 9L, userRole = UserRole.ROLE_USER).also {
+                it.changeFcmToken("fcm-token")
+            }
         `when`(firebaseAuthenticationClient.verifyIdToken("id-token")).thenReturn(identity)
         `when`(nicknameCandidateRepository.consume("selection-token"))
             .thenReturn(
@@ -126,6 +154,7 @@ class AuthServiceTest {
         `when`(userRepository.existsByInformationNickname("따스한 사슴 1234")).thenReturn(false)
         `when`(userAuthIdentityRepository.findByProviderTypeAndProviderUserId(ProviderType.EMAIL, "firebase-uid")).thenReturn(null)
         `when`(agreementTermRepository.findAllByActiveTrueOrderByIdAsc()).thenReturn(requiredTerms())
+        `when`(userRepository.findByFcmToken("fcm-token")).thenReturn(previousTokenOwner)
         `when`(userRepository.save(any(User::class.java))).thenAnswer { it.arguments[0] as User }
         `when`(jwtUtil.generateAccessToken(0L, "따스한 사슴 1234")).thenReturn("access-token")
         `when`(jwtUtil.generateRotateId()).thenReturn("rotate-id")
@@ -139,6 +168,8 @@ class AuthServiceTest {
                     nickname = "따스한 사슴 1234",
                     gender = Gender.F,
                     birthDate = minimumAgeBirthDate,
+                    travelStyleIds = setOf(1L),
+                    interestedRegionIds = setOf(1L),
                     fcmToken = "fcm-token",
                     agreedTermIds = setOf(1L, 2L),
                 ),
@@ -155,6 +186,20 @@ class AuthServiceTest {
         assertEquals("fcm-token", savedUser.value.fcmToken)
         assertEquals(SignupState.PROFILE_IMAGE_REQUIRED, savedUser.value.signupState)
         assertEquals(SignupState.PROFILE_IMAGE_REQUIRED, response.signupState)
+        assertEquals(
+            setOf(1L),
+            savedUser.value.travelStyles
+                .map { it.id }
+                .toSet(),
+        )
+        assertEquals(
+            setOf(1L),
+            savedUser.value.interestedRegions
+                .map { it.id }
+                .toSet(),
+        )
+        assertNull(previousTokenOwner.fcmToken)
+        verify(userRepository).flush()
         assertEquals(setOf(ProviderType.EMAIL), savedUser.value.linkedProviders())
         val savedSetting = org.mockito.ArgumentCaptor.forClass(NotificationSetting::class.java)
         verify(notificationSettingRepository).save(savedSetting.capture())
@@ -185,6 +230,8 @@ class AuthServiceTest {
                 nickname = "따스한 사슴 1234",
                 gender = Gender.F,
                 birthDate = LocalDate.now().minusYears(20),
+                travelStyleIds = setOf(1L),
+                interestedRegionIds = setOf(1L),
                 agreedTermIds = setOf(1L, 2L, 3L),
             ),
         )
@@ -211,6 +258,8 @@ class AuthServiceTest {
                         nickname = "따스한 사슴 1234",
                         gender = Gender.F,
                         birthDate = LocalDate.now().minusYears(20),
+                        travelStyleIds = setOf(1L),
+                        interestedRegionIds = setOf(1L),
                         agreedTermIds = setOf(1L),
                     ),
                 )
@@ -236,6 +285,8 @@ class AuthServiceTest {
                         nickname = "따스한 사슴 1234",
                         gender = Gender.F,
                         birthDate = LocalDate.now().minusYears(20).plusDays(1),
+                        travelStyleIds = setOf(1L),
+                        interestedRegionIds = setOf(1L),
                     ),
                 )
             }
@@ -505,6 +556,8 @@ class AuthServiceTest {
                 notificationSettingRepository,
                 agreementTermRepository,
                 userTermsAgreementRepository,
+                travelStyleRepository,
+                legalDongCodeRepository,
                 userService,
             )
 
@@ -558,17 +611,24 @@ class AuthServiceTest {
     @Test
     fun `가입 정보가 미완성인 기존 사용자는 신규 가입 단계로 응답한다`() {
         val user = User(id = 7L, userRole = UserRole.ROLE_USER)
+        val previousTokenOwner =
+            User(id = 9L, userRole = UserRole.ROLE_USER).also {
+                it.changeFcmToken("new-fcm")
+            }
         val identity = UserAuthIdentity(user = user, providerType = ProviderType.EMAIL, providerUserId = "uid")
         `when`(firebaseAuthenticationClient.verifyIdToken("token"))
             .thenReturn(FirebaseIdentity("uid", "user@example.com", ProviderType.EMAIL))
         `when`(userAuthIdentityRepository.findByProviderTypeAndProviderUserId(ProviderType.EMAIL, "uid"))
             .thenReturn(identity)
+        `when`(userRepository.findByFcmToken("new-fcm")).thenReturn(previousTokenOwner)
 
         val response = authService.loginWithFirebase(FirebaseLoginRequest("token", "new-fcm"))
 
         assertTrue(response.isNewUser)
         assertEquals(SignupState.USER_INFO_REQUIRED, response.signupState)
         assertEquals("new-fcm", user.fcmToken)
+        assertNull(previousTokenOwner.fcmToken)
+        verify(userRepository).flush()
     }
 
     @Test
@@ -640,6 +700,34 @@ class AuthServiceTest {
     }
 
     @Test
+    fun `존재하지 않는 여행 스타일로 회원가입할 수 없다`() {
+        stubNewSignupIdentity()
+        `when`(agreementTermRepository.findAllByActiveTrueOrderByIdAsc()).thenReturn(requiredTerms())
+        `when`(travelStyleRepository.findAllById(setOf(999L))).thenReturn(emptyList())
+
+        val exception =
+            assertThrows(BaseException::class.java) {
+                authService.signupWithFirebase(signupRequest(travelStyleIds = setOf(999L)))
+            }
+
+        assertEquals(ErrorCode.INVALID_TRAVEL_STYLE_SELECTION, exception.errorCode)
+    }
+
+    @Test
+    fun `경상북도 관심 지역이 아니거나 존재하지 않는 지역으로 회원가입할 수 없다`() {
+        stubNewSignupIdentity()
+        `when`(agreementTermRepository.findAllByActiveTrueOrderByIdAsc()).thenReturn(requiredTerms())
+        `when`(legalDongCodeRepository.findAllById(setOf(999L))).thenReturn(emptyList())
+
+        val exception =
+            assertThrows(BaseException::class.java) {
+                authService.signupWithFirebase(signupRequest(interestedRegionIds = setOf(999L)))
+            }
+
+        assertEquals(ErrorCode.INVALID_INTERESTED_REGION_SELECTION, exception.errorCode)
+    }
+
+    @Test
     fun `미완성 기존 사용자의 가입을 완료하며 누락 약관과 알림 설정을 저장한다`() {
         val user = User(id = 7L, userRole = UserRole.ROLE_USER)
         `when`(firebaseAuthenticationClient.verifyIdToken("id-token"))
@@ -656,9 +744,18 @@ class AuthServiceTest {
         `when`(jwtUtil.generateRotateId()).thenReturn("rotate")
         `when`(jwtUtil.generateRefreshToken(7L, "rotate")).thenReturn("refresh")
 
-        val response = authService.signupWithFirebase(signupRequest(agreedTermIds = setOf(1L, 2L, 3L)))
+        val response =
+            authService.signupWithFirebase(
+                signupRequest(
+                    agreedTermIds = setOf(1L, 2L, 3L),
+                    travelStyleIds = null,
+                    interestedRegionIds = null,
+                ),
+            )
 
         assertEquals("access", response.accessToken)
+        assertTrue(user.travelStyles.isEmpty())
+        assertTrue(user.interestedRegions.isEmpty())
         verify(userTermsAgreementRepository).saveAll(org.mockito.ArgumentMatchers.anyList())
         verify(notificationSettingRepository).save(any(NotificationSetting::class.java))
     }
@@ -743,13 +840,19 @@ class AuthServiceTest {
         `when`(userRepository.findByEmail("user@example.com")).thenReturn(null)
     }
 
-    private fun signupRequest(agreedTermIds: Set<Long> = setOf(1L, 2L)): FirebaseSignupRequest =
+    private fun signupRequest(
+        agreedTermIds: Set<Long> = setOf(1L, 2L),
+        travelStyleIds: Set<Long>? = setOf(1L),
+        interestedRegionIds: Set<Long>? = setOf(1L),
+    ): FirebaseSignupRequest =
         FirebaseSignupRequest(
             idToken = "id-token",
             nicknameSelectionToken = "selection-token",
             nickname = "따스한 사슴 1234",
             gender = Gender.F,
             birthDate = LocalDate.now().minusYears(20),
+            travelStyleIds = travelStyleIds,
+            interestedRegionIds = interestedRegionIds,
             agreedTermIds = agreedTermIds,
         )
 

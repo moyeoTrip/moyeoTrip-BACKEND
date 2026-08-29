@@ -129,7 +129,7 @@ interface UserAPISpec {
 
     @Operation(
         summary = "프로필 선택 항목 조회",
-        description = "프로필 수정 화면에 필요한 여행 스타일과 관심 지역 선택지를 반환합니다.",
+        description = "프로필 수정 화면에 필요한 여행 스타일과 관심 지역 선택지를 반환합니다. 유효한 서비스 Access Token이 필요합니다.",
     )
     @ApiResponses(
         value = [
@@ -137,6 +137,16 @@ interface UserAPISpec {
                 responseCode = "200",
                 description = "프로필 선택 항목 조회 성공",
                 content = [Content(schema = Schema(implementation = ProfileOptionsResponse::class))],
+            ),
+            ApiResponse(
+                responseCode = "401",
+                description = "서비스 Access Token이 없거나 유효하지 않음",
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [ExampleObject(value = UserSwaggerExamples.UNAUTHORIZED)],
+                    ),
+                ],
             ),
             ApiResponse(
                 responseCode = "500",
