@@ -1,5 +1,6 @@
 package kr.hanchae.moyeotrip.config.security
 
+import kr.hanchae.moyeotrip.entity.user.SignupState
 import kr.hanchae.moyeotrip.exception.BaseException
 import kr.hanchae.moyeotrip.exception.ErrorCode
 import kr.hanchae.moyeotrip.repository.UserRepository
@@ -24,6 +25,8 @@ class CustomUserDetailService(
             id = user.id.toString(),
             password = "",
             authorities = listOf(SimpleGrantedAuthority(user.userRole.name)),
+            signupState = user.signupState,
+            hasProfileImage = user.information?.profileFileName?.isNotBlank() == true,
         )
     }
 }
@@ -32,4 +35,6 @@ class CustomUserDto(
     id: String,
     password: String,
     authorities: Collection<SimpleGrantedAuthority>,
+    val signupState: SignupState,
+    val hasProfileImage: Boolean,
 ) : User(id, password, authorities)

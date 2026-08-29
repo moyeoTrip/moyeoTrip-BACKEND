@@ -191,6 +191,24 @@ class UserServiceTest {
     }
 
     @Test
+    fun `프로필 이미지 설정을 완료하면 후보 생성 조회 선택을 모두 거부한다`() {
+        val user = profileImageRequiredUser().also { it.selectProfileImage("user/profile/image/selected.webp") }
+        `when`(userRepository.findByIdForUpdate(7L)).thenReturn(user)
+        `when`(userRepository.findById(7L)).thenReturn(Optional.of(user))
+
+        val exceptions =
+            listOf(
+                assertThrows(BaseException::class.java) { service.generateProfileImage(7L) },
+                assertThrows(BaseException::class.java) { service.getProfileImages(7L) },
+                assertThrows(BaseException::class.java) { service.selectProfileImage(7L, 12L) },
+            )
+
+        assertTrue(exceptions.all { it.errorCode == ErrorCode.PROFILE_IMAGE_ALREADY_SELECTED })
+        verifyNoInteractions(profileImageGenerationClient)
+        verifyNoInteractions(userProfileImageRepository)
+    }
+
+    @Test
     fun `다른 사용자의 이미지 후보는 선택할 수 없다`() {
         val user = profileImageRequiredUser()
         `when`(userRepository.findByIdForUpdate(7L)).thenReturn(user)

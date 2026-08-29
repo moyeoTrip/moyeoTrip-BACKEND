@@ -115,6 +115,8 @@ enum class ErrorCode(
     TRIP_NOT_COMPLETED(HttpStatus.CONFLICT, 40915, "아직 완료되지 않은 여행입니다."),
     FEED_ALREADY_CREATED_FOR_TRIP(HttpStatus.CONFLICT, 40916, "같은 여행에는 피드를 한 번만 작성할 수 있습니다."),
     FEED_ALREADY_REPORTED(HttpStatus.CONFLICT, 40917, "이미 신고한 피드입니다."),
+    PROFILE_IMAGE_REQUIRED(HttpStatus.CONFLICT, 40918, "프로필 이미지 선택이 필요합니다."),
+    PROFILE_IMAGE_ALREADY_SELECTED(HttpStatus.CONFLICT, 40919, "이미 프로필 이미지 설정을 완료했습니다."),
 
     // 요청 한도 초과는 42900부터 시작
     PROFILE_IMAGE_GENERATION_LIMIT(HttpStatus.TOO_MANY_REQUESTS, 42900, "프로필 이미지는 사용자당 최대 3번까지 생성할 수 있습니다."),

@@ -238,6 +238,8 @@ class SwaggerErrorExamplesTest {
                                 ErrorCode.RESOURCE_NOT_FOUND,
                                 ErrorCode.METHOD_NOT_ALLOWED,
                                 ErrorCode.TOURISM_CONTENT_TYPE_NOT_FOUND,
+                                ErrorCode.INVALID_TOURISM_IMAGE_URL,
+                                ErrorCode.TOURISM_IMAGE_FETCH_FAILED,
                             )
                     }.map { it.code }
                     .toSet()

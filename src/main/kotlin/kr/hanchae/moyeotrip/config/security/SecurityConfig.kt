@@ -1,5 +1,6 @@
 package kr.hanchae.moyeotrip.config.security
 
+import com.fasterxml.jackson.databind.ObjectMapper
 import kr.hanchae.moyeotrip.utils.jwt.JwtUtil
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
@@ -19,6 +20,7 @@ class SecurityConfig(
     private val customAccessDeniedHandler: CustomAccessDeniedHandler,
     private val jwtUtil: JwtUtil,
     private val customUserDetailService: CustomUserDetailService,
+    private val objectMapper: ObjectMapper,
 ) {
     @Bean
     fun passwordEncoder(): PasswordEncoder = BCryptPasswordEncoder()
@@ -28,15 +30,16 @@ class SecurityConfig(
         authenticationConfiguration.authenticationManager
 
     @Bean
-    fun filterChain(http: HttpSecurity): SecurityFilterChain =
-        http
+    fun filterChain(http: HttpSecurity): SecurityFilterChain {
+        val jwtFilter = JwtFilter(jwtUtil, customUserDetailService, objectMapper)
+        return http
             .cors { }
             .csrf { it.disable() }
             .formLogin { it.disable() }
             .httpBasic { it.disable() }
             .sessionManagement { it.sessionCreationPolicy(SessionCreationPolicy.STATELESS) }
             .addFilterBefore(
-                JwtFilter(jwtUtil, customUserDetailService),
+                jwtFilter,
                 UsernamePasswordAuthenticationFilter::class.java,
             ).authorizeHttpRequests {
                 it
@@ -52,6 +55,7 @@ class SecurityConfig(
                 it.authenticationEntryPoint(customAuthenticationEntryPoint)
                 it.accessDeniedHandler(customAccessDeniedHandler)
             }.build()
+    }
 }
 
 val PERMITTED_URL_PATTERNS =

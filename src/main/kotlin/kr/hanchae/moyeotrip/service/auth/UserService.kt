@@ -14,6 +14,7 @@ import kr.hanchae.moyeotrip.controller.user.response.PublicProfileResponse
 import kr.hanchae.moyeotrip.controller.user.response.TravelStyleResponse
 import kr.hanchae.moyeotrip.entity.feed.FeedVisibility
 import kr.hanchae.moyeotrip.entity.notification.ChatNotificationMode
+import kr.hanchae.moyeotrip.entity.user.SignupState
 import kr.hanchae.moyeotrip.entity.user.User
 import kr.hanchae.moyeotrip.entity.user.UserProfileImage
 import kr.hanchae.moyeotrip.exception.BaseException
@@ -130,7 +131,7 @@ class UserService(
     @Transactional
     fun generateProfileImage(userId: Long): ProfileImageGenerationResponse {
         val user = userRepository.findByIdForUpdate(userId) ?: throw UserNotFoundException(userId)
-        requireProfileSetupStarted(user)
+        requireProfileImageSelectionPending(user)
         if (!user.canGenerateProfileImage()) {
             throw BaseException(
                 ErrorCode.PROFILE_IMAGE_GENERATION_LIMIT,
@@ -163,7 +164,7 @@ class UserService(
     @Transactional(readOnly = true)
     fun getProfileImages(userId: Long): ProfileImageCandidatesResponse {
         val user = userRepository.findById(userId).orElseThrow { UserNotFoundException(userId) }
-        requireProfileSetupStarted(user)
+        requireProfileImageSelectionPending(user)
         val selectedFileName = checkNotNull(user.information).profileFileName
         return ProfileImageCandidatesResponse(
             candidates =
@@ -182,7 +183,7 @@ class UserService(
         profileImageId: Long,
     ): ProfileImageSelectionResponse {
         val user = userRepository.findByIdForUpdate(userId) ?: throw UserNotFoundException(userId)
-        requireProfileSetupStarted(user)
+        requireProfileImageSelectionPending(user)
         val profileImage =
             userProfileImageRepository.findByIdAndUserId(profileImageId, userId)
                 ?: throw BaseException(
@@ -244,6 +245,16 @@ class UserService(
     private fun requireProfileSetupStarted(user: User) {
         if (user.information == null) {
             throw BaseException(ErrorCode.USER_INFO_REQUIRED, ErrorCode.USER_INFO_REQUIRED.errorMessage)
+        }
+    }
+
+    private fun requireProfileImageSelectionPending(user: User) {
+        requireProfileSetupStarted(user)
+        if (user.signupState == SignupState.SIGNUP_COMPLETE || user.information?.profileFileName != null) {
+            throw BaseException(
+                ErrorCode.PROFILE_IMAGE_ALREADY_SELECTED,
+                ErrorCode.PROFILE_IMAGE_ALREADY_SELECTED.errorMessage,
+            )
         }
     }
 
