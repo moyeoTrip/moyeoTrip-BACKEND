@@ -48,22 +48,6 @@ interface ChatRoomCustomRepository {
         pageable: Pageable,
     ): List<ChatRoom>
 
-    fun searchRoomsByTitle(
-        userId: Long,
-        blockedUserIds: Collection<Long>,
-        keyword: String?,
-        today: LocalDate,
-        pageable: Pageable,
-    ): List<ChatRoom>
-
-    fun searchRoomsByCourseTag(
-        userId: Long,
-        blockedUserIds: Collection<Long>,
-        tagId: Long,
-        today: LocalDate,
-        pageable: Pageable,
-    ): List<ChatRoom>
-
     fun findRecruitingRoomsByPublicCourseId(
         userId: Long,
         blockedUserIds: Collection<Long>,
@@ -218,95 +202,6 @@ class ChatRoomCustomRepositoryImpl(
                                 lower(tourismContent.path(TourismContent::address2)).like(pattern),
                             )
                         },
-                        room.path(ChatRoom::host).path(User::id).notIn(blockedUserIds),
-                        notExists(
-                            select(blockedParticipant.path(ChatRoomParticipant::id))
-                                .from(blockedParticipant)
-                                .whereAnd(
-                                    blockedParticipant.path(ChatRoomParticipant::chatRoom).path(ChatRoom::id).eq(room.path(ChatRoom::id)),
-                                    blockedParticipant.path(ChatRoomParticipant::user).path(User::id).`in`(blockedUserIds),
-                                ).asSubquery(),
-                        ),
-                        notExists(
-                            select(myParticipant.path(ChatRoomParticipant::id))
-                                .from(myParticipant)
-                                .whereAnd(
-                                    myParticipant.path(ChatRoomParticipant::chatRoom).path(ChatRoom::id).eq(room.path(ChatRoom::id)),
-                                    myParticipant.path(ChatRoomParticipant::user).path(User::id).eq(userId),
-                                ).asSubquery(),
-                        ),
-                    ).orderBy(
-                        room.path(ChatRoom::createdDateTime).desc(),
-                        room.path(ChatRoom::id).desc(),
-                    )
-            }.filterNotNull()
-
-    override fun searchRoomsByTitle(
-        userId: Long,
-        blockedUserIds: Collection<Long>,
-        keyword: String?,
-        today: LocalDate,
-        pageable: Pageable,
-    ): List<ChatRoom> =
-        kotlinJdslJpqlExecutor
-            .findAll(pageable) {
-                val room = entity(ChatRoom::class)
-                val blockedParticipant = entity(ChatRoomParticipant::class)
-                val myParticipant = entity(ChatRoomParticipant::class)
-
-                select(room)
-                    .from(room)
-                    .whereAnd(
-                        room.path(ChatRoom::status).eq(ChatRoomStatus.RECRUITING),
-                        room.path(ChatRoom::recruitmentDeadlineDate).ge(today),
-                        keyword?.let { lower(room.path(ChatRoom::roomTitle)).like("%${it.lowercase()}%") },
-                        room.path(ChatRoom::host).path(User::id).notIn(blockedUserIds),
-                        notExists(
-                            select(blockedParticipant.path(ChatRoomParticipant::id))
-                                .from(blockedParticipant)
-                                .whereAnd(
-                                    blockedParticipant.path(ChatRoomParticipant::chatRoom).path(ChatRoom::id).eq(room.path(ChatRoom::id)),
-                                    blockedParticipant.path(ChatRoomParticipant::user).path(User::id).`in`(blockedUserIds),
-                                ).asSubquery(),
-                        ),
-                        notExists(
-                            select(myParticipant.path(ChatRoomParticipant::id))
-                                .from(myParticipant)
-                                .whereAnd(
-                                    myParticipant.path(ChatRoomParticipant::chatRoom).path(ChatRoom::id).eq(room.path(ChatRoom::id)),
-                                    myParticipant.path(ChatRoomParticipant::user).path(User::id).eq(userId),
-                                ).asSubquery(),
-                        ),
-                    ).orderBy(
-                        room.path(ChatRoom::createdDateTime).desc(),
-                        room.path(ChatRoom::id).desc(),
-                    )
-            }.filterNotNull()
-
-    override fun searchRoomsByCourseTag(
-        userId: Long,
-        blockedUserIds: Collection<Long>,
-        tagId: Long,
-        today: LocalDate,
-        pageable: Pageable,
-    ): List<ChatRoom> =
-        kotlinJdslJpqlExecutor
-            .findAll(pageable) {
-                val room = entity(ChatRoom::class)
-                val course = entity(TravelCourse::class)
-                val tag = entity(TravelCourseTag::class)
-                val blockedParticipant = entity(ChatRoomParticipant::class)
-                val myParticipant = entity(ChatRoomParticipant::class)
-
-                selectDistinct(room)
-                    .from(
-                        room,
-                        innerJoin(room.path(ChatRoom::course)).`as`(course),
-                        innerJoin(course.path(TravelCourse::courseTags)).`as`(tag),
-                    ).whereAnd(
-                        room.path(ChatRoom::status).eq(ChatRoomStatus.RECRUITING),
-                        room.path(ChatRoom::recruitmentDeadlineDate).ge(today),
-                        tag.path(TravelCourseTag::id).eq(tagId),
                         room.path(ChatRoom::host).path(User::id).notIn(blockedUserIds),
                         notExists(
                             select(blockedParticipant.path(ChatRoomParticipant::id))

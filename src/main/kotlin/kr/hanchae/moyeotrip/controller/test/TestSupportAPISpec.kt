@@ -14,7 +14,7 @@ import kr.hanchae.moyeotrip.exception.ErrorResponse
 
 @Tag(name = "테스트 지원", description = "프론트엔드 QA 임시 API입니다. 현재 운영 프로필에도 임시로 등록되므로 QA 종료 후 반드시 비활성화해야 합니다.")
 interface TestSupportAPISpec {
-    @Operation(summary = "테스트 access token 발급", description = "DB에 존재하는 사용자 ID로 서비스 JWT를 발급합니다.")
+    @Operation(hidden = true)
     @ApiResponses(
         value = [
             ApiResponse(

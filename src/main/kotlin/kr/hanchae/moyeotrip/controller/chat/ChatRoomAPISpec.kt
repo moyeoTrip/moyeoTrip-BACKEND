@@ -274,60 +274,8 @@ interface ChatRoomAPISpec {
         @Parameter(hidden = true) userId: Long,
         @Parameter(description = "지도 중심 위도(-90~90)", example = "36.5684") latitude: Double,
         @Parameter(description = "지도 중심 경도(-180~180)", example = "128.7294") longitude: Double,
-        @Parameter(description = "검색 반경(km). 0보다 커야 하며 상한은 없습니다.", example = "5") radiusKm: Double,
+        @Parameter(description = "검색 반경(km). 0보다 크고 200 이하여야 합니다.", example = "5") radiusKm: Double,
     ): List<MapChatRoomResponse>
-
-    @Operation(summary = "모임 제목 검색", description = "참가 가능한 모집 중 모임 가운데 채팅방 제목에만 검색어가 포함된 모임을 반환합니다.")
-    @ApiResponses(
-        value = [
-            ApiResponse(
-                responseCode = "200",
-                description = "모임 제목 검색 성공",
-                content = [Content(schema = Schema(implementation = SearchChatRoomResponse::class))],
-            ),
-            ApiResponse(
-                responseCode = "401",
-                description = "서비스 Access Token이 없거나 유효하지 않음",
-                content = [
-                    Content(
-                        schema = Schema(implementation = ErrorResponse::class),
-                        examples = [ExampleObject(value = ChatRoomSwaggerExamples.UNAUTHORIZED)],
-                    ),
-                ],
-            ),
-        ],
-    )
-    fun searchRoomsByTitle(
-        @Parameter(hidden = true) userId: Long,
-        @Parameter(description = "채팅방 제목에 포함될 검색어. 생략하면 전체 모집을 조회합니다.", example = "바다") keyword: String?,
-        @Parameter(description = "반환할 최대 개수. 기본값은 20입니다.", example = "20") limit: Int,
-    ): List<SearchChatRoomResponse>
-
-    @Operation(summary = "코스 태그로 모임 검색", description = "참가 가능한 모집 중 모임 가운데 연결 코스에 지정한 태그가 있는 모임을 반환합니다.")
-    @ApiResponses(
-        value = [
-            ApiResponse(
-                responseCode = "200",
-                description = "코스 태그 모임 검색 성공",
-                content = [Content(schema = Schema(implementation = SearchChatRoomResponse::class))],
-            ),
-            ApiResponse(
-                responseCode = "401",
-                description = "서비스 Access Token이 없거나 유효하지 않음",
-                content = [
-                    Content(
-                        schema = Schema(implementation = ErrorResponse::class),
-                        examples = [ExampleObject(value = ChatRoomSwaggerExamples.UNAUTHORIZED)],
-                    ),
-                ],
-            ),
-        ],
-    )
-    fun searchRoomsByCourseTag(
-        @Parameter(hidden = true) userId: Long,
-        @Parameter(description = "필터링할 여행 코스 태그 ID. GET /api/v1/travel-courses/tags의 tagId를 사용합니다.", example = "3") tagId: Long,
-        @Parameter(description = "반환할 최대 개수. 기본값은 20입니다.", example = "20") limit: Int,
-    ): List<SearchChatRoomResponse>
 
     @Operation(summary = "채팅방 상세 조회", description = "모집·여행 정보, 호스트, 참가자와 최신 고정 공지를 반환합니다. 종료 후 2주가 지난 채팅방은 조회할 수 없습니다.")
     @ApiResponses(

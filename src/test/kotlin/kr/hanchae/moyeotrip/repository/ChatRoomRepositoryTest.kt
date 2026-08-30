@@ -177,40 +177,6 @@ class ChatRoomRepositoryTest : RepositoryIntegrationTestSupport() {
         }
 
         @Test
-        fun `제목 검색과 코스 태그 검색은 각각 해당 조건에만 일치하는 모집 방을 조회한다`() {
-            val me = savedUser()
-            val host = savedUser()
-            val titleCourse = savedCourse()
-            val tagKeyword = "QA 태그 ${System.nanoTime()}"
-            val tag = travelCourseTagRepository.saveAndFlush(TravelCourseTag(name = tagKeyword))
-            val taggedCourse = TravelCourse(type = TravelCourseType.CUSTOM, owner = host, title = "태그 코스")
-            taggedCourse.addTags(listOf(tag))
-            travelCourseRepository.saveAndFlush(taggedCourse)
-            val titleMatched = savedRoom(host, titleCourse, title = "바다 제목 모임", startDate = LocalDate.now().plusDays(3))
-            val tagMatched = savedRoom(host, taggedCourse, title = "제목에는 태그가 없는 모임", startDate = LocalDate.now().plusDays(3))
-
-            val titleRooms =
-                chatRoomRepository.searchRoomsByTitle(
-                    userId = me.id,
-                    blockedUserIds = listOf(-1L),
-                    keyword = "바다",
-                    today = LocalDate.now(),
-                    pageable = PageRequest.of(0, 20),
-                )
-            val tagRooms =
-                chatRoomRepository.searchRoomsByCourseTag(
-                    userId = me.id,
-                    blockedUserIds = listOf(-1L),
-                    tagId = tag.id,
-                    today = LocalDate.now(),
-                    pageable = PageRequest.of(0, 20),
-                )
-
-            assertEquals(listOf(titleMatched.id), titleRooms.map { it.id })
-            assertEquals(listOf(tagMatched.id), tagRooms.map { it.id })
-        }
-
-        @Test
         fun `공개 코스로 만든 모집 방은 차단 및 참가 상태를 적용해 조회한다`() {
             val me = savedUser()
             val host = savedUser()

@@ -13,6 +13,7 @@ import kr.hanchae.moyeotrip.controller.tour.response.LikedTravelCourseResponse
 import kr.hanchae.moyeotrip.controller.tour.response.TravelCourseFavoriteResponse
 import kr.hanchae.moyeotrip.controller.tour.response.TravelCourseTagResponse
 import kr.hanchae.moyeotrip.service.chat.ChatRoomService
+import kr.hanchae.moyeotrip.service.search.PopularSearchKeywordService
 import kr.hanchae.moyeotrip.service.tour.TravelCourseService
 import kr.hanchae.moyeotrip.utils.LoginUserId
 import org.springframework.http.ResponseEntity
@@ -30,6 +31,7 @@ import org.springframework.web.bind.annotation.RestController
 class TravelCourseController(
     private val chatRoomService: ChatRoomService,
     private val travelCourseService: TravelCourseService,
+    private val popularSearchKeywordService: PopularSearchKeywordService,
 ) : TravelCourseAPISpec {
     @GetMapping("/public")
     override fun getPublicCourses(
@@ -39,7 +41,10 @@ class TravelCourseController(
     @GetMapping("/search")
     override fun searchPublicCourses(
         @RequestParam(required = false) keyword: String?,
-    ): List<TravelCourseInformationResponse> = chatRoomService.searchPublicCourses(keyword)
+    ): List<TravelCourseInformationResponse> =
+        chatRoomService.searchPublicCourses(keyword).also {
+            popularSearchKeywordService.record(keyword)
+        }
 
     @GetMapping("/public/popular")
     override fun getPopularPublicCourses(): List<TravelCourseInformationResponse> = chatRoomService.getPopularPublicCourses()

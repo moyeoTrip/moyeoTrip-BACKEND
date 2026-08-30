@@ -202,24 +202,11 @@ class ChatRoomServiceTest {
     }
 
     @Test
-    fun `지도 탐색 반경에는 상한을 두지 않는다`() {
-        `when`(userBlockRepository.findRelatedUserIds(1L)).thenReturn(emptyList())
-        `when`(
-            roomRepository.findMapRooms(
-                userId = 1L,
-                blockedUserIds = listOf(-1L),
-                today = LocalDate.now(),
-                minimumLatitude = -90.0,
-                maximumLatitude = 90.0,
-                minimumLongitude = -180.0,
-                maximumLongitude = 180.0,
-                crossesDateLine = false,
-            ),
-        ).thenReturn(emptyList())
+    fun `지도 탐색은 경북 서비스 범위를 넘는 반경을 거부한다`() {
+        val exception = assertThrows(BaseException::class.java) { service.getMapRooms(1L, 36.4, 128.9, 200.1) }
 
-        val response = service.getMapRooms(1L, 0.0, 0.0, 50_000.0)
-
-        assertEquals(emptyList<Any>(), response)
+        assertEquals(ErrorCode.INVALID_MAP_SEARCH_AREA, exception.errorCode)
+        verifyNoInteractions(userBlockRepository, roomRepository)
     }
 
     @Test

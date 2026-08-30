@@ -1,6 +1,7 @@
 package kr.hanchae.moyeotrip.controller.chat
 
 import kr.hanchae.moyeotrip.service.chat.ChatRoomService
+import kr.hanchae.moyeotrip.service.search.PopularSearchKeywordService
 import kr.hanchae.moyeotrip.support.LoginUserIdStubResolver
 import org.junit.jupiter.api.Test
 import org.mockito.Mockito.mock
@@ -17,9 +18,10 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders
 
 class ChatRoomControllerValidationTest {
     private val chatRoomService = mock(ChatRoomService::class.java)
+    private val popularSearchKeywordService = mock(PopularSearchKeywordService::class.java)
     private val mockMvc: MockMvc =
         MockMvcBuilders
-            .standaloneSetup(ChatRoomController(chatRoomService))
+            .standaloneSetup(ChatRoomController(chatRoomService, popularSearchKeywordService))
             .setCustomArgumentResolvers(LoginUserIdStubResolver())
             .build()
 

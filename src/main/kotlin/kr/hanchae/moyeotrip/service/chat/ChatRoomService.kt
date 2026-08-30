@@ -310,38 +310,6 @@ class ChatRoomService(
     }
 
     @Transactional(readOnly = true)
-    fun searchRoomsByTitle(
-        userId: Long,
-        keyword: String?,
-        limit: Int,
-    ): List<SearchChatRoomResponse> =
-        searchRooms(userId, limit) { blockedUserIds, today, pageable ->
-            roomRepository.searchRoomsByTitle(
-                userId = userId,
-                blockedUserIds = blockedUserIds,
-                keyword = keyword?.trim()?.takeIf(String::isNotEmpty),
-                today = today,
-                pageable = pageable,
-            )
-        }
-
-    @Transactional(readOnly = true)
-    fun searchRoomsByCourseTag(
-        userId: Long,
-        tagId: Long,
-        limit: Int,
-    ): List<SearchChatRoomResponse> =
-        searchRooms(userId, limit) { blockedUserIds, today, pageable ->
-            roomRepository.searchRoomsByCourseTag(
-                userId = userId,
-                blockedUserIds = blockedUserIds,
-                tagId = tagId,
-                today = today,
-                pageable = pageable,
-            )
-        }
-
-    @Transactional(readOnly = true)
     fun getPublicCourseChatRooms(
         userId: Long,
         courseId: Long,
@@ -1962,7 +1930,8 @@ private fun validateMapSearchArea(
         !longitude.isFinite() ||
         longitude !in -180.0..180.0 ||
         !radiusKm.isFinite() ||
-        radiusKm <= 0.0
+        radiusKm <= 0.0 ||
+        radiusKm > MAX_MAP_SEARCH_RADIUS_KM
     ) {
         throw BaseException(ErrorCode.INVALID_MAP_SEARCH_AREA)
     }
@@ -1971,4 +1940,5 @@ private fun validateMapSearchArea(
 private fun normalizeLongitude(longitude: Double): Double = ((longitude + 540.0) % 360.0) - 180.0
 
 private const val EARTH_RADIUS_KM = 6371.0088
+private const val MAX_MAP_SEARCH_RADIUS_KM = 200.0
 private const val METERS_PER_KILOMETER = 1000.0

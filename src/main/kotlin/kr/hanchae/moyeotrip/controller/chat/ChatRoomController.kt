@@ -32,6 +32,7 @@ import kr.hanchae.moyeotrip.controller.chat.response.MyChatRoomSummaryResponse
 import kr.hanchae.moyeotrip.controller.chat.response.MyWaitingChatRoomResponse
 import kr.hanchae.moyeotrip.controller.chat.response.SearchChatRoomResponse
 import kr.hanchae.moyeotrip.service.chat.ChatRoomService
+import kr.hanchae.moyeotrip.service.search.PopularSearchKeywordService
 import kr.hanchae.moyeotrip.utils.LoginUserId
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
@@ -52,6 +53,7 @@ import org.springframework.web.multipart.MultipartFile
 @RequestMapping("/api/v1/chat-rooms")
 class ChatRoomController(
     private val chatRoomService: ChatRoomService,
+    private val popularSearchKeywordService: PopularSearchKeywordService,
 ) : ChatRoomAPISpec {
     @PostMapping(consumes = [MediaType.MULTIPART_FORM_DATA_VALUE])
     override fun createRoom(
@@ -77,7 +79,10 @@ class ChatRoomController(
         @LoginUserId userId: Long,
         @RequestParam(required = false) keyword: String?,
         @RequestParam(defaultValue = "20") limit: Int,
-    ): List<SearchChatRoomResponse> = chatRoomService.searchRooms(userId, keyword, limit)
+    ): List<SearchChatRoomResponse> =
+        chatRoomService.searchRooms(userId, keyword, limit).also {
+            popularSearchKeywordService.record(keyword)
+        }
 
     @GetMapping("/map")
     override fun getMapRooms(
@@ -86,20 +91,6 @@ class ChatRoomController(
         @RequestParam longitude: Double,
         @RequestParam radiusKm: Double,
     ): List<MapChatRoomResponse> = chatRoomService.getMapRooms(userId, latitude, longitude, radiusKm)
-
-    @GetMapping("/search/title")
-    override fun searchRoomsByTitle(
-        @LoginUserId userId: Long,
-        @RequestParam(required = false) keyword: String?,
-        @RequestParam(defaultValue = "20") limit: Int,
-    ): List<SearchChatRoomResponse> = chatRoomService.searchRoomsByTitle(userId, keyword, limit)
-
-    @GetMapping("/search/course-tags/{tagId}")
-    override fun searchRoomsByCourseTag(
-        @LoginUserId userId: Long,
-        @PathVariable tagId: Long,
-        @RequestParam(defaultValue = "20") limit: Int,
-    ): List<SearchChatRoomResponse> = chatRoomService.searchRoomsByCourseTag(userId, tagId, limit)
 
     @GetMapping("/{roomId}")
     override fun getRoom(
