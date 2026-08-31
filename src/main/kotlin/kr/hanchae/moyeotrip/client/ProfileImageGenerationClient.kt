@@ -1,6 +1,7 @@
 package kr.hanchae.moyeotrip.client
 
 import com.openai.client.OpenAIClient
+import com.openai.core.MultipartField
 import com.openai.models.images.ImageEditParams
 import kr.hanchae.moyeotrip.config.PROFILE_IMAGE_OPEN_AI_CLIENT
 import kr.hanchae.moyeotrip.exception.BaseException
@@ -29,10 +30,9 @@ class ProfileImageGenerationClient(
             val request =
                 ImageEditParams
                     .builder()
-                    .image(styleReferenceBytes)
+                    .image(styleReferencePart())
                     .prompt(prompt)
                     .model(imageProperties.model ?: DEFAULT_MODEL)
-                    .inputFidelity(ImageEditParams.InputFidelity.HIGH)
                     .n(1)
                     .outputFormat(ImageEditParams.OutputFormat.PNG)
                     .quality(ImageEditParams.Quality.of(imageProperties.quality ?: DEFAULT_QUALITY))
@@ -54,9 +54,19 @@ class ProfileImageGenerationClient(
             throw BaseException(ErrorCode.PROFILE_IMAGE_GENERATION_FAILED, ErrorCode.PROFILE_IMAGE_GENERATION_FAILED.errorMessage)
         }
 
+    private fun styleReferencePart(): MultipartField<ImageEditParams.Image> =
+        MultipartField
+            .builder<ImageEditParams.Image>()
+            .value(ImageEditParams.Image.ofInputStream(styleReferenceBytes.inputStream()))
+            .contentType(STYLE_REFERENCE_CONTENT_TYPE)
+            .filename(STYLE_REFERENCE_FILENAME)
+            .build()
+
     companion object {
         private const val DEFAULT_MODEL = "gpt-image-2"
         private const val DEFAULT_QUALITY = "low"
         private const val DEFAULT_SIZE = "1024x1024"
+        private const val STYLE_REFERENCE_CONTENT_TYPE = "image/png"
+        private const val STYLE_REFERENCE_FILENAME = "moyeotrip-character-style-reference.png"
     }
 }
