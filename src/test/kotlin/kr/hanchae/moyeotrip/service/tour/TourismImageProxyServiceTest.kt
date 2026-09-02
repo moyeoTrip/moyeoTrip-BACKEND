@@ -28,6 +28,7 @@ class TourismImageProxyServiceTest {
             "https://example.com/image.jpg",
             "https://visitkorea.or.kr.evil.example/image.jpg",
             "https://tong.visitkorea.or.kr:8443/cms/resource/image.jpg",
+            "https://user@tong.visitkorea.or.kr/cms/resource/image.jpg",
             "not-a-url",
         ],
     )
@@ -71,6 +72,26 @@ class TourismImageProxyServiceTest {
         server.verify()
     }
 
+    @ParameterizedTest
+    @ValueSource(
+        strings = [
+            "http://tong.visitkorea.or.kr:80/cms/resource/image.jpg",
+            "https://tong.visitkorea.or.kr:443/cms/resource/image.jpg",
+            "https://visitkorea.or.kr/image.jpg",
+        ],
+    )
+    fun `공식 도메인의 기본 포트와 루트 도메인은 허용한다`(imageUrl: String) {
+        val builder = RestClient.builder()
+        val server = MockRestServiceServer.bindTo(builder).build()
+        val service = TourismImageProxyService(builder)
+        server.expect { _ -> }.andRespond(withSuccess(imageBytes("jpg"), MediaType.IMAGE_JPEG))
+
+        val result = service.getImage(imageUrl)
+
+        assertEquals(MediaType.parseMediaType("image/webp"), result.contentType)
+        server.verify()
+    }
+
     @Test
     fun `관광공사 이미지 요청이 429이면 이관 작업을 재개할 수 있도록 요청 한도 예외를 던진다`() {
         val builder = RestClient.builder()
@@ -93,6 +114,78 @@ class TourismImageProxyServiceTest {
         val result = service.getImage(OFFICIAL_IMAGE_URL)
 
         assertEquals(MediaType.parseMediaType("image/webp"), result.contentType)
+        server.verify()
+    }
+
+    @Test
+    fun `이미 WebP인 응답은 변환하지 않고 원본 바이트를 반환한다`() {
+        val builder = RestClient.builder()
+        val server = MockRestServiceServer.bindTo(builder).build()
+        val service = TourismImageProxyService(builder)
+        val webp = imageBytes("webp")
+        server.expect { _ -> }.andRespond(withSuccess(webp, MediaType.parseMediaType("image/webp")))
+
+        val result = service.getImage(OFFICIAL_IMAGE_URL)
+
+        assertEquals(MediaType.parseMediaType("image/webp"), result.contentType)
+        assertEquals(webp.toList(), result.bytes.toList())
+        server.verify()
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = ["text/plain", "image/gif"])
+    fun `이미지가 아니거나 지원하지 않는 이미지 형식은 거부한다`(contentType: String) {
+        val builder = RestClient.builder()
+        val server = MockRestServiceServer.bindTo(builder).build()
+        val service = TourismImageProxyService(builder)
+        server
+            .expect { _ -> }
+            .andRespond(withSuccess("unsupported", MediaType.parseMediaType(contentType)))
+
+        val exception = assertThrows(BaseException::class.java) { service.getImage(OFFICIAL_IMAGE_URL) }
+
+        assertEquals(ErrorCode.TOURISM_IMAGE_FETCH_FAILED, exception.errorCode)
+        server.verify()
+    }
+
+    @Test
+    fun `Content Type이 없는 이미지 응답은 거부한다`() {
+        val builder = RestClient.builder()
+        val server = MockRestServiceServer.bindTo(builder).build()
+        val service = TourismImageProxyService(builder)
+        server.expect { _ -> }.andRespond(withStatus(HttpStatus.OK).body("no-content-type"))
+
+        val exception = assertThrows(BaseException::class.java) { service.getImage(OFFICIAL_IMAGE_URL) }
+
+        assertEquals(ErrorCode.TOURISM_IMAGE_FETCH_FAILED, exception.errorCode)
+        server.verify()
+    }
+
+    @Test
+    fun `해석할 수 없는 이미지 바이트는 거부한다`() {
+        val builder = RestClient.builder()
+        val server = MockRestServiceServer.bindTo(builder).build()
+        val service = TourismImageProxyService(builder)
+        server.expect { _ -> }.andRespond(withSuccess("not-an-image", MediaType.IMAGE_JPEG))
+
+        val exception = assertThrows(BaseException::class.java) { service.getImage(OFFICIAL_IMAGE_URL) }
+
+        assertEquals(ErrorCode.TOURISM_IMAGE_FETCH_FAILED, exception.errorCode)
+        server.verify()
+    }
+
+    @Test
+    fun `큰 이미지는 최대 WebP 크기에 맞춰 축소한다`() {
+        val builder = RestClient.builder()
+        val server = MockRestServiceServer.bindTo(builder).build()
+        val service = TourismImageProxyService(builder)
+        server.expect { _ -> }.andRespond(withSuccess(imageBytes("jpg", 2500, 1200), MediaType.IMAGE_JPEG))
+
+        val result = service.getImage(OFFICIAL_IMAGE_URL)
+        val converted = ByteArrayInputStream(result.bytes).use(ImageIO::read)
+
+        assertEquals(1280, converted.width)
+        assertEquals(614, converted.height)
         server.verify()
     }
 

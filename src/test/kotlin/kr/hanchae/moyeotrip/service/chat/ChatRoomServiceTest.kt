@@ -195,9 +195,26 @@ class ChatRoomServiceTest {
 
     @Test
     fun `지도 탐색은 유효하지 않은 좌표와 반경을 거부한다`() {
-        val exception = assertThrows(BaseException::class.java) { service.getMapRooms(1L, 91.0, 127.0, 0.0) }
+        val invalidAreas =
+            listOf(
+                Triple(Double.NaN, 127.0, 1.0),
+                Triple(Double.POSITIVE_INFINITY, 127.0, 1.0),
+                Triple(91.0, 127.0, 1.0),
+                Triple(36.0, Double.NaN, 1.0),
+                Triple(36.0, Double.NEGATIVE_INFINITY, 1.0),
+                Triple(36.0, 181.0, 1.0),
+                Triple(36.0, 127.0, Double.NaN),
+                Triple(36.0, 127.0, Double.POSITIVE_INFINITY),
+                Triple(36.0, 127.0, 0.0),
+            )
 
-        assertEquals(ErrorCode.INVALID_MAP_SEARCH_AREA, exception.errorCode)
+        invalidAreas.forEach { (latitude, longitude, radiusKm) ->
+            val exception =
+                assertThrows(BaseException::class.java) {
+                    service.getMapRooms(1L, latitude, longitude, radiusKm)
+                }
+            assertEquals(ErrorCode.INVALID_MAP_SEARCH_AREA, exception.errorCode)
+        }
         verifyNoInteractions(userBlockRepository, roomRepository)
     }
 
@@ -207,6 +224,63 @@ class ChatRoomServiceTest {
 
         assertEquals(ErrorCode.INVALID_MAP_SEARCH_AREA, exception.errorCode)
         verifyNoInteractions(userBlockRepository, roomRepository)
+    }
+
+    @Test
+    fun `지도 탐색 결과가 없으면 찜 저장소를 조회하지 않는다`() {
+        val latitude = 36.0
+        val longitude = 128.0
+        val radiusKm = 5.0
+        val angularDistance = radiusKm / 6371.0088
+        val latitudeDelta = Math.toDegrees(angularDistance)
+        val longitudeDelta =
+            Math.toDegrees(
+                kotlin.math.asin(kotlin.math.sin(angularDistance) / kotlin.math.cos(Math.toRadians(latitude))),
+            )
+        `when`(userBlockRepository.findRelatedUserIds(7L)).thenReturn(listOf(9L))
+        `when`(
+            roomRepository.findMapRooms(
+                userId = 7L,
+                blockedUserIds = listOf(9L),
+                today = LocalDate.now(),
+                minimumLatitude = latitude - latitudeDelta,
+                maximumLatitude = latitude + latitudeDelta,
+                minimumLongitude = ((longitude - longitudeDelta + 540.0) % 360.0) - 180.0,
+                maximumLongitude = ((longitude + longitudeDelta + 540.0) % 360.0) - 180.0,
+                crossesDateLine = false,
+            ),
+        ).thenReturn(emptyList())
+
+        assertTrue(service.getMapRooms(7L, latitude, longitude, radiusKm).isEmpty())
+
+        verifyNoInteractions(favoriteRepository)
+    }
+
+    @Test
+    fun `극지방 지도 탐색은 전체 경도 범위를 사용하고 좌표가 없거나 반경 밖인 방을 제외한다`() {
+        val latitude = 89.9
+        val longitude = 179.9
+        val radiusKm = 200.0
+        val latitudeDelta = Math.toDegrees(radiusKm / 6371.0088)
+        val missingCoordinates = room(user(1L), meetingLatitude = null, meetingLongitude = null)
+        val outsideRadius = room(user(2L), meetingLatitude = 0.0, meetingLongitude = 0.0)
+        `when`(userBlockRepository.findRelatedUserIds(7L)).thenReturn(emptyList())
+        `when`(
+            roomRepository.findMapRooms(
+                userId = 7L,
+                blockedUserIds = listOf(-1L),
+                today = LocalDate.now(),
+                minimumLatitude = latitude - latitudeDelta,
+                maximumLatitude = 90.0,
+                minimumLongitude = -180.0,
+                maximumLongitude = 180.0,
+                crossesDateLine = false,
+            ),
+        ).thenReturn(listOf(missingCoordinates, outsideRadius))
+
+        assertTrue(service.getMapRooms(7L, latitude, longitude, radiusKm).isEmpty())
+
+        verifyNoInteractions(favoriteRepository)
     }
 
     @Test
@@ -1437,6 +1511,26 @@ class ChatRoomServiceTest {
 
         assertEquals(emptyList<Any>(), response)
         verify(courseRepository).findAllByTypeOrderByCreatedDateTimeDesc(TravelCourseType.PUBLIC)
+    }
+
+    @Test
+    fun `공개 코스 검색은 검색어 앞뒤 공백을 제거한다`() {
+        `when`(courseRepository.searchPublicCourses("경주 야경")).thenReturn(emptyList())
+
+        val response = service.searchPublicCourses("  경주 야경  ")
+
+        assertTrue(response.isEmpty())
+        verify(courseRepository).searchPublicCourses("경주 야경")
+    }
+
+    @Test
+    fun `공개 코스 검색은 null 또는 공백 검색어를 전체 조회 조건으로 전달한다`() {
+        `when`(courseRepository.searchPublicCourses(null)).thenReturn(emptyList())
+
+        assertTrue(service.searchPublicCourses(null).isEmpty())
+        assertTrue(service.searchPublicCourses("   ").isEmpty())
+
+        verify(courseRepository, org.mockito.Mockito.times(2)).searchPublicCourses(null)
     }
 
     @Test

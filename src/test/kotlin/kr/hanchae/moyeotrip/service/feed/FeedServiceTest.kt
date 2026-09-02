@@ -35,6 +35,7 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import org.mockito.ArgumentCaptor
 import org.mockito.Mockito.mock
 import org.mockito.Mockito.verify
 import org.mockito.Mockito.verifyNoInteractions
@@ -267,6 +268,24 @@ class FeedServiceTest {
     }
 
     @Test
+    fun `친구 피드가 페이지 크기 이하이면 다음 커서가 없고 최소 페이지 크기를 적용한다`() {
+        `when`(
+            feedRepository.findFriendFeeds(
+                1L,
+                50L,
+                FeedVisibility.PUBLIC,
+                FeedVisibility.FRIENDS,
+                PageRequest.of(0, 2),
+            ),
+        ).thenReturn(emptyList())
+
+        val response = service.getFeeds(1L, FeedTab.FRIENDS, beforeFeedId = 50L, limit = 0)
+
+        assertTrue(response.feeds.isEmpty())
+        assertEquals(null, response.nextId)
+    }
+
+    @Test
     fun `좋아요 상태를 토글해 취소한다`() {
         val like = mock(FeedLike::class.java)
         val feed = mock(Feed::class.java)
@@ -282,6 +301,21 @@ class FeedServiceTest {
         assertEquals(4L, response.likeCount)
         verify(likeRepository).delete(like)
         verifyNoInteractions(userRepository)
+    }
+
+    @Test
+    fun `좋아요 수가 이미 0이면 취소해도 음수가 되지 않는다`() {
+        val like = mock(FeedLike::class.java)
+        val feed = mock(Feed::class.java)
+        `when`(feed.author).thenReturn(user(1L))
+        `when`(feed.visibility).thenReturn(FeedVisibility.PRIVATE)
+        `when`(feedRepository.findById(3L)).thenReturn(Optional.of(feed))
+        `when`(likeRepository.countByFeedId(3L)).thenReturn(0L)
+        `when`(likeRepository.findByFeedIdAndUserId(3L, 1L)).thenReturn(like)
+
+        val response = service.toggleLike(1L, 3L)
+
+        assertEquals(0L, response.likeCount)
     }
 
     @Test
@@ -343,6 +377,46 @@ class FeedServiceTest {
     }
 
     @Test
+    fun `친구 공개 피드는 작성자 본인에게 친구 조회 없이 노출된다`() {
+        val feed = responseFeed(3L)
+        `when`(feed.visibility).thenReturn(FeedVisibility.FRIENDS)
+        `when`(feedRepository.findById(3L)).thenReturn(Optional.of(feed))
+
+        val response = service.getFeed(2L, 3L)
+
+        assertEquals(3L, response.feedId)
+        verifyNoInteractions(friendshipRepository)
+    }
+
+    @Test
+    fun `친구가 아닌 사용자는 친구 공개 피드를 조회할 수 없다`() {
+        val feed = mock(Feed::class.java)
+        `when`(feed.author).thenReturn(user(2L))
+        `when`(feed.visibility).thenReturn(FeedVisibility.FRIENDS)
+        `when`(feedRepository.findById(3L)).thenReturn(Optional.of(feed))
+        `when`(friendshipRepository.existsBetween(1L, 2L)).thenReturn(false)
+
+        val exception = assertThrows(BaseException::class.java) { service.getFeed(1L, 3L) }
+
+        assertEquals(ErrorCode.FEED_NOT_VISIBLE_TO_USER, exception.errorCode)
+    }
+
+    @Test
+    fun `자신의 피드는 신고할 수 없다`() {
+        val feed = mock(Feed::class.java)
+        `when`(feed.author).thenReturn(user(1L))
+        `when`(feedRepository.findByIdForUpdate(3L)).thenReturn(feed)
+
+        val exception =
+            assertThrows(BaseException::class.java) {
+                service.reportFeed(1L, 3L, CreateFeedReportRequest(FeedReportReason.SPAM, null))
+            }
+
+        assertEquals(ErrorCode.SELF_FEED_REPORT_NOT_ALLOWED, exception.errorCode)
+        verifyNoInteractions(reportRepository)
+    }
+
+    @Test
     fun `차단 관계인 사용자의 공개 피드는 조회할 수 없다`() {
         val feed = mock(Feed::class.java)
         `when`(feed.author).thenReturn(user(2L))
@@ -370,6 +444,52 @@ class FeedServiceTest {
 
         assertEquals(ErrorCode.FEED_PARENT_COMMENT_NOT_FOUND, exception.errorCode)
         verifyNoInteractions(userRepository)
+    }
+
+    @Test
+    fun `대댓글은 최상위 부모 댓글 아래에 저장한다`() {
+        val author = user(1L)
+        val feed = mock(Feed::class.java)
+        val parent = mock(FeedComment::class.java)
+        val savedComment = mock(FeedComment::class.java)
+        `when`(feed.author).thenReturn(author)
+        `when`(feed.visibility).thenReturn(FeedVisibility.PRIVATE)
+        `when`(feedRepository.findById(3L)).thenReturn(Optional.of(feed))
+        `when`(commentRepository.findByIdAndFeedId(5L, 3L)).thenReturn(parent)
+        `when`(parent.parent).thenReturn(null)
+        `when`(userRepository.findById(1L)).thenReturn(Optional.of(author))
+        `when`(savedComment.id).thenReturn(7L)
+        `when`(savedComment.author).thenReturn(author)
+        `when`(savedComment.content).thenReturn("답글")
+        `when`(savedComment.createdDateTime).thenReturn(LocalDateTime.now())
+        `when`(commentRepository.save(org.mockito.ArgumentMatchers.any(FeedComment::class.java))).thenReturn(savedComment)
+
+        val response = service.createComment(1L, 3L, CreateFeedCommentRequest(" 답글 ", parentCommentId = 5L))
+
+        assertEquals("답글", response.content)
+        val captor = ArgumentCaptor.forClass(FeedComment::class.java)
+        verify(commentRepository).save(captor.capture())
+        assertEquals(parent, captor.value.parent)
+    }
+
+    @Test
+    fun `대댓글에 다시 답글을 작성할 수 없다`() {
+        val author = user(1L)
+        val feed = mock(Feed::class.java)
+        val root = mock(FeedComment::class.java)
+        val reply = mock(FeedComment::class.java)
+        `when`(feed.author).thenReturn(author)
+        `when`(feed.visibility).thenReturn(FeedVisibility.PRIVATE)
+        `when`(feedRepository.findById(3L)).thenReturn(Optional.of(feed))
+        `when`(commentRepository.findByIdAndFeedId(5L, 3L)).thenReturn(reply)
+        `when`(reply.parent).thenReturn(root)
+
+        val exception =
+            assertThrows(BaseException::class.java) {
+                service.createComment(1L, 3L, CreateFeedCommentRequest("중첩 답글", parentCommentId = 5L))
+            }
+
+        assertEquals(ErrorCode.FEED_PARENT_COMMENT_NOT_FOUND, exception.errorCode)
     }
 
     @Test

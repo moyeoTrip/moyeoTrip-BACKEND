@@ -349,6 +349,34 @@ class AuthServiceTest {
     }
 
     @Test
+    fun `카카오 redirect URI는 안전한 절대 HTTP HTTPS 주소만 허용한다`() {
+        val invalidRedirectUris =
+            listOf(
+                "http://[",
+                "/relative/callback",
+                "ftp://moyeo-trip.jayden-bin.cc/callback",
+                "http://moyeo-trip.jayden-bin.cc/callback",
+                "https:/callback",
+                "https://user@moyeo-trip.jayden-bin.cc/callback",
+                "https://moyeo-trip.jayden-bin.cc/callback?code=leak",
+                "https://moyeo-trip.jayden-bin.cc/callback#fragment",
+                "http://localhost/callback",
+                "http://127.0.0.1/callback",
+                "http://[::1]/callback",
+            )
+
+        invalidRedirectUris.forEach { redirectUri ->
+            val exception =
+                assertThrows(BaseException::class.java) {
+                    authService.createKakaoCustomToken(KakaoAuthorizationCodeRequest("code", redirectUri))
+                }
+            assertEquals(ErrorCode.INVALID_KAKAO_REDIRECT_URI, exception.errorCode)
+        }
+
+        verifyNoInteractions(kakaoClient)
+    }
+
+    @Test
     fun `Kakao가 인가 코드를 거부하면 안전한 인증 오류로 변환한다`() {
         val redirectUri = "https://moyeo-trip.jayden-bin.cc/moyeoTrip-Web/auth/kakao/callback"
         `when`(kakaoClient.exchangeAuthorizationCode("expired-code", redirectUri))

@@ -267,6 +267,58 @@ class NotificationServiceTest {
     }
 
     @Test
+    fun `내 메시지에 대한 답글은 멘션 전용 설정에서도 알림을 받는다`() {
+        val originalSender = user(2L, "원문 작성자")
+        val replySender = user(1L, "답글 작성자")
+        val room = room(replySender)
+        val original = ChatMessage(id = 19L, chatRoom = room, sender = originalSender, type = ChatMessageType.USER, content = "원문")
+        val reply =
+            ChatMessage(
+                id = 20L,
+                chatRoom = room,
+                sender = replySender,
+                type = ChatMessageType.USER,
+                content = "답글",
+                replyTo = original,
+            )
+        `when`(participantRepository.findAllByChatRoomIdOrderByCreatedDateTimeAsc(10L))
+            .thenReturn(
+                listOf(
+                    ChatRoomParticipant(chatRoom = room, user = replySender, role = ChatParticipantRole.HOST),
+                    ChatRoomParticipant(chatRoom = room, user = originalSender, role = ChatParticipantRole.MEMBER),
+                ),
+            )
+        `when`(settingRepository.findByUserId(2L))
+            .thenReturn(NotificationSetting(user = originalSender, chatNotificationMode = ChatNotificationMode.MENTIONS_AND_REPLIES))
+        stubNotificationSave()
+
+        service.notifyMessage(reply)
+
+        verify(notificationRepository).save(any(Notification::class.java))
+    }
+
+    @Test
+    fun `전체 채팅 알림을 끈 사용자는 일반 메시지 알림을 받지 않는다`() {
+        val sender = user(1L, "보낸이")
+        val recipient = user(2L, "받는이")
+        val room = room(sender)
+        val message = ChatMessage(id = 20L, chatRoom = room, sender = sender, type = ChatMessageType.USER, content = "안녕하세요")
+        `when`(participantRepository.findAllByChatRoomIdOrderByCreatedDateTimeAsc(10L))
+            .thenReturn(
+                listOf(
+                    ChatRoomParticipant(chatRoom = room, user = sender, role = ChatParticipantRole.HOST),
+                    ChatRoomParticipant(chatRoom = room, user = recipient, role = ChatParticipantRole.MEMBER),
+                ),
+            )
+        `when`(settingRepository.findByUserId(2L))
+            .thenReturn(NotificationSetting(user = recipient, chatNotificationMode = ChatNotificationMode.NONE))
+
+        service.notifyMessage(message)
+
+        verifyNoInteractions(notificationRepository, realtimeMessagingService, pushNotificationSender)
+    }
+
+    @Test
     fun `이미 생성된 동일 알림은 중복 저장하지 않는다`() {
         val room = room(user(1L, "호스트"))
         `when`(
@@ -545,6 +597,28 @@ class NotificationServiceTest {
             listOf(NotificationType.FEED_LIKE, NotificationType.FRIEND_REQUEST, NotificationType.FRIEND_ACCEPTED),
             captor.allValues.map { it.type },
         )
+    }
+
+    @Test
+    fun `프로필이 없는 사용자의 소셜 알림에는 사용자 ID를 표시한다`() {
+        val author = User(id = 1L, userRole = UserRole.ROLE_USER)
+        val actor = User(id = 2L, userRole = UserRole.ROLE_USER)
+        val receiver = User(id = 3L, userRole = UserRole.ROLE_USER)
+        val feed = mock(Feed::class.java)
+        `when`(feed.id).thenReturn(20L)
+        `when`(feed.author).thenReturn(author)
+        `when`(feed.chatRoom).thenReturn(room(author))
+        val friendRequest = FriendRequest(id = 30L, requester = actor, receiver = receiver)
+        val friendship = Friendship(id = 40L, firstUser = author, secondUser = actor)
+        stubNotificationSave()
+
+        service.notifyFeedLiked(feed, actor)
+        service.notifyFriendRequested(friendRequest)
+        service.notifyFriendAccepted(friendship, actor)
+
+        val captor = ArgumentCaptor.forClass(Notification::class.java)
+        verify(notificationRepository, org.mockito.Mockito.times(3)).save(captor.capture())
+        assertTrue(captor.allValues.all { it.content.contains("사용자 2") })
     }
 
     private fun stubNotificationSave() {
