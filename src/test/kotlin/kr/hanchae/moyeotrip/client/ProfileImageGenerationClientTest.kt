@@ -10,6 +10,7 @@ import kr.hanchae.moyeotrip.exception.ErrorCode
 import org.junit.jupiter.api.Assertions.assertArrayEquals
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertThrows
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.mockito.ArgumentCaptor
 import org.mockito.ArgumentMatchers.any
@@ -34,7 +35,9 @@ class ProfileImageGenerationClientTest {
         with(requestCaptor.value) {
             assertEquals("profile prompt", prompt())
             assertArrayEquals(fixture.referenceImage, image().asInputStream().readBytes())
-            assertEquals(ImageEditParams.InputFidelity.HIGH, inputFidelity().orElseThrow())
+            assertEquals("image/png", _image().contentType)
+            assertEquals("moyeotrip-character-style-reference.png", _image().filename().orElseThrow())
+            assertTrue(inputFidelity().isEmpty)
             assertEquals(ImageEditParams.Quality.LOW, quality().orElseThrow())
             assertEquals("gpt-image-2", model().orElseThrow().asString())
         }
