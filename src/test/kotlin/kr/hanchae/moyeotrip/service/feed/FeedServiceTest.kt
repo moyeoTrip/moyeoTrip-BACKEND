@@ -286,6 +286,61 @@ class FeedServiceTest {
     }
 
     @Test
+    fun `댓글 목록은 최상위 댓글 ID 커서로 조회하고 대댓글을 포함한다`() {
+        val feed = mock(Feed::class.java)
+        val root3 = comment(3L, "세 번째")
+        val root2 = comment(2L, "두 번째")
+        val root1 = comment(1L, "첫 번째")
+        val reply = comment(4L, "답글")
+        `when`(feed.author).thenReturn(user(1L))
+        `when`(feed.visibility).thenReturn(FeedVisibility.PRIVATE)
+        `when`(feedRepository.findById(7L)).thenReturn(Optional.of(feed))
+        `when`(
+            commentRepository.findByFeedIdAndParentIsNullAndIdLessThanOrderByIdDesc(
+                7L,
+                Long.MAX_VALUE,
+                PageRequest.of(0, 3),
+            ),
+        ).thenReturn(listOf(root3, root2, root1))
+        `when`(commentRepository.findAllByParentIdOrderByCreatedDateTimeAsc(3L)).thenReturn(listOf(reply))
+        `when`(commentRepository.findAllByParentIdOrderByCreatedDateTimeAsc(2L)).thenReturn(emptyList())
+
+        val response = service.getComments(1L, 7L, beforeCommentId = null, limit = 2)
+
+        assertEquals(listOf(3L, 2L), response.comments.map { it.commentId })
+        assertEquals(
+            listOf(4L),
+            response.comments
+                .first()
+                .replies
+                .map { it.commentId },
+        )
+        assertEquals(2L, response.nextId)
+    }
+
+    @Test
+    fun `마지막 댓글 페이지에는 다음 커서가 없다`() {
+        val feed = mock(Feed::class.java)
+        val root = comment(9L, "마지막")
+        `when`(feed.author).thenReturn(user(1L))
+        `when`(feed.visibility).thenReturn(FeedVisibility.PRIVATE)
+        `when`(feedRepository.findById(7L)).thenReturn(Optional.of(feed))
+        `when`(
+            commentRepository.findByFeedIdAndParentIsNullAndIdLessThanOrderByIdDesc(
+                7L,
+                10L,
+                PageRequest.of(0, 2),
+            ),
+        ).thenReturn(listOf(root))
+        `when`(commentRepository.findAllByParentIdOrderByCreatedDateTimeAsc(9L)).thenReturn(emptyList())
+
+        val response = service.getComments(1L, 7L, beforeCommentId = 10L, limit = 1)
+
+        assertEquals(listOf(9L), response.comments.map { it.commentId })
+        assertEquals(null, response.nextId)
+    }
+
+    @Test
     fun `좋아요 상태를 토글해 취소한다`() {
         val like = mock(FeedLike::class.java)
         val feed = mock(Feed::class.java)
@@ -527,6 +582,17 @@ class FeedServiceTest {
         `when`(room.startDate).thenReturn(LocalDate.now())
         return feed
     }
+
+    private fun comment(
+        id: Long,
+        content: String,
+    ): FeedComment =
+        mock(FeedComment::class.java).also {
+            `when`(it.id).thenReturn(id)
+            `when`(it.author).thenReturn(user(id + 10L))
+            `when`(it.content).thenReturn(content)
+            `when`(it.createdDateTime).thenReturn(LocalDateTime.of(2026, 9, 2, 12, 0).plusMinutes(id))
+        }
 
     private fun user(id: Long): User =
         User(

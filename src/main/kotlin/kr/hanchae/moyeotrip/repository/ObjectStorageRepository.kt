@@ -18,7 +18,13 @@ class ObjectStorageRepository(
         key: String,
         stream: InputStream,
     ): String {
-        val result = s3Template.upload(storageS3Properties.bucket, path + key, stream)
+        val result =
+            s3Template.upload(
+                storageS3Properties.bucket,
+                path + key,
+                stream,
+                immutableObjectMetadata(),
+            )
         return result.filename
     }
 
@@ -37,6 +43,7 @@ class ObjectStorageRepository(
                     .builder()
                     .contentType(contentType)
                     .contentLength(bytes.size.toLong())
+                    .cacheControl(IMMUTABLE_CACHE_CONTROL)
                     .build(),
             ).filename
 
@@ -52,6 +59,7 @@ class ObjectStorageRepository(
                     .builder()
                     .contentType(PROFILE_IMAGE_CONTENT_TYPE)
                     .contentLength(imageBytes.size.toLong())
+                    .cacheControl(IMMUTABLE_CACHE_CONTROL)
                     .build(),
             ).filename
 
@@ -68,6 +76,7 @@ class ObjectStorageRepository(
                     .builder()
                     .contentType(contentType)
                     .contentLength(imageBytes.size.toLong())
+                    .cacheControl(IMMUTABLE_CACHE_CONTROL)
                     .build(),
             ).filename
 
@@ -87,6 +96,7 @@ class ObjectStorageRepository(
         const val TOURISM_IMAGE_PATH = "tourism/image/"
         private const val PROFILE_IMAGE_EXTENSION = "webp"
         private const val PROFILE_IMAGE_CONTENT_TYPE = "image/webp"
+        private const val IMMUTABLE_CACHE_CONTROL = "public, max-age=31536000, immutable"
 
         fun generateFileName(extension: String): String = "${UUID.randomUUID()}.$extension" // 중복나지 않도록 UUID 사용
 
@@ -97,4 +107,10 @@ class ObjectStorageRepository(
                 else -> "jpg"
             }
     }
+
+    private fun immutableObjectMetadata(): ObjectMetadata =
+        ObjectMetadata
+            .builder()
+            .cacheControl(IMMUTABLE_CACHE_CONTROL)
+            .build()
 }

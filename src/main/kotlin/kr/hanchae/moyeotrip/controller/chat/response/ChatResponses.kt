@@ -177,6 +177,8 @@ data class PublicTravelCourseDetailResponse(
     val description: String?,
     @field:Schema(description = "작성자 표시를 허용한 경우의 닉네임. 비공개면 null", nullable = true)
     val creatorNickname: String?,
+    @field:Schema(description = "작성자 표시를 허용한 경우의 프로필 이미지 URL. 비공개 또는 이미지가 없으면 null", nullable = true)
+    val creatorProfileImageUrl: String?,
     @field:Schema(description = "작성자가 이 코스를 여행한 시작일. 공개 설정에 따라 null", nullable = true, type = "string", format = "date")
     val creatorTravelStartDate: LocalDate?,
     @field:Schema(description = "작성자가 이 코스를 여행한 종료일. 당일 여행 또는 비공개면 null", nullable = true, type = "string", format = "date")

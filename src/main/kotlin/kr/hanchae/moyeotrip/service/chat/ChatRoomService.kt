@@ -507,6 +507,11 @@ class ChatRoomService(
                 } else {
                     null
                 },
+            creatorProfileImageUrl =
+                creator
+                    ?.information
+                    ?.profileFileName
+                    ?.let(objectStorageRepository::getDownloadUrl),
             creatorTravelStartDate = creatorTravelRoom?.startDate,
             creatorTravelEndDate = creatorTravelRoom?.endDate,
             chatRoomCount = roomRepository.countByCourseIdAndStatusNot(courseId, ChatRoomStatus.CANCELLED),

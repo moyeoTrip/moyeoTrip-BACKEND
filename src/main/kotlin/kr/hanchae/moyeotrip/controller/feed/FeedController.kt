@@ -5,6 +5,7 @@ import kr.hanchae.moyeotrip.controller.feed.request.CreateFeedCommentRequest
 import kr.hanchae.moyeotrip.controller.feed.request.CreateFeedReportRequest
 import kr.hanchae.moyeotrip.controller.feed.request.CreateFeedRequest
 import kr.hanchae.moyeotrip.controller.feed.request.FeedTab
+import kr.hanchae.moyeotrip.controller.feed.response.FeedCommentPageResponse
 import kr.hanchae.moyeotrip.controller.feed.response.FeedCommentResponse
 import kr.hanchae.moyeotrip.controller.feed.response.FeedLikeResponse
 import kr.hanchae.moyeotrip.controller.feed.response.FeedPageResponse
@@ -74,7 +75,9 @@ class FeedController(
     override fun getComments(
         @LoginUserId userId: Long,
         @PathVariable feedId: Long,
-    ): List<FeedCommentResponse> = feedService.getComments(userId, feedId)
+        @RequestParam(required = false) beforeCommentId: Long?,
+        @RequestParam(defaultValue = "20") limit: Int,
+    ): FeedCommentPageResponse = feedService.getComments(userId, feedId, beforeCommentId, limit)
 
     @PostMapping("/{feedId}/comments")
     override fun createComment(

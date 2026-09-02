@@ -13,6 +13,7 @@ import kr.hanchae.moyeotrip.controller.feed.request.CreateFeedCommentRequest
 import kr.hanchae.moyeotrip.controller.feed.request.CreateFeedReportRequest
 import kr.hanchae.moyeotrip.controller.feed.request.CreateFeedRequest
 import kr.hanchae.moyeotrip.controller.feed.request.FeedTab
+import kr.hanchae.moyeotrip.controller.feed.response.FeedCommentPageResponse
 import kr.hanchae.moyeotrip.controller.feed.response.FeedCommentResponse
 import kr.hanchae.moyeotrip.controller.feed.response.FeedLikeResponse
 import kr.hanchae.moyeotrip.controller.feed.response.FeedPageResponse
@@ -263,13 +264,13 @@ interface FeedAPISpec {
         @Parameter(description = "신고 사유와 선택적 상세 내용", required = true) request: CreateFeedReportRequest,
     ): ResponseEntity<Void>
 
-    @Operation(summary = "피드 댓글 목록 조회", description = "최상위 댓글과 각 댓글의 대댓글을 함께 반환합니다.")
+    @Operation(summary = "피드 댓글 목록 조회", description = "최상위 댓글을 ID 커서로 조회하며 각 댓글의 대댓글을 함께 반환합니다.")
     @ApiResponses(
         value = [
             ApiResponse(
                 responseCode = "200",
                 description = "댓글 목록 조회 성공",
-                content = [Content(array = ArraySchema(schema = Schema(implementation = FeedCommentResponse::class)))],
+                content = [Content(schema = Schema(implementation = FeedCommentPageResponse::class))],
             ),
             ApiResponse(
                 responseCode = "403",
@@ -300,7 +301,11 @@ interface FeedAPISpec {
         @Parameter(hidden = true) userId: Long,
         @Parameter(description = "댓글을 조회할 피드 ID", example = "100")
         feedId: Long,
-    ): List<FeedCommentResponse>
+        @Parameter(description = "이 ID보다 작은 최상위 댓글을 조회합니다. 첫 조회에서는 생략합니다.", example = "45")
+        beforeCommentId: Long?,
+        @Parameter(description = "한 번에 조회할 최상위 댓글 수(1~50)", example = "20")
+        limit: Int,
+    ): FeedCommentPageResponse
 
     @Operation(summary = "피드 댓글·대댓글 작성", description = "parentCommentId를 생략하면 댓글, 지정하면 해당 댓글의 대댓글을 작성합니다.")
     @ApiResponses(

@@ -5,6 +5,7 @@ import kr.hanchae.moyeotrip.controller.feed.request.CreateFeedReportRequest
 import kr.hanchae.moyeotrip.controller.feed.request.CreateFeedRequest
 import kr.hanchae.moyeotrip.controller.feed.request.FeedTab
 import kr.hanchae.moyeotrip.controller.feed.response.FeedAuthorResponse
+import kr.hanchae.moyeotrip.controller.feed.response.FeedCommentPageResponse
 import kr.hanchae.moyeotrip.controller.feed.response.FeedCommentResponse
 import kr.hanchae.moyeotrip.controller.feed.response.FeedImageResponse
 import kr.hanchae.moyeotrip.controller.feed.response.FeedLikeResponse
@@ -178,15 +179,28 @@ class FeedService(
     fun getComments(
         userId: Long,
         feedId: Long,
-    ): List<FeedCommentResponse> {
+        beforeCommentId: Long?,
+        limit: Int,
+    ): FeedCommentPageResponse {
         requireVisibleFeed(userId, feedId)
-        return feedCommentRepository
-            .findAllByFeedIdAndParentIsNullOrderByCreatedDateTimeAsc(feedId)
-            .map { comment ->
-                comment.toResponse(
-                    replies = feedCommentRepository.findAllByParentIdOrderByCreatedDateTimeAsc(comment.id).map { it.toResponse() },
-                )
-            }
+        val pageSize = limit.coerceIn(1, MAX_PAGE_SIZE)
+        val fetched =
+            feedCommentRepository.findByFeedIdAndParentIsNullAndIdLessThanOrderByIdDesc(
+                feedId,
+                beforeCommentId ?: Long.MAX_VALUE,
+                PageRequest.of(0, pageSize + 1),
+            )
+        val hasNext = fetched.size > pageSize
+        val comments = fetched.take(pageSize)
+        return FeedCommentPageResponse(
+            comments =
+                comments.map { comment ->
+                    comment.toResponse(
+                        replies = feedCommentRepository.findAllByParentIdOrderByCreatedDateTimeAsc(comment.id).map { it.toResponse() },
+                    )
+                },
+            nextId = comments.lastOrNull()?.id?.takeIf { hasNext },
+        )
     }
 
     @Transactional

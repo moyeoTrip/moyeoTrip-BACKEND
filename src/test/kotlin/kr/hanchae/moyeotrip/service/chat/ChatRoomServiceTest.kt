@@ -1379,6 +1379,7 @@ class ChatRoomServiceTest {
     @Test
     fun `공개 코스 상세 조회는 만든 사람과 원본 여행 및 코스 정보를 반환한다`() {
         val creator = profiledUser(1L, Gender.F, LocalDate.of(1990, 1, 1))
+        creator.information?.profileFileName = "user/profile/image/creator.webp"
         val course =
             TravelCourse(
                 id = 5L,
@@ -1425,12 +1426,15 @@ class ChatRoomServiceTest {
         `when`(roomRepository.countByCourseIdAndStatusNot(5L, ChatRoomStatus.CANCELLED)).thenReturn(3L)
         `when`(ratingRepository.findAverageByCourseId(5L)).thenReturn(4.46)
         `when`(ratingRepository.countByCourseId(5L)).thenReturn(12L)
+        `when`(objectStorageRepository.getDownloadUrl("user/profile/image/creator.webp"))
+            .thenReturn("https://cdn.example.com/creator.webp")
 
         val response = service.getCourse(5L)
 
         assertEquals("울릉도 대표 코스", response.title)
         assertEquals("바다와 산을 함께 즐기는 코스", response.description)
         assertEquals("여행자1", response.creatorNickname)
+        assertEquals("https://cdn.example.com/creator.webp", response.creatorProfileImageUrl)
         assertEquals(LocalDate.of(2026, 5, 25), response.creatorTravelStartDate)
         assertEquals(LocalDate.of(2026, 5, 26), response.creatorTravelEndDate)
         assertEquals(3L, response.chatRoomCount)
@@ -1462,6 +1466,7 @@ class ChatRoomServiceTest {
         val response = service.getCourse(5L)
 
         assertEquals(null, response.creatorNickname)
+        assertEquals(null, response.creatorProfileImageUrl)
         assertEquals(null, response.creatorTravelStartDate)
         assertEquals(null, response.creatorTravelEndDate)
         assertEquals(null, response.averageRating)

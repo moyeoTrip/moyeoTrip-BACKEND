@@ -161,7 +161,11 @@ interface FeedLikeRepository : JpaRepository<FeedLike, Long> {
 interface FeedCommentRepository : JpaRepository<FeedComment, Long> {
     fun countByFeedId(feedId: Long): Long
 
-    fun findAllByFeedIdAndParentIsNullOrderByCreatedDateTimeAsc(feedId: Long): List<FeedComment>
+    fun findByFeedIdAndParentIsNullAndIdLessThanOrderByIdDesc(
+        feedId: Long,
+        beforeId: Long,
+        pageable: Pageable,
+    ): List<FeedComment>
 
     fun findAllByParentIdOrderByCreatedDateTimeAsc(parentId: Long): List<FeedComment>
 

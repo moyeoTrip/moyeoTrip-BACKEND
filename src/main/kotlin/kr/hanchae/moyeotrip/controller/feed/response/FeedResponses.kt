@@ -15,6 +15,14 @@ data class FeedPageResponse(
     val nextId: Long?,
 )
 
+@Schema(description = "피드 최상위 댓글 커서 조회 응답")
+data class FeedCommentPageResponse(
+    @field:Schema(description = "조회한 최상위 댓글과 각 댓글의 대댓글 목록")
+    val comments: List<FeedCommentResponse>,
+    @field:Schema(description = "다음 페이지 조회에 사용할 마지막 최상위 댓글 ID. 다음 페이지가 없으면 null", example = "45", nullable = true)
+    val nextId: Long?,
+)
+
 @Schema(description = "여행 피드 상세 응답")
 data class FeedResponse(
     @field:Schema(description = "피드 ID", example = "101")
