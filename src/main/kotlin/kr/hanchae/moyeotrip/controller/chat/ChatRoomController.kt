@@ -11,6 +11,7 @@ import kr.hanchae.moyeotrip.controller.chat.request.MyChatRoomFilter
 import kr.hanchae.moyeotrip.controller.chat.request.SendChatMessageRequest
 import kr.hanchae.moyeotrip.controller.chat.request.ShareTourismContentRequest
 import kr.hanchae.moyeotrip.controller.chat.request.UpdateChatRoomNoticeRequest
+import kr.hanchae.moyeotrip.controller.chat.request.UpdateChatRoomRequest
 import kr.hanchae.moyeotrip.controller.chat.request.UpdateChatRoomStatusRequest
 import kr.hanchae.moyeotrip.controller.chat.request.UpdateMeetingInfoRequest
 import kr.hanchae.moyeotrip.controller.chat.response.ApproveJoinApplicationResponse
@@ -39,6 +40,7 @@ import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.DeleteMapping
 import org.springframework.web.bind.annotation.GetMapping
+import org.springframework.web.bind.annotation.PatchMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.PutMapping
@@ -97,6 +99,17 @@ class ChatRoomController(
         @LoginUserId userId: Long,
         @PathVariable roomId: Long,
     ): ChatRoomDetailResponse = chatRoomService.getRoom(userId, roomId)
+
+    @PatchMapping("/{roomId}", consumes = [MediaType.MULTIPART_FORM_DATA_VALUE])
+    override fun updateRoom(
+        @LoginUserId userId: Long,
+        @PathVariable roomId: Long,
+        @Valid @RequestPart("request") request: UpdateChatRoomRequest,
+        @RequestPart("thumbnail", required = false) thumbnail: MultipartFile?,
+    ): ResponseEntity<Void> {
+        chatRoomService.updateRoom(userId, roomId, request, thumbnail)
+        return ResponseEntity.noContent().build()
+    }
 
     @PostMapping("/{roomId}/favorite")
     override fun toggleRoomFavorite(
@@ -240,6 +253,16 @@ class ChatRoomController(
         @Valid @RequestBody request: SendChatMessageRequest,
     ): ResponseEntity<ChatMessageResponse> =
         ResponseEntity.status(HttpStatus.CREATED).body(chatRoomService.sendMessage(userId, roomId, request))
+
+    @DeleteMapping("/{roomId}/messages/{messageId}")
+    override fun deleteMessage(
+        @LoginUserId userId: Long,
+        @PathVariable roomId: Long,
+        @PathVariable messageId: Long,
+    ): ResponseEntity<Void> {
+        chatRoomService.deleteMessage(userId, roomId, messageId)
+        return ResponseEntity.noContent().build()
+    }
 
     @PostMapping("/{roomId}/messages/images", consumes = [MediaType.MULTIPART_FORM_DATA_VALUE])
     override fun shareImage(

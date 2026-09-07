@@ -84,6 +84,11 @@ class ObjectStorageRepository(
         s3Template.deleteObject(storageS3Properties.bucket, key)
     }
 
+    fun deleteByDownloadUrl(downloadUrl: String) {
+        val prefix = "${storageS3Properties.cdnUrl.trimEnd('/')}/"
+        downloadUrl.takeIf { it.startsWith(prefix) }?.removePrefix(prefix)?.let(::delete)
+    }
+
     // WARNING: 이 메소드는 모든 객체를 삭제합니다. 주의해서 사용하세요.
     fun deleteAll() {
         s3Template.listObjects(storageS3Properties.bucket, "").parallelStream().forEach { obj ->

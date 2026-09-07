@@ -5,6 +5,8 @@ import kr.hanchae.moyeotrip.controller.feed.request.CreateFeedCommentRequest
 import kr.hanchae.moyeotrip.controller.feed.request.CreateFeedReportRequest
 import kr.hanchae.moyeotrip.controller.feed.request.CreateFeedRequest
 import kr.hanchae.moyeotrip.controller.feed.request.FeedTab
+import kr.hanchae.moyeotrip.controller.feed.request.UpdateFeedCommentRequest
+import kr.hanchae.moyeotrip.controller.feed.request.UpdateFeedRequest
 import kr.hanchae.moyeotrip.controller.feed.response.FeedCommentPageResponse
 import kr.hanchae.moyeotrip.controller.feed.response.FeedCommentResponse
 import kr.hanchae.moyeotrip.controller.feed.response.FeedLikeResponse
@@ -16,9 +18,11 @@ import kr.hanchae.moyeotrip.utils.LoginUserId
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
+import org.springframework.web.bind.annotation.DeleteMapping
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
+import org.springframework.web.bind.annotation.PutMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestParam
@@ -55,6 +59,22 @@ class FeedController(
         @PathVariable feedId: Long,
     ): FeedResponse = feedService.getFeed(userId, feedId)
 
+    @PutMapping("/{feedId}")
+    override fun updateFeed(
+        @LoginUserId userId: Long,
+        @PathVariable feedId: Long,
+        @Valid @RequestBody request: UpdateFeedRequest,
+    ): FeedResponse = feedService.updateFeed(userId, feedId, request)
+
+    @DeleteMapping("/{feedId}")
+    override fun deleteFeed(
+        @LoginUserId userId: Long,
+        @PathVariable feedId: Long,
+    ): ResponseEntity<Void> {
+        feedService.deleteFeed(userId, feedId)
+        return ResponseEntity.noContent().build()
+    }
+
     @PostMapping("/{feedId}/like")
     override fun toggleLike(
         @LoginUserId userId: Long,
@@ -86,4 +106,22 @@ class FeedController(
         @Valid @RequestBody request: CreateFeedCommentRequest,
     ): ResponseEntity<FeedCommentResponse> =
         ResponseEntity.status(HttpStatus.CREATED).body(feedService.createComment(userId, feedId, request))
+
+    @PutMapping("/{feedId}/comments/{commentId}")
+    override fun updateComment(
+        @LoginUserId userId: Long,
+        @PathVariable feedId: Long,
+        @PathVariable commentId: Long,
+        @Valid @RequestBody request: UpdateFeedCommentRequest,
+    ): FeedCommentResponse = feedService.updateComment(userId, feedId, commentId, request)
+
+    @DeleteMapping("/{feedId}/comments/{commentId}")
+    override fun deleteComment(
+        @LoginUserId userId: Long,
+        @PathVariable feedId: Long,
+        @PathVariable commentId: Long,
+    ): ResponseEntity<Void> {
+        feedService.deleteComment(userId, feedId, commentId)
+        return ResponseEntity.noContent().build()
+    }
 }

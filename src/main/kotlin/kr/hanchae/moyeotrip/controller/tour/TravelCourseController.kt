@@ -18,9 +18,9 @@ import kr.hanchae.moyeotrip.service.tour.TravelCourseService
 import kr.hanchae.moyeotrip.utils.LoginUserId
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.GetMapping
+import org.springframework.web.bind.annotation.PatchMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
-import org.springframework.web.bind.annotation.PutMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestParam
@@ -54,7 +54,7 @@ class TravelCourseController(
         @PathVariable roomId: Long,
     ): TravelCourseDetailResponse = chatRoomService.getRoomCourse(roomId)
 
-    @PutMapping("/chat-rooms/{roomId}")
+    @PatchMapping("/chat-rooms/{roomId}")
     override fun updateRoomCourse(
         @LoginUserId userId: Long,
         @PathVariable roomId: Long,

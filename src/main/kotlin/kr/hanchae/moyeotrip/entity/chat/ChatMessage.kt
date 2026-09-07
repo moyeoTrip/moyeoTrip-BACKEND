@@ -17,6 +17,7 @@ import jakarta.persistence.Table
 import kr.hanchae.moyeotrip.entity.BaseTimeEntity
 import kr.hanchae.moyeotrip.entity.tour.TourismContent
 import kr.hanchae.moyeotrip.entity.user.User
+import java.time.LocalDateTime
 
 @Entity
 @Table(name = "chat_messages")
@@ -33,8 +34,7 @@ class ChatMessage(
     @Enumerated(EnumType.STRING)
     @Column(name = "message_type", nullable = false, length = 20)
     val type: ChatMessageType,
-    @Column(nullable = false, length = 1000)
-    val content: String,
+    content: String,
     @Column(name = "image_url", length = 1000)
     val imageUrl: String? = null,
     @ManyToOne(fetch = FetchType.LAZY)
@@ -54,6 +54,14 @@ class ChatMessage(
     @Column(name = "system_event_key", length = 30, updatable = false)
     val systemEventKey: String? = null,
 ) : BaseTimeEntity() {
+    @Column(nullable = false, length = 1000)
+    var content: String = content
+        protected set
+
+    @Column(name = "deleted_datetime")
+    var deletedDateTime: LocalDateTime? = null
+        protected set
+
     @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
         name = "chat_message_mentions",
@@ -67,6 +75,18 @@ class ChatMessage(
 
     fun mention(users: Collection<User>) {
         mentionedUserEntities.addAll(users)
+    }
+
+    fun markDeleted(now: LocalDateTime = LocalDateTime.now()) {
+        content = DELETED_MESSAGE_CONTENT
+        deletedDateTime = now
+        mentionedUserEntities.clear()
+    }
+
+    fun isDeleted(): Boolean = deletedDateTime != null
+
+    companion object {
+        const val DELETED_MESSAGE_CONTENT = "삭제된 메세지입니다"
     }
 }
 

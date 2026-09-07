@@ -18,6 +18,14 @@ data class CreateFeedRequest(
     val visibility: FeedVisibility,
 )
 
+@Schema(description = "피드 본문 수정 요청")
+data class UpdateFeedRequest(
+    @field:Schema(description = "수정할 피드 본문", example = "주왕산 단풍이 정말 아름다웠어요!")
+    @field:NotBlank
+    @field:Size(max = 500)
+    val content: String,
+)
+
 @Schema(description = "피드 댓글 또는 대댓글 작성 요청")
 data class CreateFeedCommentRequest(
     @field:Schema(description = "댓글 본문", example = "다음에 저도 가보고 싶어요!")
@@ -26,6 +34,14 @@ data class CreateFeedCommentRequest(
     val content: String,
     @field:Schema(description = "대댓글을 작성할 부모 댓글 ID. 생략하면 최상위 댓글입니다.", example = "45", nullable = true)
     val parentCommentId: Long? = null,
+)
+
+@Schema(description = "피드 댓글 또는 대댓글 수정 요청")
+data class UpdateFeedCommentRequest(
+    @field:Schema(description = "수정할 댓글 본문", example = "다음에 저도 꼭 가보고 싶어요!")
+    @field:NotBlank
+    @field:Size(max = 500)
+    val content: String,
 )
 
 @Schema(description = "피드 신고 요청")

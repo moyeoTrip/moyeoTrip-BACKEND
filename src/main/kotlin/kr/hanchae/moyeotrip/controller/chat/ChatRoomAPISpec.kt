@@ -21,6 +21,7 @@ import kr.hanchae.moyeotrip.controller.chat.request.MyChatRoomFilter
 import kr.hanchae.moyeotrip.controller.chat.request.SendChatMessageRequest
 import kr.hanchae.moyeotrip.controller.chat.request.ShareTourismContentRequest
 import kr.hanchae.moyeotrip.controller.chat.request.UpdateChatRoomNoticeRequest
+import kr.hanchae.moyeotrip.controller.chat.request.UpdateChatRoomRequest
 import kr.hanchae.moyeotrip.controller.chat.request.UpdateChatRoomStatusRequest
 import kr.hanchae.moyeotrip.controller.chat.request.UpdateMeetingInfoRequest
 import kr.hanchae.moyeotrip.controller.chat.response.ApproveJoinApplicationResponse
@@ -302,6 +303,40 @@ interface ChatRoomAPISpec {
         @Parameter(description = "조회할 채팅방 ID", example = "101")
         roomId: Long,
     ): ChatRoomDetailResponse
+
+    @Operation(
+        summary = "채팅방 모집글 부분 수정",
+        description =
+            "모집 중인 채팅방의 호스트가 제목, 설명, 여행 일정, 모집 마감일, 인원, 참가비와 썸네일을 수정합니다. " +
+                "thumbnail 파트를 생략하면 기존 썸네일을 유지합니다. 방 삭제는 상태를 CANCELLED로 변경하는 기존 API를 사용합니다.",
+    )
+    @ApiResponses(
+        value = [
+            ApiResponse(responseCode = "204", description = "채팅방 모집글 수정 성공"),
+            ApiResponse(responseCode = "400", description = "일정, 인원 또는 입력값이 유효하지 않음"),
+            ApiResponse(responseCode = "403", description = "채팅방 호스트가 아님"),
+            ApiResponse(responseCode = "404", description = "채팅방 없음"),
+            ApiResponse(responseCode = "409", description = "모집 중 상태가 아님"),
+        ],
+    )
+    fun updateRoom(
+        @Parameter(hidden = true) userId: Long,
+        @Parameter(description = "채팅방 ID", example = "101") roomId: Long,
+        @RequestBody(
+            description = "채팅방 수정 정보와 선택적 썸네일을 multipart/form-data로 전송합니다. request 파트는 application/json입니다.",
+            required = true,
+            content = [
+                Content(
+                    mediaType = MediaType.MULTIPART_FORM_DATA_VALUE,
+                    encoding = [Encoding(name = "request", contentType = MediaType.APPLICATION_JSON_VALUE)],
+                ),
+            ],
+        )
+        @Parameter(description = "수정할 모집글과 여행 일정 JSON")
+        request: UpdateChatRoomRequest,
+        @Parameter(description = "교체할 채팅방 썸네일 이미지. 생략하면 기존 이미지를 유지합니다.", required = false)
+        thumbnail: MultipartFile?,
+    ): ResponseEntity<Void>
 
     @Operation(summary = "채팅방 찜 상태 토글", description = "호출할 때마다 찜 상태를 반전하고 변경된 상태를 반환합니다.")
     @ApiResponses(
@@ -989,6 +1024,32 @@ interface ChatRoomAPISpec {
         request: SendChatMessageRequest,
     ): ResponseEntity<ChatMessageResponse>
 
+    @Operation(
+        summary = "내 채팅 메시지 삭제",
+        description = "현재 채팅방 참가자가 자신이 보낸 메시지를 삭제 상태로 바꿉니다. 메시지 행과 답글 연결은 유지되고 본문은 '삭제된 메세지입니다'로 표시됩니다.",
+    )
+    @ApiResponses(
+        value = [
+            ApiResponse(responseCode = "204", description = "메시지 삭제 성공"),
+            ApiResponse(responseCode = "403", description = "채팅방 참가자가 아니거나 메시지 작성자가 아님"),
+            ApiResponse(
+                responseCode = "404",
+                description = "채팅 메시지 없음",
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [ExampleObject(value = ChatRoomSwaggerExamples.CHAT_MESSAGE_NOT_FOUND)],
+                    ),
+                ],
+            ),
+        ],
+    )
+    fun deleteMessage(
+        @Parameter(hidden = true) userId: Long,
+        @Parameter(description = "채팅방 ID", example = "101") roomId: Long,
+        @Parameter(description = "삭제할 메시지 ID", example = "501") messageId: Long,
+    ): ResponseEntity<Void>
+
     @Operation(summary = "채팅 사진 공유", description = "현재 참가자가 최대 20MB 이미지 한 장을 공유합니다.")
     @ApiResponses(
         value = [
@@ -1417,6 +1478,7 @@ private object ChatRoomSwaggerExamples {
     const val DUPLICATE_CHAT_POLL_OPTION = """{"code":40025,"errorMessage":"투표 선택지는 중복될 수 없습니다."}"""
     const val CHAT_ROOM_HOST_REQUIRED = """{"code":40307,"errorMessage":"채팅방 호스트만 이 작업을 할 수 있습니다."}"""
     const val CHAT_REPLY_MESSAGE_NOT_FOUND = """{"code":40416,"errorMessage":"답글을 달 원본 채팅 메시지를 찾을 수 없습니다."}"""
+    const val CHAT_MESSAGE_NOT_FOUND = """{"code":40423,"errorMessage":"채팅 메시지를 찾을 수 없습니다."}"""
     const val TOURISM_CONTENT_NOT_FOUND = """{"code":40408,"errorMessage":"관광 콘텐츠를 찾을 수 없습니다."}"""
     const val CHAT_ROOM_NOTICE_NOT_FOUND = """{"code":40411,"errorMessage":"채팅방 공지를 찾을 수 없습니다."}"""
     const val TRAVEL_COURSE_TAG_NOT_FOUND = """{"code":40412,"errorMessage":"여행 코스 태그를 찾을 수 없습니다."}"""

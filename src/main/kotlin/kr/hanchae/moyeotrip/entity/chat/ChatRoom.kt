@@ -32,32 +32,21 @@ class ChatRoom(
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "travel_course_id", nullable = false, updatable = false)
     val course: TravelCourse,
-    @Column(name = "room_title", nullable = false, length = 100)
-    val roomTitle: String,
-    @Column(length = 500)
-    val description: String? = null,
-    @Column(length = 1000)
-    val thumbnail: String? = null,
-    @Column(name = "max_participants", nullable = false)
-    val maxParticipants: Int,
-    @Column(name = "minimum_participants", nullable = false)
-    val minimumParticipants: Int = MINIMUM_PARTICIPANTS,
-    @Column(name = "start_date", nullable = false)
-    val startDate: LocalDate,
-    @Column(name = "end_date")
-    val endDate: LocalDate? = null,
-    @Column(name = "recruitment_deadline_date", nullable = false)
-    val recruitmentDeadlineDate: LocalDate,
-    @Column(name = "day_trip_start_time")
-    val dayTripStartTime: LocalTime? = null,
-    @Column(name = "day_trip_end_time")
-    val dayTripEndTime: LocalTime? = null,
+    roomTitle: String,
+    description: String? = null,
+    thumbnail: String? = null,
+    maxParticipants: Int,
+    minimumParticipants: Int = MINIMUM_PARTICIPANTS,
+    startDate: LocalDate,
+    endDate: LocalDate? = null,
+    recruitmentDeadlineDate: LocalDate,
+    dayTripStartTime: LocalTime? = null,
+    dayTripEndTime: LocalTime? = null,
     meetingLatitude: Double? = null,
     meetingLongitude: Double? = null,
     meetingDetails: String? = null,
     meetingDateTime: LocalDateTime,
-    @Column(name = "participation_fee")
-    val participationFee: Long? = null,
+    participationFee: Long? = null,
     @Enumerated(EnumType.STRING)
     @Column(name = "gender_restriction", nullable = false, length = 20)
     val genderRestriction: GenderRestriction = GenderRestriction.NONE,
@@ -72,6 +61,50 @@ class ChatRoom(
     @Column(nullable = false, length = 20)
     var status: ChatRoomStatus = ChatRoomStatus.RECRUITING,
 ) : BaseModifiableEntity() {
+    @Column(name = "room_title", nullable = false, length = 100)
+    var roomTitle: String = roomTitle
+        protected set
+
+    @Column(length = 500)
+    var description: String? = description
+        protected set
+
+    @Column(length = 1000)
+    var thumbnail: String? = thumbnail
+        protected set
+
+    @Column(name = "max_participants", nullable = false)
+    var maxParticipants: Int = maxParticipants
+        protected set
+
+    @Column(name = "minimum_participants", nullable = false)
+    var minimumParticipants: Int = minimumParticipants
+        protected set
+
+    @Column(name = "start_date", nullable = false)
+    var startDate: LocalDate = startDate
+        protected set
+
+    @Column(name = "end_date")
+    var endDate: LocalDate? = endDate
+        protected set
+
+    @Column(name = "recruitment_deadline_date", nullable = false)
+    var recruitmentDeadlineDate: LocalDate = recruitmentDeadlineDate
+        protected set
+
+    @Column(name = "day_trip_start_time")
+    var dayTripStartTime: LocalTime? = dayTripStartTime
+        protected set
+
+    @Column(name = "day_trip_end_time")
+    var dayTripEndTime: LocalTime? = dayTripEndTime
+        protected set
+
+    @Column(name = "participation_fee")
+    var participationFee: Long? = participationFee
+        protected set
+
     @get:Transient
     val tripDays: Int
         get() = endDate?.let { ChronoUnit.DAYS.between(startDate, it).toInt() + 1 } ?: 1
@@ -159,6 +192,47 @@ class ChatRoom(
         meetingLongitude = longitude
         meetingDetails = details
         meetingDateTime = dateTime
+    }
+
+    fun updateRecruitmentPost(
+        title: String,
+        description: String?,
+        minimumParticipants: Int,
+        maxParticipants: Int,
+        startDate: LocalDate,
+        endDate: LocalDate?,
+        recruitmentDeadlineDate: LocalDate,
+        dayTripStartTime: LocalTime?,
+        dayTripEndTime: LocalTime?,
+        participationFee: Long?,
+    ) {
+        require(recruitmentDeadlineDate <= startDate)
+        endDate?.let { require(it.isAfter(startDate)) }
+        val days = endDate?.let { ChronoUnit.DAYS.between(startDate, it).toInt() + 1 } ?: 1
+        require(days <= 30)
+        require(maxParticipants in MINIMUM_PARTICIPANTS..MAXIMUM_PARTICIPANTS)
+        require(minimumParticipants in MINIMUM_PARTICIPANTS..maxParticipants)
+        participationFee?.let { require(it >= 0) }
+        require(meetingDateTime.toLocalDate() <= startDate)
+        if (endDate == null) {
+            require(dayTripStartTime != null && dayTripEndTime != null && dayTripStartTime < dayTripEndTime)
+        } else {
+            require(dayTripStartTime == null && dayTripEndTime == null)
+        }
+        roomTitle = title
+        this.description = description
+        this.minimumParticipants = minimumParticipants
+        this.maxParticipants = maxParticipants
+        this.startDate = startDate
+        this.endDate = endDate
+        this.recruitmentDeadlineDate = recruitmentDeadlineDate
+        this.dayTripStartTime = dayTripStartTime
+        this.dayTripEndTime = dayTripEndTime
+        this.participationFee = participationFee
+    }
+
+    fun updateThumbnail(thumbnail: String) {
+        this.thumbnail = thumbnail
     }
 
     fun canChat(): Boolean = chatClosedDateTime == null && status != ChatRoomStatus.CANCELLED

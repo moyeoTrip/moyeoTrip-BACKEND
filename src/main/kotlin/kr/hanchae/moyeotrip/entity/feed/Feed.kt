@@ -34,11 +34,14 @@ class Feed(
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "chat_room_id", nullable = false, updatable = false)
     val chatRoom: ChatRoom,
-    @Column(nullable = false, length = 500)
-    val content: String,
+    content: String,
     visibility: FeedVisibility,
     hiddenByReports: Boolean = false,
 ) : BaseTimeEntity() {
+    @Column(nullable = false, length = 500)
+    var content: String = content
+        protected set
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     var visibility: FeedVisibility = visibility
@@ -60,6 +63,10 @@ class Feed(
         sequence: Int,
     ) {
         feedImages += FeedImage(feed = this, fileName = fileName, sequence = sequence)
+    }
+
+    fun updateContent(content: String) {
+        this.content = content
     }
 
     fun hideByReports() {

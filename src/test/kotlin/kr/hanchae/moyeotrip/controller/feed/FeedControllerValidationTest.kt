@@ -10,6 +10,7 @@ import org.springframework.mock.web.MockMultipartFile
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import org.springframework.test.web.servlet.setup.MockMvcBuilders
 
@@ -40,6 +41,31 @@ class FeedControllerValidationTest {
         mockMvc
             .perform(
                 post("/api/v1/feeds/10/comments")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"content":"$tooLong"}"""),
+            ).andExpect(status().isBadRequest)
+
+        verifyNoInteractions(feedService)
+    }
+
+    @Test
+    fun `피드 수정은 공백 감상평을 거부한다`() {
+        mockMvc
+            .perform(
+                put("/api/v1/feeds/10")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"content":"   "}"""),
+            ).andExpect(status().isBadRequest)
+
+        verifyNoInteractions(feedService)
+    }
+
+    @Test
+    fun `댓글 수정은 500자를 초과할 수 없다`() {
+        val tooLong = "가".repeat(501)
+        mockMvc
+            .perform(
+                put("/api/v1/feeds/10/comments/20")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content("""{"content":"$tooLong"}"""),
             ).andExpect(status().isBadRequest)

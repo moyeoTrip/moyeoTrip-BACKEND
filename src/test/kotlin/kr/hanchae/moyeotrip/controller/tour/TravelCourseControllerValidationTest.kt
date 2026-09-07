@@ -9,8 +9,8 @@ import org.mockito.Mockito.mock
 import org.mockito.Mockito.verifyNoInteractions
 import org.springframework.http.MediaType
 import org.springframework.test.web.servlet.MockMvc
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
-import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import org.springframework.test.web.servlet.setup.MockMvcBuilders
 
@@ -26,7 +26,7 @@ class TravelCourseControllerValidationTest {
 
     @Test
     fun `코스 수정은 방문지 두 개 미만을 거부한다`() {
-        putJson(
+        patchJson(
             "/api/v1/travel-courses/chat-rooms/10",
             """{"places":[{"contentId":1,"dayNumber":1,"sequence":1,"visitTime":"09:00"}]}""",
         ).andExpect(status().isBadRequest)
@@ -35,7 +35,7 @@ class TravelCourseControllerValidationTest {
 
     @Test
     fun `코스 수정은 중첩 방문지의 음수 순서를 거부한다`() {
-        putJson(
+        patchJson(
             "/api/v1/travel-courses/chat-rooms/10",
             """
             {"places":[
@@ -63,10 +63,10 @@ class TravelCourseControllerValidationTest {
         verifyNoInteractions(chatRoomService)
     }
 
-    private fun putJson(
+    private fun patchJson(
         path: String,
         json: String,
-    ) = mockMvc.perform(put(path).contentType(MediaType.APPLICATION_JSON).content(json))
+    ) = mockMvc.perform(patch(path).contentType(MediaType.APPLICATION_JSON).content(json))
 
     private fun postJson(
         path: String,

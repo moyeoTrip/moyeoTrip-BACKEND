@@ -6,6 +6,7 @@ import kr.hanchae.moyeotrip.support.LoginUserIdStubResolver
 import org.junit.jupiter.api.Test
 import org.mockito.Mockito.mock
 import org.mockito.Mockito.verifyNoInteractions
+import org.springframework.http.HttpMethod
 import org.springframework.http.MediaType
 import org.springframework.mock.web.MockMultipartFile
 import org.springframework.test.web.servlet.MockMvc
@@ -109,6 +110,35 @@ class ChatRoomControllerValidationTest {
                         }
                         """.trimIndent(),
                     ),
+            ).andExpect(status().isBadRequest)
+
+        verifyNoInteractions(chatRoomService)
+    }
+
+    @Test
+    fun `채팅방 모집글 수정은 빈 제목과 인원 범위 위반을 거부한다`() {
+        val request =
+            MockMultipartFile(
+                "request",
+                "request.json",
+                MediaType.APPLICATION_JSON_VALUE,
+                """
+                {
+                  "title": " ",
+                  "tripType": "DAY_TRIP",
+                  "minimumParticipants": 2,
+                  "maxParticipants": 21,
+                  "startDate": "2026-09-12",
+                  "recruitmentDeadlineDate": "2026-09-09",
+                  "dayTripStartTime": "09:00",
+                  "dayTripEndTime": "18:00"
+                }
+                """.trimIndent().toByteArray(),
+            )
+        mockMvc
+            .perform(
+                multipart(HttpMethod.PATCH, "/api/v1/chat-rooms/10")
+                    .file(request),
             ).andExpect(status().isBadRequest)
 
         verifyNoInteractions(chatRoomService)

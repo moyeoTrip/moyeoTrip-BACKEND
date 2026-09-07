@@ -93,6 +93,8 @@ enum class ErrorCode(
     FRIEND_REQUEST_NOT_FOUND(HttpStatus.NOT_FOUND, 40419, "친구 요청을 찾을 수 없습니다."),
     FRIENDSHIP_NOT_FOUND(HttpStatus.NOT_FOUND, 40420, "친구 관계를 찾을 수 없습니다."),
     TRAVEL_COMPANION_NOT_FOUND(HttpStatus.NOT_FOUND, 40421, "해당 여행에서 평가할 동행자 기록을 찾을 수 없습니다."),
+    FEED_COMMENT_NOT_FOUND(HttpStatus.NOT_FOUND, 40422, "피드 댓글을 찾을 수 없습니다."),
+    CHAT_MESSAGE_NOT_FOUND(HttpStatus.NOT_FOUND, 40423, "채팅 메시지를 찾을 수 없습니다."),
 
     // METHOD NOT ALLOWED는 40500부터 시작
     METHOD_NOT_ALLOWED(HttpStatus.METHOD_NOT_ALLOWED, 40500, "지원하지 않는 HTTP 메서드입니다."),

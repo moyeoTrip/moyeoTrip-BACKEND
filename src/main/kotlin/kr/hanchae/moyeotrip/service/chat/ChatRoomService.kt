@@ -9,6 +9,7 @@ import kr.hanchae.moyeotrip.controller.chat.request.JoinChatRoomRequest
 import kr.hanchae.moyeotrip.controller.chat.request.MyChatRoomFilter
 import kr.hanchae.moyeotrip.controller.chat.request.SendChatMessageRequest
 import kr.hanchae.moyeotrip.controller.chat.request.ShareTourismContentRequest
+import kr.hanchae.moyeotrip.controller.chat.request.UpdateChatRoomRequest
 import kr.hanchae.moyeotrip.controller.chat.request.UpdateMeetingInfoRequest
 import kr.hanchae.moyeotrip.controller.chat.response.ApplicantProfileResponse
 import kr.hanchae.moyeotrip.controller.chat.response.ApprovalResult
@@ -102,6 +103,8 @@ import kr.hanchae.moyeotrip.utils.FhdWebpImageOptimizer
 import org.springframework.data.domain.PageRequest
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import org.springframework.transaction.support.TransactionSynchronization
+import org.springframework.transaction.support.TransactionSynchronizationManager
 import org.springframework.web.multipart.MultipartFile
 import java.time.Duration
 import java.time.LocalDate
@@ -204,6 +207,85 @@ class ChatRoomService(
             favorite = roomFavoriteRepository.existsByUserIdAndChatRoomId(userId, roomId),
             canApply = canApply(room, user),
         )
+    }
+
+    @Transactional
+    fun updateRoom(
+        hostId: Long,
+        roomId: Long,
+        request: UpdateChatRoomRequest,
+        thumbnail: MultipartFile? = null,
+    ) {
+        val room = findRoomForUpdate(roomId)
+        requireHost(room, hostId)
+        if (room.status != ChatRoomStatus.RECRUITING) throw BaseException(ErrorCode.INVALID_CHAT_ROOM_STATUS)
+        if (request.title.isBlank()) throw BaseException(ErrorCode.BAD_REQUEST)
+        if (
+            (
+                request.tripType == TripType.DAY_TRIP &&
+                    (request.endDate != null || request.dayTripStartTime == null || request.dayTripEndTime == null)
+            ) ||
+            (
+                request.tripType == TripType.OVERNIGHT &&
+                    (request.endDate == null || request.dayTripStartTime != null || request.dayTripEndTime != null)
+            )
+        ) {
+            throw BaseException(ErrorCode.INVALID_TRIP_SCHEDULE)
+        }
+        if (
+            (request.endDate != null && !request.endDate.isAfter(request.startDate)) ||
+            (request.endDate != null && request.endDate.isAfter(request.startDate.plusDays(29))) ||
+            (
+                request.dayTripStartTime != null &&
+                    request.dayTripEndTime != null &&
+                    request.dayTripStartTime >= request.dayTripEndTime
+            )
+        ) {
+            throw BaseException(ErrorCode.INVALID_TRIP_SCHEDULE)
+        }
+        if (request.startDate.isBefore(LocalDate.now())) throw BaseException(ErrorCode.PAST_CHAT_ROOM_START_DATE)
+        if (request.recruitmentDeadlineDate.isBefore(LocalDate.now())) {
+            throw BaseException(ErrorCode.PAST_RECRUITMENT_DEADLINE_DATE)
+        }
+        if (request.recruitmentDeadlineDate > request.startDate) throw BaseException(ErrorCode.INVALID_RECRUITMENT_DEADLINE)
+        if (
+            request.minimumParticipants !in ChatRoom.MINIMUM_PARTICIPANTS..ChatRoom.MAXIMUM_PARTICIPANTS ||
+            request.maxParticipants !in ChatRoom.MINIMUM_PARTICIPANTS..ChatRoom.MAXIMUM_PARTICIPANTS ||
+            request.minimumParticipants > request.maxParticipants
+        ) {
+            throw BaseException(ErrorCode.INVALID_MINIMUM_PARTICIPANTS)
+        }
+        if (request.participationFee != null && request.participationFee < 0) throw BaseException(ErrorCode.BAD_REQUEST)
+        if (room.meetingDateTime.toLocalDate() > request.startDate) throw BaseException(ErrorCode.INVALID_MEETING_INFORMATION)
+        thumbnail?.let(::validateReplacementThumbnail)
+        if (participantRepository.countByChatRoomId(roomId) > request.maxParticipants) {
+            throw BaseException(ErrorCode.BAD_REQUEST)
+        }
+        room.updateRecruitmentPost(
+            title = request.title.trim(),
+            description = request.description?.trim()?.takeIf(String::isNotEmpty),
+            minimumParticipants = request.minimumParticipants,
+            maxParticipants = request.maxParticipants,
+            startDate = request.startDate,
+            endDate = request.endDate,
+            recruitmentDeadlineDate = request.recruitmentDeadlineDate,
+            dayTripStartTime = request.dayTripStartTime,
+            dayTripEndTime = request.dayTripEndTime,
+            participationFee = request.participationFee,
+        )
+        thumbnail?.let { image ->
+            val previousThumbnail = room.thumbnail
+            val newThumbnailKey =
+                objectStorageRepository.upload(
+                    CHAT_ROOM_THUMBNAIL_PATH,
+                    ObjectStorageRepository.generateFileName(WEBP_EXTENSION),
+                    fhdWebpImageOptimizer.optimizeToFhdWebp(image.bytes, ErrorCode.INVALID_CHAT_ROOM_THUMBNAIL),
+                    WEBP_CONTENT_TYPE,
+                )
+            room.updateThumbnail(objectStorageRepository.getDownloadUrl(newThumbnailKey))
+            scheduleThumbnailReplacement(previousThumbnail, newThumbnailKey)
+        }
+        saveSystemMessage(room, "호스트가 모집 정보를 수정했어요.")
     }
 
     @Transactional
@@ -436,6 +518,9 @@ class ChatRoomService(
         ) {
             throw BaseException(ErrorCode.TRAVEL_COURSE_NOT_EDITABLE)
         }
+        val normalizedTitle = request.title?.trim()?.takeIf(String::isNotEmpty)
+        if (request.title != null && normalizedTitle == null) throw BaseException(ErrorCode.BAD_REQUEST)
+        course.updateInformation(normalizedTitle, request.description?.trim())
         validateCustomCourseSchedule(request.places, room.tripDays)
 
         course.clearCustomPlaces()
@@ -933,6 +1018,20 @@ class ChatRoomService(
         participant.readThrough(message.id)
         notificationService.notifyMessage(message)
         return message.toResponse(userId).also { realtimeMessagingService.sendChatMessage(room.id, it) }
+    }
+
+    @Transactional
+    fun deleteMessage(
+        userId: Long,
+        roomId: Long,
+        messageId: Long,
+    ) {
+        findParticipant(roomId, userId)
+        val message =
+            messageRepository.findByIdAndChatRoomId(messageId, roomId)
+                ?: throw BaseException(ErrorCode.CHAT_MESSAGE_NOT_FOUND)
+        if (message.sender?.id != userId) throw BaseException(ErrorCode.FORBIDDEN)
+        message.markDeleted()
     }
 
     @Transactional
@@ -1555,9 +1654,10 @@ class ChatRoomService(
     }
 
     private fun ChatMessage.toResponse(viewerUserId: Long? = null): ChatMessageResponse {
-        val sharedContent = tourismContent
+        val deleted = isDeleted()
+        val sharedContent = tourismContent.takeUnless { deleted }
         val poll =
-            if (type == ChatMessageType.POLL) {
+            if (!deleted && type == ChatMessageType.POLL) {
                 val options = pollOptionRepository.findAllByMessageIdOrderBySequenceAsc(id)
                 val votes = pollVoteRepository.findAllByMessageId(id)
                 val votesByOption = votes.groupBy { it.option.id }
@@ -1588,7 +1688,7 @@ class ChatRoomService(
             senderNickname = sender?.nickname() ?: SYSTEM_NICKNAME,
             content = content,
             createdAt = createdDateTime,
-            imageUrl = imageUrl,
+            imageUrl = imageUrl.takeUnless { deleted },
             tourismContent =
                 sharedContent?.let {
                     SharedTourismContentResponse(
@@ -1601,19 +1701,26 @@ class ChatRoomService(
                     )
                 },
             location =
-                sharedLatitude?.let { latitude ->
+                sharedLatitude?.takeUnless { deleted }?.let { latitude ->
                     SharedLocationResponse(latitude, requireNotNull(sharedLongitude), locationName)
                 },
             poll = poll,
             replyTo =
-                replyTo?.let {
+                replyTo?.takeUnless { deleted }?.let {
                     RepliedChatMessageResponse(
                         messageId = it.id,
                         senderNickname = it.sender?.nickname() ?: SYSTEM_NICKNAME,
                         content = it.content,
                     )
                 },
-            mentions = mentionedUsers.sortedBy { it.id }.map { MentionedChatUserResponse(it.id, it.nickname()) },
+            mentions =
+                if (deleted) {
+                    emptyList()
+                } else {
+                    mentionedUsers
+                        .sortedBy { it.id }
+                        .map { user -> MentionedChatUserResponse(user.id, user.nickname()) }
+                },
         )
     }
 
@@ -1657,6 +1764,39 @@ class ChatRoomService(
         if (thumbnail.size > MAX_CHAT_ROOM_THUMBNAIL_BYTES || thumbnail.contentType?.startsWith("image/") != true) {
             throw BaseException(ErrorCode.INVALID_CHAT_ROOM_THUMBNAIL)
         }
+    }
+
+    private fun validateReplacementThumbnail(thumbnail: MultipartFile) {
+        if (
+            thumbnail.isEmpty ||
+            thumbnail.size > MAX_CHAT_ROOM_THUMBNAIL_BYTES ||
+            thumbnail.contentType?.startsWith("image/") != true
+        ) {
+            throw BaseException(ErrorCode.INVALID_CHAT_ROOM_THUMBNAIL)
+        }
+    }
+
+    private fun scheduleThumbnailReplacement(
+        previousThumbnailUrl: String?,
+        newThumbnailKey: String,
+    ) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            previousThumbnailUrl?.let(objectStorageRepository::deleteByDownloadUrl)
+            return
+        }
+        TransactionSynchronizationManager.registerSynchronization(
+            object : TransactionSynchronization {
+                override fun afterCommit() {
+                    previousThumbnailUrl?.let(objectStorageRepository::deleteByDownloadUrl)
+                }
+
+                override fun afterCompletion(status: Int) {
+                    if (status == TransactionSynchronization.STATUS_ROLLED_BACK) {
+                        objectStorageRepository.delete(newThumbnailKey)
+                    }
+                }
+            },
+        )
     }
 
     private fun uploadChatImage(file: MultipartFile): String {

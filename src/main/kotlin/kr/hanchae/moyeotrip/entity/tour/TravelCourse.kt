@@ -107,6 +107,15 @@ class TravelCourse(
         coursePlaces.clear()
     }
 
+    fun updateInformation(
+        title: String?,
+        description: String?,
+    ) {
+        check(type == TravelCourseType.CUSTOM) { "커스텀 코스만 수정할 수 있습니다." }
+        title?.let { this.title = it }
+        description?.let { this.description = it }
+    }
+
     fun publish(
         title: String = this.title,
         description: String? = this.description,

@@ -111,7 +111,10 @@ interface TravelCourseAPISpec {
         roomId: Long,
     ): TravelCourseDetailResponse
 
-    @Operation(summary = "채팅방 커스텀 여행 코스 수정", description = "여행 확정 전까지 채팅방 호스트만 수정할 수 있습니다.")
+    @Operation(
+        summary = "채팅방 커스텀 여행 코스 부분 수정",
+        description = "여행 확정 전까지 채팅방 호스트만 수정할 수 있습니다. 제목과 설명을 생략하면 기존 값을 유지합니다.",
+    )
     @ApiResponses(
         value = [
             ApiResponse(

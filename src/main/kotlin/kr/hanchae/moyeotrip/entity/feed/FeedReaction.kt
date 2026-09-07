@@ -43,6 +43,13 @@ class FeedComment(
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "parent_comment_id", updatable = false)
     val parent: FeedComment? = null,
+    content: String,
+) : BaseTimeEntity() {
     @Column(nullable = false, length = 500)
-    val content: String,
-) : BaseTimeEntity()
+    var content: String = content
+        protected set
+
+    fun updateContent(content: String) {
+        this.content = content
+    }
+}

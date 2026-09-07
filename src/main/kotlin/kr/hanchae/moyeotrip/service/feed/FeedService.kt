@@ -4,6 +4,8 @@ import kr.hanchae.moyeotrip.controller.feed.request.CreateFeedCommentRequest
 import kr.hanchae.moyeotrip.controller.feed.request.CreateFeedReportRequest
 import kr.hanchae.moyeotrip.controller.feed.request.CreateFeedRequest
 import kr.hanchae.moyeotrip.controller.feed.request.FeedTab
+import kr.hanchae.moyeotrip.controller.feed.request.UpdateFeedCommentRequest
+import kr.hanchae.moyeotrip.controller.feed.request.UpdateFeedRequest
 import kr.hanchae.moyeotrip.controller.feed.response.FeedAuthorResponse
 import kr.hanchae.moyeotrip.controller.feed.response.FeedCommentPageResponse
 import kr.hanchae.moyeotrip.controller.feed.response.FeedCommentResponse
@@ -38,6 +40,8 @@ import kr.hanchae.moyeotrip.service.notification.NotificationService
 import org.springframework.data.domain.PageRequest
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import org.springframework.transaction.support.TransactionSynchronization
+import org.springframework.transaction.support.TransactionSynchronizationManager
 import org.springframework.web.multipart.MultipartFile
 import java.time.LocalDate
 
@@ -132,6 +136,28 @@ class FeedService(
     ): FeedResponse = requireVisibleFeed(userId, feedId).toResponse(userId)
 
     @Transactional
+    fun updateFeed(
+        userId: Long,
+        feedId: Long,
+        request: UpdateFeedRequest,
+    ): FeedResponse {
+        val feed = requireOwnedFeedForUpdate(userId, feedId)
+        feed.updateContent(request.content.trim())
+        return feed.toResponse(userId)
+    }
+
+    @Transactional
+    fun deleteFeed(
+        userId: Long,
+        feedId: Long,
+    ) {
+        val feed = requireOwnedFeedForUpdate(userId, feedId)
+        val imageKeys = feed.images.map { it.fileName }
+        feedRepository.delete(feed)
+        scheduleObjectDeletionAfterCommit(imageKeys)
+    }
+
+    @Transactional
     fun toggleLike(
         userId: Long,
         feedId: Long,
@@ -220,6 +246,38 @@ class FeedService(
             .toResponse()
     }
 
+    @Transactional
+    fun updateComment(
+        userId: Long,
+        feedId: Long,
+        commentId: Long,
+        request: UpdateFeedCommentRequest,
+    ): FeedCommentResponse {
+        requireVisibleFeed(userId, feedId)
+        val comment = findOwnedComment(userId, feedId, commentId)
+        comment.updateContent(request.content.trim())
+        return comment.toResponse(
+            replies =
+                if (comment.parent ==
+                    null
+                ) {
+                    feedCommentRepository.findAllByParentIdOrderByCreatedDateTimeAsc(comment.id).map { it.toResponse() }
+                } else {
+                    emptyList()
+                },
+        )
+    }
+
+    @Transactional
+    fun deleteComment(
+        userId: Long,
+        feedId: Long,
+        commentId: Long,
+    ) {
+        requireVisibleFeed(userId, feedId)
+        feedCommentRepository.delete(findOwnedComment(userId, feedId, commentId))
+    }
+
     private fun Feed.toResponse(userId: Long): FeedResponse {
         val information = checkNotNull(author.information)
         return FeedResponse(
@@ -301,6 +359,40 @@ class FeedService(
             ?: "jpg"
 
     private fun findFeed(feedId: Long): Feed = feedRepository.findById(feedId).orElseThrow { BaseException(ErrorCode.FEED_NOT_FOUND) }
+
+    private fun requireOwnedFeedForUpdate(
+        userId: Long,
+        feedId: Long,
+    ): Feed {
+        val feed = feedRepository.findByIdForUpdate(feedId) ?: throw BaseException(ErrorCode.FEED_NOT_FOUND)
+        if (feed.author.id != userId) throw BaseException(ErrorCode.FORBIDDEN)
+        return feed
+    }
+
+    private fun findOwnedComment(
+        userId: Long,
+        feedId: Long,
+        commentId: Long,
+    ): FeedComment {
+        val comment =
+            feedCommentRepository.findByIdAndFeedId(commentId, feedId) ?: throw BaseException(ErrorCode.FEED_COMMENT_NOT_FOUND)
+        if (comment.author.id != userId) throw BaseException(ErrorCode.FORBIDDEN)
+        return comment
+    }
+
+    private fun scheduleObjectDeletionAfterCommit(keys: List<String>) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            keys.forEach { runCatching { objectStorageRepository.delete(it) } }
+            return
+        }
+        TransactionSynchronizationManager.registerSynchronization(
+            object : TransactionSynchronization {
+                override fun afterCommit() {
+                    keys.forEach { runCatching { objectStorageRepository.delete(it) } }
+                }
+            },
+        )
+    }
 
     private fun requireVisibleFeed(
         userId: Long,

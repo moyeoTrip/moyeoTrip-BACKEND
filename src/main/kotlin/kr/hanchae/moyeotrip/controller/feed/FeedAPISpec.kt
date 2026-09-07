@@ -6,6 +6,7 @@ import io.swagger.v3.oas.annotations.media.ArraySchema
 import io.swagger.v3.oas.annotations.media.Content
 import io.swagger.v3.oas.annotations.media.ExampleObject
 import io.swagger.v3.oas.annotations.media.Schema
+import io.swagger.v3.oas.annotations.parameters.RequestBody
 import io.swagger.v3.oas.annotations.responses.ApiResponse
 import io.swagger.v3.oas.annotations.responses.ApiResponses
 import io.swagger.v3.oas.annotations.tags.Tag
@@ -13,6 +14,8 @@ import kr.hanchae.moyeotrip.controller.feed.request.CreateFeedCommentRequest
 import kr.hanchae.moyeotrip.controller.feed.request.CreateFeedReportRequest
 import kr.hanchae.moyeotrip.controller.feed.request.CreateFeedRequest
 import kr.hanchae.moyeotrip.controller.feed.request.FeedTab
+import kr.hanchae.moyeotrip.controller.feed.request.UpdateFeedCommentRequest
+import kr.hanchae.moyeotrip.controller.feed.request.UpdateFeedRequest
 import kr.hanchae.moyeotrip.controller.feed.response.FeedCommentPageResponse
 import kr.hanchae.moyeotrip.controller.feed.response.FeedCommentResponse
 import kr.hanchae.moyeotrip.controller.feed.response.FeedLikeResponse
@@ -172,6 +175,33 @@ interface FeedAPISpec {
         @Parameter(description = "상세 조회할 피드 ID", example = "100")
         feedId: Long,
     ): FeedResponse
+
+    @Operation(summary = "피드 수정", description = "작성자 본인이 피드 본문만 수정합니다. 공개 범위와 첨부 이미지는 변경하지 않습니다.")
+    @ApiResponses(
+        value = [
+            ApiResponse(responseCode = "200", description = "피드 수정 성공"),
+            ApiResponse(responseCode = "403", description = "피드 작성자가 아님"),
+            ApiResponse(responseCode = "404", description = "피드 없음"),
+        ],
+    )
+    fun updateFeed(
+        @Parameter(hidden = true) userId: Long,
+        @Parameter(description = "수정할 피드 ID", example = "100") feedId: Long,
+        @RequestBody(description = "수정할 피드 본문", required = true) request: UpdateFeedRequest,
+    ): FeedResponse
+
+    @Operation(summary = "피드 삭제", description = "작성자 본인이 피드와 하위 댓글·좋아요·신고를 함께 삭제합니다.")
+    @ApiResponses(
+        value = [
+            ApiResponse(responseCode = "204", description = "피드 삭제 성공"),
+            ApiResponse(responseCode = "403", description = "피드 작성자가 아님"),
+            ApiResponse(responseCode = "404", description = "피드 없음"),
+        ],
+    )
+    fun deleteFeed(
+        @Parameter(hidden = true) userId: Long,
+        @Parameter(description = "삭제할 피드 ID", example = "100") feedId: Long,
+    ): ResponseEntity<Void>
 
     @Operation(summary = "피드 좋아요 토글", description = "호출할 때마다 로그인 사용자의 좋아요를 추가 또는 취소하고, 추가 시 작성자에게 알림을 보냅니다.")
     @ApiResponses(
@@ -361,6 +391,44 @@ interface FeedAPISpec {
         @Parameter(description = "댓글 본문과 선택적 부모 댓글 ID", required = true)
         request: CreateFeedCommentRequest,
     ): ResponseEntity<FeedCommentResponse>
+
+    @Operation(summary = "피드 댓글 수정", description = "댓글 또는 대댓글 작성자 본인이 내용을 수정합니다.")
+    @ApiResponses(
+        value = [
+            ApiResponse(responseCode = "200", description = "댓글 수정 성공"),
+            ApiResponse(responseCode = "403", description = "댓글 작성자가 아니거나 피드를 볼 수 없음"),
+            ApiResponse(
+                responseCode = "404",
+                description = "피드 또는 댓글 없음",
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [ExampleObject(value = FeedSwaggerExamples.COMMENT_NOT_FOUND)],
+                    ),
+                ],
+            ),
+        ],
+    )
+    fun updateComment(
+        @Parameter(hidden = true) userId: Long,
+        @Parameter(description = "피드 ID", example = "100") feedId: Long,
+        @Parameter(description = "댓글 ID", example = "45") commentId: Long,
+        @RequestBody(description = "수정할 댓글 내용", required = true) request: UpdateFeedCommentRequest,
+    ): FeedCommentResponse
+
+    @Operation(summary = "피드 댓글 삭제", description = "댓글 또는 대댓글 작성자 본인이 삭제합니다. 최상위 댓글이면 대댓글도 함께 삭제됩니다.")
+    @ApiResponses(
+        value = [
+            ApiResponse(responseCode = "204", description = "댓글 삭제 성공"),
+            ApiResponse(responseCode = "403", description = "댓글 작성자가 아니거나 피드를 볼 수 없음"),
+            ApiResponse(responseCode = "404", description = "피드 또는 댓글 없음"),
+        ],
+    )
+    fun deleteComment(
+        @Parameter(hidden = true) userId: Long,
+        @Parameter(description = "피드 ID", example = "100") feedId: Long,
+        @Parameter(description = "댓글 ID", example = "45") commentId: Long,
+    ): ResponseEntity<Void>
 }
 
 private object FeedSwaggerExamples {
@@ -374,6 +442,7 @@ private object FeedSwaggerExamples {
     const val FEED_NOT_VISIBLE = """{"code":40306,"errorMessage":"이 피드는 현재 사용자에게 공개되지 않았습니다."}"""
     const val FEED_NOT_FOUND = """{"code":40417,"errorMessage":"피드를 찾을 수 없습니다."}"""
     const val PARENT_COMMENT_NOT_FOUND = """{"code":40418,"errorMessage":"답글을 달 원본 댓글을 찾을 수 없습니다."}"""
+    const val COMMENT_NOT_FOUND = """{"code":40422,"errorMessage":"피드 댓글을 찾을 수 없습니다."}"""
     const val USER_NOT_FOUND = """{"code":40400,"errorMessage":"해당 유저를 찾을 수 없습니다."}"""
     const val CHAT_ROOM_NOT_FOUND = """{"code":40405,"errorMessage":"채팅방을 찾을 수 없습니다."}"""
     const val SELF_REPORT = """{"code":40039,"errorMessage":"본인이 작성한 피드는 신고할 수 없습니다."}"""

@@ -4,6 +4,8 @@ import kr.hanchae.moyeotrip.controller.feed.request.CreateFeedCommentRequest
 import kr.hanchae.moyeotrip.controller.feed.request.CreateFeedReportRequest
 import kr.hanchae.moyeotrip.controller.feed.request.CreateFeedRequest
 import kr.hanchae.moyeotrip.controller.feed.request.FeedTab
+import kr.hanchae.moyeotrip.controller.feed.request.UpdateFeedCommentRequest
+import kr.hanchae.moyeotrip.controller.feed.request.UpdateFeedRequest
 import kr.hanchae.moyeotrip.entity.chat.ChatRoom
 import kr.hanchae.moyeotrip.entity.feed.Feed
 import kr.hanchae.moyeotrip.entity.feed.FeedComment
@@ -286,6 +288,37 @@ class FeedServiceTest {
     }
 
     @Test
+    fun `피드 작성자는 본문을 수정한다`() {
+        val feed = responseFeed(3L)
+        `when`(feedRepository.findByIdForUpdate(3L)).thenReturn(feed)
+
+        service.updateFeed(2L, 3L, UpdateFeedRequest(" 수정한 여행 기록 "))
+
+        verify(feed).updateContent("수정한 여행 기록")
+    }
+
+    @Test
+    fun `피드 작성자가 아니면 피드를 삭제할 수 없다`() {
+        val feed = responseFeed(3L)
+        `when`(feedRepository.findByIdForUpdate(3L)).thenReturn(feed)
+
+        val exception = assertThrows(BaseException::class.java) { service.deleteFeed(1L, 3L) }
+
+        assertEquals(ErrorCode.FORBIDDEN, exception.errorCode)
+        verify(feedRepository, org.mockito.Mockito.never()).delete(feed)
+    }
+
+    @Test
+    fun `피드 작성자는 피드를 삭제한다`() {
+        val feed = responseFeed(3L)
+        `when`(feedRepository.findByIdForUpdate(3L)).thenReturn(feed)
+
+        service.deleteFeed(2L, 3L)
+
+        verify(feedRepository).delete(feed)
+    }
+
+    @Test
     fun `댓글 목록은 최상위 댓글 ID 커서로 조회하고 대댓글을 포함한다`() {
         val feed = mock(Feed::class.java)
         val root3 = comment(3L, "세 번째")
@@ -565,6 +598,40 @@ class FeedServiceTest {
         val response = service.createComment(1L, 3L, CreateFeedCommentRequest(" 댓글 "))
 
         assertEquals("댓글", response.content)
+    }
+
+    @Test
+    fun `댓글 작성자는 댓글 내용을 수정한다`() {
+        val author = user(1L)
+        val feed = mock(Feed::class.java)
+        val parent = mock(FeedComment::class.java)
+        val comment = FeedComment(id = 7L, feed = feed, author = author, parent = parent, content = "원문")
+        comment.javaClass.superclass.getDeclaredField("createdDateTime").apply {
+            isAccessible = true
+            set(comment, LocalDateTime.now())
+        }
+        `when`(feed.author).thenReturn(author)
+        `when`(feed.visibility).thenReturn(FeedVisibility.PRIVATE)
+        `when`(feedRepository.findById(3L)).thenReturn(Optional.of(feed))
+        `when`(commentRepository.findByIdAndFeedId(7L, 3L)).thenReturn(comment)
+
+        val response = service.updateComment(1L, 3L, 7L, UpdateFeedCommentRequest(" 수정 댓글 "))
+
+        assertEquals("수정 댓글", response.content)
+    }
+
+    @Test
+    fun `댓글 작성자가 아니면 삭제할 수 없다`() {
+        val feed = mock(Feed::class.java)
+        val comment = FeedComment(id = 7L, feed = feed, author = user(2L), content = "댓글")
+        `when`(feed.author).thenReturn(user(1L))
+        `when`(feed.visibility).thenReturn(FeedVisibility.PUBLIC)
+        `when`(feedRepository.findById(3L)).thenReturn(Optional.of(feed))
+        `when`(commentRepository.findByIdAndFeedId(7L, 3L)).thenReturn(comment)
+
+        val exception = assertThrows(BaseException::class.java) { service.deleteComment(1L, 3L, 7L) }
+
+        assertEquals(ErrorCode.FORBIDDEN, exception.errorCode)
     }
 
     private fun responseFeed(id: Long): Feed {

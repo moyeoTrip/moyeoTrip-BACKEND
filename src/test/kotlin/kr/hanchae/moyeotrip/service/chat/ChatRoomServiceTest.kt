@@ -9,6 +9,7 @@ import kr.hanchae.moyeotrip.controller.chat.request.JoinChatRoomRequest
 import kr.hanchae.moyeotrip.controller.chat.request.MyChatRoomFilter
 import kr.hanchae.moyeotrip.controller.chat.request.SendChatMessageRequest
 import kr.hanchae.moyeotrip.controller.chat.request.ShareTourismContentRequest
+import kr.hanchae.moyeotrip.controller.chat.request.UpdateChatRoomRequest
 import kr.hanchae.moyeotrip.controller.chat.request.UpdateMeetingInfoRequest
 import kr.hanchae.moyeotrip.controller.chat.response.ChatPollUpdatedOptionResponse
 import kr.hanchae.moyeotrip.controller.chat.response.ChatPollUpdatedResponse
@@ -1686,6 +1687,8 @@ class ChatRoomServiceTest {
                         place(100L, 2, 1, 9, 30),
                         place(100L, 2, 2, 14, 0),
                     ),
+                title = "새 코스 이름",
+                description = "새 코스 설명",
             )
         `when`(roomRepository.findByIdForUpdate(10L)).thenReturn(room)
         `when`(tourismContentRepository.findByContentId(100L)).thenReturn(tourismContent)
@@ -1698,8 +1701,140 @@ class ChatRoomServiceTest {
         assertEquals(4, response.places.size)
         assertEquals(2, response.places.last().dayNumber)
         assertEquals(LocalTime.of(14, 0), response.places.last().visitTime)
+        assertEquals("새 코스 이름", course.title)
+        assertEquals("새 코스 설명", course.description)
         verify(placeRepository).deleteAllByCourseId(5L)
         verify(notificationService).notifyCourseUpdated(room, 0L)
+    }
+
+    @Test
+    fun `호스트는 모집 중인 채팅방의 모집 정보를 수정할 수 있다`() {
+        val room = room(user(1L))
+        val startDate = LocalDate.now().plusDays(12)
+        val request =
+            UpdateChatRoomRequest(
+                title = " 안동 야경 여행 ",
+                description = " 저녁에 함께 걸어요 ",
+                tripType = TripType.OVERNIGHT,
+                minimumParticipants = 3,
+                maxParticipants = 6,
+                startDate = startDate,
+                endDate = startDate.plusDays(1),
+                recruitmentDeadlineDate = startDate.minusDays(3),
+                participationFee = 45000L,
+            )
+        `when`(roomRepository.findByIdForUpdate(10L)).thenReturn(room)
+        `when`(participantRepository.countByChatRoomId(10L)).thenReturn(2L)
+        `when`(messageRepository.saveAndFlush(any(ChatMessage::class.java))).thenAnswer { it.arguments[0] }
+
+        service.updateRoom(1L, 10L, request)
+
+        assertEquals("안동 야경 여행", room.roomTitle)
+        assertEquals("저녁에 함께 걸어요", room.description)
+        assertEquals(6, room.maxParticipants)
+        assertEquals(startDate, room.startDate)
+        assertEquals(45000L, room.participationFee)
+        verify(messageRepository).saveAndFlush(any(ChatMessage::class.java))
+    }
+
+    @Test
+    fun `호스트는 모집 중인 채팅방의 썸네일을 교체할 수 있다`() {
+        val room = room(user(1L), thumbnail = "https://cdn.example.com/chat-room/thumbnail/old.webp")
+        val startDate = LocalDate.now().plusDays(12)
+        val request =
+            UpdateChatRoomRequest(
+                title = "안동 야경 여행",
+                tripType = TripType.OVERNIGHT,
+                minimumParticipants = 3,
+                maxParticipants = 6,
+                startDate = startDate,
+                endDate = startDate.plusDays(1),
+                recruitmentDeadlineDate = startDate.minusDays(3),
+            )
+        val thumbnail = mock(MultipartFile::class.java)
+        val thumbnailBytes = byteArrayOf(1, 2, 3)
+        val optimizedBytes = byteArrayOf(4, 5, 6)
+        `when`(roomRepository.findByIdForUpdate(10L)).thenReturn(room)
+        `when`(participantRepository.countByChatRoomId(10L)).thenReturn(2L)
+        `when`(thumbnail.isEmpty).thenReturn(false)
+        `when`(thumbnail.size).thenReturn(thumbnailBytes.size.toLong())
+        `when`(thumbnail.contentType).thenReturn("image/png")
+        `when`(thumbnail.bytes).thenReturn(thumbnailBytes)
+        `when`(
+            fhdWebpImageOptimizer.optimizeToFhdWebp(thumbnailBytes, ErrorCode.INVALID_CHAT_ROOM_THUMBNAIL),
+        ).thenReturn(optimizedBytes)
+        `when`(
+            objectStorageRepository.upload(
+                org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString(),
+                anyByteArray(),
+                org.mockito.ArgumentMatchers.anyString(),
+            ),
+        ).thenReturn("chat-room/thumbnail/new.webp")
+        `when`(objectStorageRepository.getDownloadUrl("chat-room/thumbnail/new.webp"))
+            .thenReturn("https://cdn.example.com/chat-room/thumbnail/new.webp")
+        `when`(messageRepository.saveAndFlush(any(ChatMessage::class.java))).thenAnswer { it.arguments[0] }
+
+        service.updateRoom(1L, 10L, request, thumbnail)
+
+        assertEquals("https://cdn.example.com/chat-room/thumbnail/new.webp", room.thumbnail)
+        verify(objectStorageRepository).deleteByDownloadUrl("https://cdn.example.com/chat-room/thumbnail/old.webp")
+    }
+
+    @Test
+    fun `현재 참가자보다 최대 인원을 작게 수정할 수 없다`() {
+        val room = room(user(1L), maxParticipants = 6)
+        val startDate = LocalDate.now().plusDays(12)
+        val request =
+            UpdateChatRoomRequest(
+                title = "안동 여행",
+                tripType = TripType.OVERNIGHT,
+                minimumParticipants = 3,
+                maxParticipants = 4,
+                startDate = startDate,
+                endDate = startDate.plusDays(1),
+                recruitmentDeadlineDate = startDate.minusDays(3),
+            )
+        `when`(roomRepository.findByIdForUpdate(10L)).thenReturn(room)
+        `when`(participantRepository.countByChatRoomId(10L)).thenReturn(5L)
+
+        val exception = assertThrows(BaseException::class.java) { service.updateRoom(1L, 10L, request) }
+
+        assertEquals(ErrorCode.BAD_REQUEST, exception.errorCode)
+        verifyNoInteractions(messageRepository)
+    }
+
+    @Test
+    fun `사용자는 자신이 보낸 채팅 메시지를 삭제할 수 있다`() {
+        val room = room(user(1L))
+        val sender = user(2L)
+        val participant = ChatRoomParticipant(chatRoom = room, user = sender, role = ChatParticipantRole.MEMBER)
+        val message = ChatMessage(id = 50L, chatRoom = room, sender = sender, type = ChatMessageType.IMAGE, content = "여행 사진")
+        `when`(participantRepository.findByChatRoomIdAndUserId(10L, 2L)).thenReturn(participant)
+        `when`(messageRepository.findByIdAndChatRoomId(50L, 10L)).thenReturn(message)
+
+        service.deleteMessage(2L, 10L, 50L)
+
+        assertEquals(ChatMessageType.IMAGE, message.type)
+        assertEquals(ChatMessage.DELETED_MESSAGE_CONTENT, message.content)
+        assertTrue(message.isDeleted())
+        verify(messageRepository, never()).delete(message)
+    }
+
+    @Test
+    fun `다른 사용자가 보낸 채팅 메시지는 삭제할 수 없다`() {
+        val room = room(user(1L))
+        val requester = user(2L)
+        val sender = user(3L)
+        val participant = ChatRoomParticipant(chatRoom = room, user = requester, role = ChatParticipantRole.MEMBER)
+        val message = message(50L, room, sender)
+        `when`(participantRepository.findByChatRoomIdAndUserId(10L, 2L)).thenReturn(participant)
+        `when`(messageRepository.findByIdAndChatRoomId(50L, 10L)).thenReturn(message)
+
+        val exception = assertThrows(BaseException::class.java) { service.deleteMessage(2L, 10L, 50L) }
+
+        assertEquals(ErrorCode.FORBIDDEN, exception.errorCode)
+        verify(messageRepository, never()).delete(message)
     }
 
     @Test

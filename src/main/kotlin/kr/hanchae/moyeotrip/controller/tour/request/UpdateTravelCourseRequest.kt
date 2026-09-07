@@ -11,4 +11,10 @@ data class UpdateTravelCourseRequest(
     @field:Valid
     @field:Size(min = 2)
     val places: List<CustomCoursePlaceRequest>,
+    @field:Schema(description = "변경할 코스 제목. 생략하면 유지됩니다.", nullable = true, maxLength = 100)
+    @field:Size(max = 100)
+    val title: String? = null,
+    @field:Schema(description = "변경할 코스 설명. 생략하면 유지됩니다.", nullable = true, maxLength = 500)
+    @field:Size(max = 500)
+    val description: String? = null,
 )
