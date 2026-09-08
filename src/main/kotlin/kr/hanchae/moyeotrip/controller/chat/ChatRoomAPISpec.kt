@@ -1026,7 +1026,7 @@ interface ChatRoomAPISpec {
 
     @Operation(
         summary = "내 채팅 메시지 삭제",
-        description = "현재 채팅방 참가자가 자신이 보낸 메시지를 삭제 상태로 바꿉니다. 메시지 행과 답글 연결은 유지되고 본문은 '삭제된 메세지입니다'로 표시됩니다.",
+        description = "현재 채팅방 참가자가 자신이 보낸 메시지를 삭제 상태로 바꿉니다. 메시지 행과 답글 연결은 유지되고 본문은 '삭제된 메사지입니다'로 표시됩니다.",
     )
     @ApiResponses(
         value = [
