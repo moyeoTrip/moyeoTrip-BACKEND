@@ -10,4 +10,19 @@ data class PopularSearchKeywordResponse(
     val keyword: String,
     @field:Schema(description = "누적 검색 횟수", example = "128")
     val searchCount: Long,
+    @field:Schema(description = "전일 순위 대비 등락 상태", example = "UP")
+    val rankTrend: PopularSearchRankTrend,
+    @field:Schema(
+        description = "전일 순위 대비 변동 폭. 양수는 상승, 음수는 하락이며 신규 진입은 null",
+        example = "2",
+        nullable = true,
+    )
+    val rankChange: Int?,
 )
+
+enum class PopularSearchRankTrend {
+    UP,
+    DOWN,
+    SAME,
+    NEW,
+}

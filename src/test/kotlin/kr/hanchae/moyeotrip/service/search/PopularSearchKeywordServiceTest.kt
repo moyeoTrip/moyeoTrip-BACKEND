@@ -1,5 +1,6 @@
 package kr.hanchae.moyeotrip.service.search
 
+import kr.hanchae.moyeotrip.controller.search.response.PopularSearchRankTrend
 import kr.hanchae.moyeotrip.repository.PopularSearchKeyword
 import kr.hanchae.moyeotrip.repository.PopularSearchKeywordRepository
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -30,11 +31,13 @@ class PopularSearchKeywordServiceTest {
     }
 
     @Test
-    fun `인기 검색어를 순위와 검색 횟수로 변환한다`() {
+    fun `인기 검색어를 순위와 전일 대비 등락으로 변환한다`() {
         `when`(repository.findTop(5)).thenReturn(
             listOf(
-                PopularSearchKeyword("주왕산", 12),
-                PopularSearchKeyword("경주 야경", 8),
+                PopularSearchKeyword("주왕산", 12, 3),
+                PopularSearchKeyword("경주 야경", 8, 1),
+                PopularSearchKeyword("안동", 7, 3),
+                PopularSearchKeyword("영덕", 6, null),
             ),
         )
 
@@ -43,7 +46,14 @@ class PopularSearchKeywordServiceTest {
         assertEquals(1, response[0].rank)
         assertEquals("주왕산", response[0].keyword)
         assertEquals(12, response[0].searchCount)
-        assertEquals(2, response[1].rank)
+        assertEquals(PopularSearchRankTrend.UP, response[0].rankTrend)
+        assertEquals(2, response[0].rankChange)
+        assertEquals(PopularSearchRankTrend.DOWN, response[1].rankTrend)
+        assertEquals(-1, response[1].rankChange)
+        assertEquals(PopularSearchRankTrend.SAME, response[2].rankTrend)
+        assertEquals(0, response[2].rankChange)
+        assertEquals(PopularSearchRankTrend.NEW, response[3].rankTrend)
+        assertEquals(null, response[3].rankChange)
     }
 
     @Test
