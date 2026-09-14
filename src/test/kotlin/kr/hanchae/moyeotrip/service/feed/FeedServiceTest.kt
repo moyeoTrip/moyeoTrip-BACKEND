@@ -9,6 +9,7 @@ import kr.hanchae.moyeotrip.controller.feed.request.UpdateFeedRequest
 import kr.hanchae.moyeotrip.entity.chat.ChatRoom
 import kr.hanchae.moyeotrip.entity.feed.Feed
 import kr.hanchae.moyeotrip.entity.feed.FeedComment
+import kr.hanchae.moyeotrip.entity.feed.FeedCommentReport
 import kr.hanchae.moyeotrip.entity.feed.FeedLike
 import kr.hanchae.moyeotrip.entity.feed.FeedReport
 import kr.hanchae.moyeotrip.entity.feed.FeedReportReason
@@ -24,6 +25,7 @@ import kr.hanchae.moyeotrip.exception.BaseException
 import kr.hanchae.moyeotrip.exception.ErrorCode
 import kr.hanchae.moyeotrip.repository.ChatRoomParticipantRepository
 import kr.hanchae.moyeotrip.repository.ChatRoomRepository
+import kr.hanchae.moyeotrip.repository.FeedCommentReportRepository
 import kr.hanchae.moyeotrip.repository.FeedCommentRepository
 import kr.hanchae.moyeotrip.repository.FeedLikeRepository
 import kr.hanchae.moyeotrip.repository.FeedReportRepository
@@ -60,6 +62,7 @@ class FeedServiceTest {
     private val storageRepository = mock(ObjectStorageRepository::class.java)
     private val notificationService = mock(NotificationService::class.java)
     private val reportRepository = mock(FeedReportRepository::class.java)
+    private val commentReportRepository = mock(FeedCommentReportRepository::class.java)
     private val service =
         FeedService(
             feedRepository,
@@ -73,6 +76,7 @@ class FeedServiceTest {
             storageRepository,
             notificationService,
             reportRepository,
+            commentReportRepository,
         )
 
     @Test
@@ -126,6 +130,81 @@ class FeedServiceTest {
 
         assertEquals(ErrorCode.FEED_ALREADY_REPORTED, exception.errorCode)
         verifyNoInteractions(userRepository)
+    }
+
+    @Test
+    fun `댓글 신고는 사유와 상세를 다듬어 저장한다`() {
+        val comment = commentOn(feedVisibleToReporter(), authorId = 2L)
+        `when`(commentRepository.findByIdAndFeedId(5L, 3L)).thenReturn(comment)
+        `when`(userRepository.findById(1L)).thenReturn(Optional.of(user(1L)))
+        `when`(commentReportRepository.existsByCommentIdAndReporterId(5L, 1L)).thenReturn(false)
+
+        service.reportComment(1L, 3L, 5L, CreateFeedReportRequest(FeedReportReason.HARASSMENT, "  욕설  "))
+
+        val saved = ArgumentCaptor.forClass(FeedCommentReport::class.java)
+        verify(commentReportRepository).saveAndFlush(saved.capture())
+        assertEquals(FeedReportReason.HARASSMENT, saved.value.reason)
+        assertEquals("욕설", saved.value.details)
+    }
+
+    @Test
+    fun `본인이 쓴 댓글은 신고할 수 없다`() {
+        val comment = commentOn(feedVisibleToReporter(), authorId = 1L)
+        `when`(commentRepository.findByIdAndFeedId(5L, 3L)).thenReturn(comment)
+
+        val exception =
+            assertThrows(BaseException::class.java) {
+                service.reportComment(1L, 3L, 5L, CreateFeedReportRequest(FeedReportReason.SPAM))
+            }
+
+        assertEquals(ErrorCode.SELF_FEED_COMMENT_REPORT_NOT_ALLOWED, exception.errorCode)
+        verifyNoInteractions(commentReportRepository)
+    }
+
+    @Test
+    fun `같은 사용자는 동일 댓글을 중복 신고할 수 없다`() {
+        val comment = commentOn(feedVisibleToReporter(), authorId = 2L)
+        `when`(commentRepository.findByIdAndFeedId(5L, 3L)).thenReturn(comment)
+        `when`(commentReportRepository.existsByCommentIdAndReporterId(5L, 1L)).thenReturn(true)
+
+        val exception =
+            assertThrows(BaseException::class.java) {
+                service.reportComment(1L, 3L, 5L, CreateFeedReportRequest(FeedReportReason.SPAM))
+            }
+
+        assertEquals(ErrorCode.FEED_COMMENT_ALREADY_REPORTED, exception.errorCode)
+        verifyNoInteractions(userRepository)
+    }
+
+    @Test
+    fun `없는 댓글은 신고할 수 없다`() {
+        `when`(commentRepository.findByIdAndFeedId(5L, 3L)).thenReturn(null)
+
+        val exception =
+            assertThrows(BaseException::class.java) {
+                service.reportComment(1L, 3L, 5L, CreateFeedReportRequest(FeedReportReason.SPAM))
+            }
+
+        assertEquals(ErrorCode.FEED_COMMENT_NOT_FOUND, exception.errorCode)
+    }
+
+    @Test
+    fun `볼 수 없는 피드의 댓글은 신고할 수 없다`() {
+        // 신고는 「본 것」에 대한 행위다 — 공개 범위를 넘겨다보는 통로가 되면 안 된다.
+        // 비공개 피드라 글쓴이 말고는 볼 수 없다.
+        val feed = mock(Feed::class.java)
+        `when`(feed.visibility).thenReturn(FeedVisibility.PRIVATE)
+        `when`(feed.author).thenReturn(user(2L))
+        val comment = commentOn(feed, authorId = 2L)
+        `when`(commentRepository.findByIdAndFeedId(5L, 3L)).thenReturn(comment)
+
+        val exception =
+            assertThrows(BaseException::class.java) {
+                service.reportComment(1L, 3L, 5L, CreateFeedReportRequest(FeedReportReason.SPAM))
+            }
+
+        assertEquals(ErrorCode.FEED_NOT_VISIBLE_TO_USER, exception.errorCode)
+        verifyNoInteractions(commentReportRepository)
     }
 
     @Test
@@ -285,6 +364,19 @@ class FeedServiceTest {
 
         assertTrue(response.feeds.isEmpty())
         assertEquals(null, response.nextId)
+    }
+
+    @Test
+    fun `내 피드는 공개 범위와 무관하게 내가 쓴 것만 커서로 조회한다`() {
+        val feeds = (3L downTo 1L).map(::responseFeed)
+        `when`(feedRepository.findByAuthorIdAndIdLessThanOrderByIdDesc(1L, Long.MAX_VALUE, PageRequest.of(0, 3)))
+            .thenReturn(feeds)
+
+        val response = service.getFeeds(1L, FeedTab.MINE, beforeFeedId = null, limit = 2)
+
+        assertEquals(listOf(3L, 2L), response.feeds.map { it.feedId })
+        assertEquals(2L, response.nextId)
+        verify(feedRepository).findByAuthorIdAndIdLessThanOrderByIdDesc(1L, Long.MAX_VALUE, PageRequest.of(0, 3))
     }
 
     @Test
@@ -659,6 +751,18 @@ class FeedServiceTest {
             `when`(it.author).thenReturn(user(id + 10L))
             `when`(it.content).thenReturn(content)
             `when`(it.createdDateTime).thenReturn(LocalDateTime.of(2026, 9, 2, 12, 0).plusMinutes(id))
+        }
+
+    private fun feedVisibleToReporter(): Feed = mock(Feed::class.java).also { `when`(it.visibility).thenReturn(FeedVisibility.PUBLIC) }
+
+    private fun commentOn(
+        feed: Feed,
+        authorId: Long,
+    ): FeedComment =
+        mock(FeedComment::class.java).also {
+            `when`(it.id).thenReturn(5L)
+            `when`(it.feed).thenReturn(feed)
+            `when`(it.author).thenReturn(user(authorId))
         }
 
     private fun user(id: Long): User =

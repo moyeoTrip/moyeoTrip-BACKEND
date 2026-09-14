@@ -4,6 +4,7 @@ import com.linecorp.kotlinjdsl.support.spring.data.jpa.repository.KotlinJdslJpql
 import jakarta.persistence.LockModeType
 import kr.hanchae.moyeotrip.entity.feed.Feed
 import kr.hanchae.moyeotrip.entity.feed.FeedComment
+import kr.hanchae.moyeotrip.entity.feed.FeedCommentReport
 import kr.hanchae.moyeotrip.entity.feed.FeedLike
 import kr.hanchae.moyeotrip.entity.feed.FeedReport
 import kr.hanchae.moyeotrip.entity.feed.FeedVisibility
@@ -34,6 +35,13 @@ interface FeedRepository :
         chatRoomId: Long,
         authorId: Long,
     ): Boolean
+
+    // BE-28 · 「내 피드」는 내가 쓴 것만 주면 되므로 친구·차단 조건 없이 작성자로만 거른다.
+    fun findByAuthorIdAndIdLessThanOrderByIdDesc(
+        authorId: Long,
+        beforeId: Long,
+        pageable: Pageable,
+    ): List<Feed>
 }
 
 interface FeedReportRepository : JpaRepository<FeedReport, Long> {
@@ -43,6 +51,14 @@ interface FeedReportRepository : JpaRepository<FeedReport, Long> {
     ): Boolean
 
     fun countByFeedId(feedId: Long): Long
+}
+
+// BE-12: 댓글 신고. 피드 신고와 같은 규칙 — 신고자당 댓글 1건.
+interface FeedCommentReportRepository : JpaRepository<FeedCommentReport, Long> {
+    fun existsByCommentIdAndReporterId(
+        commentId: Long,
+        reporterId: Long,
+    ): Boolean
 }
 
 interface FeedCustomRepository {

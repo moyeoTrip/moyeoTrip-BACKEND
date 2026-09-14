@@ -104,7 +104,12 @@ interface FeedAPISpec {
         images: List<MultipartFile>,
     ): ResponseEntity<FeedResponse>
 
-    @Operation(summary = "피드 목록 조회", description = "DISCOVER는 차단 관계가 아닌 전체 공개 피드, FRIENDS는 친구의 전체·친구 공개 피드를 커서 방식으로 반환합니다.")
+    @Operation(
+        summary = "피드 목록 조회",
+        description =
+            "DISCOVER는 차단 관계가 아닌 전체 공개 피드, FRIENDS는 친구의 전체·친구 공개 피드, " +
+                "MINE은 로그인 사용자가 쓴 피드를 공개 범위와 무관하게 커서 방식으로 반환합니다.",
+    )
     @ApiResponses(
         value = [
             ApiResponse(
@@ -126,7 +131,7 @@ interface FeedAPISpec {
     )
     fun getFeeds(
         @Parameter(hidden = true) userId: Long,
-        @Parameter(description = "피드 탭. DISCOVER=차단 관계가 아닌 전체 공개 피드, FRIENDS=친구 피드", example = "DISCOVER")
+        @Parameter(description = "피드 탭. DISCOVER=차단 관계가 아닌 전체 공개 피드, FRIENDS=친구 피드, MINE=내가 쓴 피드", example = "DISCOVER")
         tab: FeedTab,
         @Parameter(description = "이 ID보다 오래된 피드부터 조회하는 커서. 첫 페이지는 생략합니다.", example = "100")
         beforeFeedId: Long?,
@@ -294,6 +299,62 @@ interface FeedAPISpec {
         @Parameter(description = "신고 사유와 선택적 상세 내용", required = true) request: CreateFeedReportRequest,
     ): ResponseEntity<Void>
 
+    @Operation(
+        summary = "피드 댓글 신고",
+        description = "피드의 댓글을 신고합니다. 신고 사유 목록은 피드 신고와 같은 GET /api/v1/feeds/report-reasons를 사용하세요.",
+    )
+    @ApiResponses(
+        value = [
+            ApiResponse(responseCode = "204", description = "댓글 신고 성공"),
+            ApiResponse(
+                responseCode = "400",
+                description = "본인이 작성한 댓글을 신고함",
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [ExampleObject(value = FeedSwaggerExamples.SELF_COMMENT_REPORT)],
+                    ),
+                ],
+            ),
+            ApiResponse(
+                responseCode = "403",
+                description = "차단 관계이거나 조회할 수 없는 피드의 댓글",
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [ExampleObject(value = FeedSwaggerExamples.FEED_NOT_VISIBLE)],
+                    ),
+                ],
+            ),
+            ApiResponse(
+                responseCode = "404",
+                description = "댓글 또는 사용자를 찾을 수 없음",
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [ExampleObject(value = FeedSwaggerExamples.COMMENT_NOT_FOUND)],
+                    ),
+                ],
+            ),
+            ApiResponse(
+                responseCode = "409",
+                description = "이미 신고한 댓글",
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [ExampleObject(value = FeedSwaggerExamples.COMMENT_ALREADY_REPORTED)],
+                    ),
+                ],
+            ),
+        ],
+    )
+    fun reportComment(
+        @Parameter(hidden = true) userId: Long,
+        @Parameter(description = "댓글이 달린 피드 ID", example = "100") feedId: Long,
+        @Parameter(description = "신고할 댓글 ID", example = "501") commentId: Long,
+        @Parameter(description = "신고 사유와 선택적 상세 내용", required = true) request: CreateFeedReportRequest,
+    ): ResponseEntity<Void>
+
     @Operation(summary = "피드 댓글 목록 조회", description = "최상위 댓글을 ID 커서로 조회하며 각 댓글의 대댓글을 함께 반환합니다.")
     @ApiResponses(
         value = [
@@ -447,4 +508,6 @@ private object FeedSwaggerExamples {
     const val CHAT_ROOM_NOT_FOUND = """{"code":40405,"errorMessage":"채팅방을 찾을 수 없습니다."}"""
     const val SELF_REPORT = """{"code":40039,"errorMessage":"본인이 작성한 피드는 신고할 수 없습니다."}"""
     const val ALREADY_REPORTED = """{"code":40917,"errorMessage":"이미 신고한 피드입니다."}"""
+    const val SELF_COMMENT_REPORT = """{"code":40046,"errorMessage":"본인이 작성한 댓글은 신고할 수 없습니다."}"""
+    const val COMMENT_ALREADY_REPORTED = """{"code":40922,"errorMessage":"이미 신고한 댓글입니다."}"""
 }

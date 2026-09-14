@@ -2,6 +2,7 @@ package kr.hanchae.moyeotrip.entity.chat
 
 import kr.hanchae.moyeotrip.entity.tour.TravelCourse
 import kr.hanchae.moyeotrip.entity.tour.TravelCourseType
+import kr.hanchae.moyeotrip.entity.user.AgePolicy
 import kr.hanchae.moyeotrip.entity.user.User
 import kr.hanchae.moyeotrip.entity.user.UserRole
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -51,10 +52,24 @@ class ChatRoomEntityTest {
     }
 
     @Test
+    fun `연령 조건 하한은 가입 최소 연령과 같다`() {
+        // 상수는 한 곳(AgePolicy)에 있지만, 「19세」라는 현재 값 자체가 말없이 바뀌는 것은 여기서 막는다.
+        assertEquals(AgePolicy.MINIMUM_SIGNUP_AGE, ChatRoom.MINIMUM_CONDITION_AGE)
+        assertEquals(19, ChatRoom.MINIMUM_CONDITION_AGE)
+    }
+
+    @Test
+    fun `가입 최소 연령인 19세로도 연령 조건을 걸 수 있다`() {
+        val room = room(minimumAge = 19)
+
+        assertEquals(19, room.minimumAge)
+    }
+
+    @Test
     fun `나이 제한의 범위와 순서를 검증한다`() {
-        assertThrows(IllegalArgumentException::class.java) { room(minimumAge = 19) }
+        assertThrows(IllegalArgumentException::class.java) { room(minimumAge = 18) }
         assertThrows(IllegalArgumentException::class.java) { room(minimumAge = 101) }
-        assertThrows(IllegalArgumentException::class.java) { room(maximumAge = 19) }
+        assertThrows(IllegalArgumentException::class.java) { room(maximumAge = 18) }
         assertThrows(IllegalArgumentException::class.java) { room(maximumAge = 101) }
         assertThrows(IllegalArgumentException::class.java) { room(minimumAge = 40, maximumAge = 30) }
 

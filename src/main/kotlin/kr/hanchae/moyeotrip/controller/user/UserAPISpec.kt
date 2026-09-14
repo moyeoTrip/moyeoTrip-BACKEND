@@ -13,11 +13,13 @@ import io.swagger.v3.oas.annotations.tags.Tag
 import kr.hanchae.moyeotrip.config.swagger.SwaggerTag
 import kr.hanchae.moyeotrip.controller.user.request.ProfileImageSelectionRequest
 import kr.hanchae.moyeotrip.controller.user.request.UpdateProfileRequest
+import kr.hanchae.moyeotrip.controller.user.request.WithdrawRequest
 import kr.hanchae.moyeotrip.controller.user.response.MyProfileResponse
 import kr.hanchae.moyeotrip.controller.user.response.ProfileImageCandidatesResponse
 import kr.hanchae.moyeotrip.controller.user.response.ProfileImageGenerationResponse
 import kr.hanchae.moyeotrip.controller.user.response.ProfileImageSelectionResponse
 import kr.hanchae.moyeotrip.controller.user.response.ProfileOptionsResponse
+import kr.hanchae.moyeotrip.controller.user.response.WithdrawalReasonResponse
 import kr.hanchae.moyeotrip.exception.ErrorResponse
 
 @Tag(
@@ -196,7 +198,28 @@ interface UserAPISpec {
     )
     fun withdraw(
         @Parameter(hidden = true) userId: Long,
+        @RequestBody(
+            description = "탈퇴 사유. 생략할 수 있으며, 본문 없이 호출해도 탈퇴됩니다.",
+            required = false,
+        ) request: WithdrawRequest?,
     )
+
+    @Operation(
+        summary = "회원 탈퇴 사유 선택지 조회",
+        description =
+            "탈퇴 화면에 그릴 사유 목록입니다. 문구를 클라이언트가 하드코딩하지 않도록 서버가 제공합니다. " +
+                "사유는 선택 항목이며, 고른 사유는 누가 골랐는지 없이 사유와 시각만 저장합니다.",
+    )
+    @ApiResponses(
+        value = [
+            ApiResponse(
+                responseCode = "200",
+                description = "탈퇴 사유 선택지",
+                content = [Content(schema = Schema(implementation = WithdrawalReasonResponse::class))],
+            ),
+        ],
+    )
+    fun getWithdrawalReasons(): List<WithdrawalReasonResponse>
 
     @Operation(
         summary = "AI 프로필 이미지 후보 생성",
@@ -436,7 +459,7 @@ private object UserSwaggerExamples {
         """{"selectedImage":{"profileImageId":15,"profileImageUrl":"https://cdn.example.com/user/profile/image/second.webp","selected":true},"signupState":"SIGNUP_COMPLETE"}"""
     const val PROFILE_IMAGE_NOT_FOUND =
         """{"code":40401,"errorMessage":"선택할 수 있는 프로필 이미지를 찾을 수 없습니다."}"""
-    const val MINIMUM_SIGNUP_AGE_NOT_MET = """{"code":40011,"errorMessage":"만 20세 이상만 가입할 수 있습니다."}"""
+    const val MINIMUM_SIGNUP_AGE_NOT_MET = """{"code":40011,"errorMessage":"만 19세 이상만 가입할 수 있습니다."}"""
     const val INVALID_INTERESTED_REGION_SELECTION = """{"code":40014,"errorMessage":"관심 지역으로 선택할 수 없는 지역 ID가 포함되어 있습니다."}"""
     const val INVALID_TRAVEL_STYLE_SELECTION = """{"code":40015,"errorMessage":"선택할 수 없는 여행 스타일 ID가 포함되어 있습니다."}"""
     const val MALFORMED_REQUEST_BODY = """{"code":40033,"errorMessage":"요청 본문의 JSON 형식이 올바르지 않습니다."}"""

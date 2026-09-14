@@ -81,11 +81,13 @@ class TravelCourseService(
                     courseId = course.id,
                     title = course.title,
                     description = course.description,
+                    // BE-22 · 큐레이션한 표지가 있으면 그것을, 없으면 지금까지처럼 첫 방문지 사진을 쓴다.
                     thumbnail =
-                        course.places
-                            .firstOrNull()
-                            ?.tourismContent
-                            ?.thumbnail,
+                        course.thumbnail
+                            ?: course.places
+                                .firstOrNull()
+                                ?.tourismContent
+                                ?.thumbnail,
                     tags = course.tags.sortedBy { it.id }.map { LikedTravelCourseTagResponse(it.id, it.name) },
                 )
             }

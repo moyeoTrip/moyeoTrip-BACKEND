@@ -69,5 +69,8 @@ val PERMITTED_URL_PATTERNS =
         "/api/v1/auth/**",
         "/api/v1/test/**",
         "/api/v1/terms/**",
+        // STOMP 핸드셰이크(`STOMP_ENDPOINT`). 여기서 여는 것은 **핸드셰이크뿐**이고,
+        // 실제 인증은 STOMP `CONNECT` 프레임의 `Authorization` 헤더에서 한다.
+        // 인그레스에도 `/ws` 가 있어야 밖에서 닿는다 — 없으면 운영에서 404 다.
         "/ws/**",
     )

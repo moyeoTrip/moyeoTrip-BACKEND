@@ -3,6 +3,8 @@ package kr.hanchae.moyeotrip.service.tour
 import kr.hanchae.moyeotrip.controller.tour.request.PublishTravelCourseRequest
 import kr.hanchae.moyeotrip.entity.chat.ChatRoomStatus
 import kr.hanchae.moyeotrip.entity.tour.CoursePublicationStatus
+import kr.hanchae.moyeotrip.entity.tour.TourismContent
+import kr.hanchae.moyeotrip.entity.tour.TourismContentType
 import kr.hanchae.moyeotrip.entity.tour.TravelCourse
 import kr.hanchae.moyeotrip.entity.tour.TravelCourseLike
 import kr.hanchae.moyeotrip.entity.tour.TravelCourseTag
@@ -28,6 +30,7 @@ import org.mockito.Mockito.mock
 import org.mockito.Mockito.verify
 import org.mockito.Mockito.`when`
 import java.time.LocalDate
+import java.time.LocalTime
 import java.util.Optional
 
 class TravelCourseServiceTest {
@@ -163,6 +166,36 @@ class TravelCourseServiceTest {
         assertFalse(response.favorite)
         assertEquals(0L, response.favoriteCount)
         verify(courseLikeRepository).delete(like)
+    }
+
+    @Test
+    fun `찜한 코스 표지는 큐레이션한 이미지를 우선 쓰고 없으면 첫 방문지 사진을 쓴다`() {
+        val contentType = TourismContentType(12, "관광지")
+        val curated = TravelCourse(id = 8L, type = TravelCourseType.CUSTOM, title = "큐레이션 코스")
+        curated.addCustomPlace(
+            TourismContent(contentId = 100L, contentType = contentType, title = "주산지", thumbnail = "https://cdn.example.com/place.png"),
+            1,
+            1,
+            LocalTime.of(10, 0),
+        )
+        curated.publish()
+        curated.updateThumbnail("https://cdn.example.com/curated.webp")
+        val fallback = TravelCourse(id = 7L, type = TravelCourseType.CUSTOM, title = "표지 없는 코스")
+        fallback.addCustomPlace(
+            TourismContent(contentId = 101L, contentType = contentType, title = "주왕산", thumbnail = "https://cdn.example.com/place2.png"),
+            1,
+            1,
+            LocalTime.of(11, 0),
+        )
+        fallback.publish()
+        `when`(courseLikeRepository.findCoursesByUserIdOrderByLikedAtDesc(3L)).thenReturn(listOf(curated, fallback))
+
+        val response = service.getLikedCourses(3L)
+
+        assertEquals(
+            listOf("https://cdn.example.com/curated.webp", "https://cdn.example.com/place2.png"),
+            response.map { it.thumbnail },
+        )
     }
 
     @Test

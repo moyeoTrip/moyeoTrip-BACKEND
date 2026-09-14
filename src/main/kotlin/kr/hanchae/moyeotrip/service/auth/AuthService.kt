@@ -19,6 +19,7 @@ import kr.hanchae.moyeotrip.entity.terms.AgreementTerm
 import kr.hanchae.moyeotrip.entity.terms.AgreementTermCode
 import kr.hanchae.moyeotrip.entity.terms.UserTermsAgreement
 import kr.hanchae.moyeotrip.entity.tour.LegalDongCode
+import kr.hanchae.moyeotrip.entity.user.AgePolicy
 import kr.hanchae.moyeotrip.entity.user.NicknameColor
 import kr.hanchae.moyeotrip.entity.user.ProviderType
 import kr.hanchae.moyeotrip.entity.user.SignupState
@@ -250,7 +251,7 @@ class AuthService(
     }
 
     private fun validateMinimumSignupAge(birthDate: LocalDate) {
-        if (birthDate.isAfter(LocalDate.now().minusYears(MINIMUM_SIGNUP_AGE.toLong()))) {
+        if (birthDate.isAfter(LocalDate.now().minusYears(AgePolicy.MINIMUM_SIGNUP_AGE.toLong()))) {
             throw BaseException(ErrorCode.MINIMUM_SIGNUP_AGE_NOT_MET)
         }
     }
@@ -410,7 +411,6 @@ class AuthService(
     }
 
     private companion object {
-        const val MINIMUM_SIGNUP_AGE = 20
         const val GYEONGSANGBUKDO_REGION_CODE = "47"
     }
 }

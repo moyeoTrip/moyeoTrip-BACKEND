@@ -18,6 +18,7 @@ import kr.hanchae.moyeotrip.controller.feed.response.FeedResponse
 import kr.hanchae.moyeotrip.controller.feed.response.FeedTripResponse
 import kr.hanchae.moyeotrip.entity.feed.Feed
 import kr.hanchae.moyeotrip.entity.feed.FeedComment
+import kr.hanchae.moyeotrip.entity.feed.FeedCommentReport
 import kr.hanchae.moyeotrip.entity.feed.FeedLike
 import kr.hanchae.moyeotrip.entity.feed.FeedReport
 import kr.hanchae.moyeotrip.entity.feed.FeedReportReason
@@ -28,6 +29,7 @@ import kr.hanchae.moyeotrip.exception.ErrorCode
 import kr.hanchae.moyeotrip.exception.UserNotFoundException
 import kr.hanchae.moyeotrip.repository.ChatRoomParticipantRepository
 import kr.hanchae.moyeotrip.repository.ChatRoomRepository
+import kr.hanchae.moyeotrip.repository.FeedCommentReportRepository
 import kr.hanchae.moyeotrip.repository.FeedCommentRepository
 import kr.hanchae.moyeotrip.repository.FeedLikeRepository
 import kr.hanchae.moyeotrip.repository.FeedReportRepository
@@ -58,6 +60,7 @@ class FeedService(
     private val objectStorageRepository: ObjectStorageRepository,
     private val notificationService: NotificationService,
     private val feedReportRepository: FeedReportRepository,
+    private val feedCommentReportRepository: FeedCommentReportRepository,
 ) {
     @Transactional(readOnly = true)
     fun getReportReasons(): List<FeedReportReasonResponse> =
@@ -114,13 +117,18 @@ class FeedService(
         val pageable = PageRequest.of(0, pageSize + 1)
         val beforeId = beforeFeedId ?: Long.MAX_VALUE
         val fetched =
-            feedRepository.findFriendFeeds(
-                userId,
-                beforeId,
-                FeedVisibility.PUBLIC,
-                FeedVisibility.FRIENDS,
-                pageable,
-            )
+            if (tab == FeedTab.MINE) {
+                // BE-28 · 내 피드는 내 것이 전부라 공개 범위·친구·차단 조건을 보지 않는다.
+                feedRepository.findByAuthorIdAndIdLessThanOrderByIdDesc(userId, beforeId, pageable)
+            } else {
+                feedRepository.findFriendFeeds(
+                    userId,
+                    beforeId,
+                    FeedVisibility.PUBLIC,
+                    FeedVisibility.FRIENDS,
+                    pageable,
+                )
+            }
         val hasNext = fetched.size > pageSize
         val feeds = fetched.take(pageSize)
         return FeedPageResponse(
@@ -199,6 +207,38 @@ class FeedService(
         if (feedReportRepository.countByFeedId(feedId) >= REPORT_HIDE_THRESHOLD) {
             feed.hideByReports()
         }
+    }
+
+    /**
+     * 댓글 신고 (BE-12). 피드 신고와 같은 관문을 통과해야 한다 —
+     * 볼 수 없는 피드의 댓글을 신고할 수는 없기 때문이다.
+     */
+    @Transactional
+    fun reportComment(
+        userId: Long,
+        feedId: Long,
+        commentId: Long,
+        request: CreateFeedReportRequest,
+    ) {
+        val comment =
+            feedCommentRepository.findByIdAndFeedId(commentId, feedId)
+                ?: throw BaseException(ErrorCode.FEED_COMMENT_NOT_FOUND)
+        if (comment.author.id == userId) throw BaseException(ErrorCode.SELF_FEED_COMMENT_REPORT_NOT_ALLOWED)
+        if (userBlockRepository.existsBetween(userId, comment.author.id)) {
+            throw BaseException(ErrorCode.USER_BLOCK_RELATIONSHIP)
+        }
+        if (!comment.feed.isVisibleTo(userId)) throw BaseException(ErrorCode.FEED_NOT_VISIBLE_TO_USER)
+        if (feedCommentReportRepository.existsByCommentIdAndReporterId(commentId, userId)) {
+            throw BaseException(ErrorCode.FEED_COMMENT_ALREADY_REPORTED)
+        }
+        feedCommentReportRepository.saveAndFlush(
+            FeedCommentReport(
+                comment = comment,
+                reporter = findUser(userId),
+                reason = request.reason,
+                details = request.details?.trim()?.takeIf(String::isNotEmpty),
+            ),
+        )
     }
 
     @Transactional(readOnly = true)

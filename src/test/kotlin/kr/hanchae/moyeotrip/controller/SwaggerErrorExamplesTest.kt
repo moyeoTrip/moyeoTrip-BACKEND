@@ -84,7 +84,8 @@ class SwaggerErrorExamplesTest {
         @Test
         fun `참가 신청의 400과 404를 원인별로 구분한다`() {
             assertEquals(
-                setOf("요청 본문 검증 실패", "수동 승인 모임의 신청 메시지 누락"),
+                // BE-08: 한마디 길이(10~200자) 제약이 생기면서 400 원인이 하나 늘었다
+                setOf("요청 본문 검증 실패", "수동 승인 모임의 신청 메시지 누락", "신청 한마디 길이 위반"),
                 examples(ChatRoomAPISpec::class.java, "applyToJoin", "400"),
             )
             assertEquals(

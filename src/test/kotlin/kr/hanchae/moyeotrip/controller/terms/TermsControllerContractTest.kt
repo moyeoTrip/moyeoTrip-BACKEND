@@ -2,6 +2,7 @@ package kr.hanchae.moyeotrip.controller.terms
 
 import kr.hanchae.moyeotrip.controller.terms.response.AgreementTermDetailResponse
 import kr.hanchae.moyeotrip.controller.terms.response.AgreementTermSummaryResponse
+import kr.hanchae.moyeotrip.entity.terms.AgreementTermCode
 import kr.hanchae.moyeotrip.service.terms.TermsService
 import org.junit.jupiter.api.Test
 import org.mockito.Mockito.mock
@@ -30,8 +31,10 @@ class TermsControllerContractTest {
                 listOf(
                     AgreementTermSummaryResponse(
                         termId = 1L,
+                        code = AgreementTermCode.SERVICE,
                         title = "[필수] 모여트립 이용약관",
                         required = true,
+                        version = "2026.08.23",
                     ),
                 ),
             )
@@ -50,6 +53,7 @@ class TermsControllerContractTest {
             .thenReturn(
                 AgreementTermDetailResponse(
                     termId = 1L,
+                    code = AgreementTermCode.SERVICE,
                     title = "[필수] 모여트립 이용약관",
                     required = true,
                     version = "2026.08.23",

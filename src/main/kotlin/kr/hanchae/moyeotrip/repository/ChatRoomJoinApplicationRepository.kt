@@ -37,6 +37,12 @@ interface ChatRoomJoinApplicationRepository : JpaRepository<ChatRoomJoinApplicat
         status: JoinApplicationStatus,
     ): List<ChatRoomJoinApplication>
 
+    // BE-17: 호스트의 거절 기록 조회. 거절 시각이 없는 과거 행도 섞이므로 신청 시각 내림차순으로 정렬한다.
+    fun findAllByChatRoomIdAndStatusOrderByCreatedDateTimeDescIdDesc(
+        chatRoomId: Long,
+        status: JoinApplicationStatus,
+    ): List<ChatRoomJoinApplication>
+
     fun findFirstByChatRoomIdAndStatusOrderByCreatedDateTimeAscIdAsc(
         chatRoomId: Long,
         status: JoinApplicationStatus,

@@ -73,8 +73,9 @@ class TravelCourseController(
 
     @GetMapping("/{courseId}")
     override fun getCourse(
+        @LoginUserId userId: Long,
         @PathVariable courseId: Long,
-    ): PublicTravelCourseDetailResponse = chatRoomService.getCourse(courseId)
+    ): PublicTravelCourseDetailResponse = chatRoomService.getCourse(courseId, userId)
 
     @GetMapping("/{courseId}/chat-rooms")
     override fun getPublicCourseChatRooms(

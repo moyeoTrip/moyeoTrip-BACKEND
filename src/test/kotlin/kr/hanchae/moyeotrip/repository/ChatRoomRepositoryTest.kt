@@ -52,6 +52,7 @@ class ChatRoomRepositoryTest : RepositoryIntegrationTestSupport() {
                 chatRoomRepository.findMapRooms(
                     userId = me.id,
                     blockedUserIds = listOf(-1L),
+                    tagId = null,
                     today = LocalDate.now(),
                     minimumLatitude = 35.9,
                     maximumLatitude = 36.1,
@@ -111,7 +112,9 @@ class ChatRoomRepositoryTest : RepositoryIntegrationTestSupport() {
                     userId = me.id,
                     blockedUserIds = listOf(blockedHost.id, blockedMember.id),
                     keyword = "경주",
+                    tagId = null,
                     today = today,
+                    cursor = null,
                     pageable = PageRequest.of(0, 20),
                 )
 
@@ -168,12 +171,115 @@ class ChatRoomRepositoryTest : RepositoryIntegrationTestSupport() {
                         userId = me.id,
                         blockedUserIds = listOf(-1L),
                         keyword = keyword,
+                        tagId = null,
                         today = LocalDate.now(),
+                        cursor = null,
                         pageable = PageRequest.of(0, 20),
                     )
 
                 assertEquals(listOf(room.id), rooms.map { it.id }, "$keyword 검색 결과")
             }
+        }
+
+        @Test
+        fun `커서로 이어 받으면 경계에서 건너뛰거나 겹치지 않는다`() {
+            // 탐색이 첫 20건만 주고 끝나서 21번째부터는 볼 방법이 없었다. 커서로 이어 받는다.
+            val me = savedUser()
+            val host = savedUser()
+            val course = savedCourse()
+            val created =
+                (1..5).map { index ->
+                    savedRoom(host, course, title = "커서 검증 모임 $index", startDate = LocalDate.now().plusDays(3))
+                }
+            val newestFirst = created.map { it.id }.sortedDescending()
+
+            val firstPage =
+                chatRoomRepository.searchRooms(
+                    userId = me.id,
+                    blockedUserIds = listOf(-1L),
+                    keyword = "커서 검증 모임",
+                    tagId = null,
+                    today = LocalDate.now(),
+                    cursor = null,
+                    pageable = PageRequest.of(0, 2),
+                )
+            val secondPage =
+                chatRoomRepository.searchRooms(
+                    userId = me.id,
+                    blockedUserIds = listOf(-1L),
+                    keyword = "커서 검증 모임",
+                    tagId = null,
+                    today = LocalDate.now(),
+                    cursor = firstPage.last().id,
+                    pageable = PageRequest.of(0, 2),
+                )
+            val thirdPage =
+                chatRoomRepository.searchRooms(
+                    userId = me.id,
+                    blockedUserIds = listOf(-1L),
+                    keyword = "커서 검증 모임",
+                    tagId = null,
+                    today = LocalDate.now(),
+                    cursor = secondPage.last().id,
+                    pageable = PageRequest.of(0, 2),
+                )
+
+            assertEquals(newestFirst.take(2), firstPage.map { it.id })
+            assertEquals(newestFirst.drop(2).take(2), secondPage.map { it.id })
+            // 마지막 쪽은 요청한 2건보다 적게 온다 — 클라이언트는 이걸로 끝을 안다.
+            assertEquals(newestFirst.drop(4), thirdPage.map { it.id })
+            assertEquals(newestFirst, firstPage.map { it.id } + secondPage.map { it.id } + thirdPage.map { it.id })
+        }
+
+        // BE-02: 목록과 지도가 같은 태그 필터로 같은 결과 집합을 줘야 한다.
+        @Test
+        fun `태그 필터를 주면 목록과 지도가 같은 방만 조회한다`() {
+            val me = savedUser()
+            val host = savedUser()
+            val taggedCourse =
+                travelCourseRepository.saveAndFlush(
+                    TravelCourse(type = TravelCourseType.CUSTOM, owner = host, title = "태그 붙은 코스"),
+                )
+            val otherCourse = savedCourse()
+            val tag = travelCourseTagRepository.saveAndFlush(TravelCourseTag(name = "QA태그${System.nanoTime()}"))
+            taggedCourse.addTags(listOf(tag))
+            travelCourseRepository.saveAndFlush(taggedCourse)
+            val tagged =
+                savedRoom(host, taggedCourse, title = "태그 있는 모임", startDate = LocalDate.now().plusDays(3)).also {
+                    // 지도 조회는 집합 좌표가 있는 방만 본다
+                    it.updateMeetingInfo(36.0, 129.0, "안동역", LocalDate.now().plusDays(3).atTime(8, 30))
+                    chatRoomRepository.saveAndFlush(it)
+                }
+            savedRoom(host, otherCourse, title = "태그 없는 모임", startDate = LocalDate.now().plusDays(3)).also {
+                it.updateMeetingInfo(36.0, 129.0, "안동역", LocalDate.now().plusDays(3).atTime(8, 30))
+                chatRoomRepository.saveAndFlush(it)
+            }
+
+            val listed =
+                chatRoomRepository.searchRooms(
+                    userId = me.id,
+                    blockedUserIds = listOf(-1L),
+                    keyword = null,
+                    tagId = tag.id,
+                    today = LocalDate.now(),
+                    cursor = null,
+                    pageable = PageRequest.of(0, 20),
+                )
+            val mapped =
+                chatRoomRepository.findMapRooms(
+                    userId = me.id,
+                    blockedUserIds = listOf(-1L),
+                    tagId = tag.id,
+                    today = LocalDate.now(),
+                    minimumLatitude = -90.0,
+                    maximumLatitude = 90.0,
+                    minimumLongitude = -180.0,
+                    maximumLongitude = 180.0,
+                    crossesDateLine = false,
+                )
+
+            assertEquals(listOf(tagged.id), listed.map { it.id })
+            assertEquals(listed.map { it.id }.toSet(), mapped.map { it.id }.toSet())
         }
 
         @Test

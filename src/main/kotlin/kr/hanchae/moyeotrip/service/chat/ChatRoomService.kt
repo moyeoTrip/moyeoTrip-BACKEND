@@ -1,9 +1,11 @@
 package kr.hanchae.moyeotrip.service.chat
 
 import kr.hanchae.moyeotrip.controller.chat.request.CreateChatPollRequest
+import kr.hanchae.moyeotrip.controller.chat.request.CreateChatRoomReportRequest
 import kr.hanchae.moyeotrip.controller.chat.request.CreateChatRoomRequest
 import kr.hanchae.moyeotrip.controller.chat.request.CreateCustomCourseRequest
 import kr.hanchae.moyeotrip.controller.chat.request.CreateSettlementMemoRequest
+import kr.hanchae.moyeotrip.controller.chat.request.CreateUserReportRequest
 import kr.hanchae.moyeotrip.controller.chat.request.CustomCoursePlaceRequest
 import kr.hanchae.moyeotrip.controller.chat.request.JoinChatRoomRequest
 import kr.hanchae.moyeotrip.controller.chat.request.MyChatRoomFilter
@@ -28,6 +30,7 @@ import kr.hanchae.moyeotrip.controller.chat.response.ChatRoomMemberListResponse
 import kr.hanchae.moyeotrip.controller.chat.response.ChatRoomMemberResponse
 import kr.hanchae.moyeotrip.controller.chat.response.ChatRoomNoticeHistoryResponse
 import kr.hanchae.moyeotrip.controller.chat.response.ChatRoomNoticeResponse
+import kr.hanchae.moyeotrip.controller.chat.response.ChatRoomReportReasonResponse
 import kr.hanchae.moyeotrip.controller.chat.response.CreateChatRoomResponse
 import kr.hanchae.moyeotrip.controller.chat.response.CurrentTravelRoadmapResponse
 import kr.hanchae.moyeotrip.controller.chat.response.JoinApplicationResponse
@@ -39,8 +42,10 @@ import kr.hanchae.moyeotrip.controller.chat.response.LeaveResult
 import kr.hanchae.moyeotrip.controller.chat.response.MapChatRoomResponse
 import kr.hanchae.moyeotrip.controller.chat.response.MentionedChatUserResponse
 import kr.hanchae.moyeotrip.controller.chat.response.MyChatRoomSummaryResponse
+import kr.hanchae.moyeotrip.controller.chat.response.MyParticipationStatus
 import kr.hanchae.moyeotrip.controller.chat.response.MyWaitingChatRoomResponse
 import kr.hanchae.moyeotrip.controller.chat.response.PublicTravelCourseDetailResponse
+import kr.hanchae.moyeotrip.controller.chat.response.RejectedJoinApplicationResponse
 import kr.hanchae.moyeotrip.controller.chat.response.RepliedChatMessageResponse
 import kr.hanchae.moyeotrip.controller.chat.response.SearchChatRoomResponse
 import kr.hanchae.moyeotrip.controller.chat.response.SharedLocationResponse
@@ -52,6 +57,8 @@ import kr.hanchae.moyeotrip.controller.chat.response.TravelCourseResponse
 import kr.hanchae.moyeotrip.controller.chat.response.TravelCourseRoomResponse
 import kr.hanchae.moyeotrip.controller.chat.response.TravelRoadmapPlaceResponse
 import kr.hanchae.moyeotrip.controller.chat.response.TravelRoadmapProgress
+import kr.hanchae.moyeotrip.controller.chat.response.UserReportReasonResponse
+import kr.hanchae.moyeotrip.controller.chat.response.WaitlistedJoinApplicationResponse
 import kr.hanchae.moyeotrip.controller.tour.request.UpdateTravelCourseRequest
 import kr.hanchae.moyeotrip.controller.tour.response.TravelCourseTagResponse
 import kr.hanchae.moyeotrip.entity.chat.ChatMessage
@@ -70,6 +77,10 @@ import kr.hanchae.moyeotrip.entity.chat.GenderRestriction
 import kr.hanchae.moyeotrip.entity.chat.JoinApplicationStatus
 import kr.hanchae.moyeotrip.entity.chat.JoinApprovalMode
 import kr.hanchae.moyeotrip.entity.chat.TripType
+import kr.hanchae.moyeotrip.entity.report.ChatRoomReport
+import kr.hanchae.moyeotrip.entity.report.ChatRoomReportReason
+import kr.hanchae.moyeotrip.entity.report.UserReport
+import kr.hanchae.moyeotrip.entity.report.UserReportReason
 import kr.hanchae.moyeotrip.entity.tour.TourismContent
 import kr.hanchae.moyeotrip.entity.tour.TravelCourse
 import kr.hanchae.moyeotrip.entity.tour.TravelCoursePlace
@@ -88,14 +99,18 @@ import kr.hanchae.moyeotrip.repository.ChatRoomJoinApplicationRepository
 import kr.hanchae.moyeotrip.repository.ChatRoomKickHistoryRepository
 import kr.hanchae.moyeotrip.repository.ChatRoomNoticeRepository
 import kr.hanchae.moyeotrip.repository.ChatRoomParticipantRepository
+import kr.hanchae.moyeotrip.repository.ChatRoomReportRepository
 import kr.hanchae.moyeotrip.repository.ChatRoomRepository
+import kr.hanchae.moyeotrip.repository.LegalDongCodeRepository
 import kr.hanchae.moyeotrip.repository.ObjectStorageRepository
 import kr.hanchae.moyeotrip.repository.TourismContentRepository
+import kr.hanchae.moyeotrip.repository.TravelCourseLikeRepository
 import kr.hanchae.moyeotrip.repository.TravelCoursePlaceRepository
 import kr.hanchae.moyeotrip.repository.TravelCourseRatingRepository
 import kr.hanchae.moyeotrip.repository.TravelCourseRepository
 import kr.hanchae.moyeotrip.repository.TravelCourseTagRepository
 import kr.hanchae.moyeotrip.repository.UserBlockRepository
+import kr.hanchae.moyeotrip.repository.UserReportRepository
 import kr.hanchae.moyeotrip.repository.UserRepository
 import kr.hanchae.moyeotrip.service.notification.NotificationService
 import kr.hanchae.moyeotrip.service.realtime.RealtimeMessagingService
@@ -140,28 +155,43 @@ class ChatRoomService(
     private val noticeRepository: ChatRoomNoticeRepository,
     private val notificationService: NotificationService,
     private val realtimeMessagingService: RealtimeMessagingService,
+    private val legalDongCodeRepository: LegalDongCodeRepository,
+    private val courseLikeRepository: TravelCourseLikeRepository,
+    private val chatRoomReportRepository: ChatRoomReportRepository,
+    private val userReportRepository: UserReportRepository,
 ) {
     @Transactional
     fun createRoom(
         userId: Long,
         request: CreateChatRoomRequest,
-        thumbnail: MultipartFile,
+        thumbnail: MultipartFile? = null,
     ): CreateChatRoomResponse {
         validateTripSchedule(request)
         validateRoomDates(request)
         validateMinimumParticipants(request)
         validateAgeRestriction(request)
-        validateRequiredThumbnail(thumbnail)
+        // BE-07: 썸네일 파트가 필수라 클라이언트가 「안 골랐다」를 표현할 수 없었고,
+        // 내장 플레이스홀더가 방마다 새 복사본으로 CDN 에 쌓였다. 이제 파트를 아예 빼면 「안 골랐다」로 읽는다.
+        // 파트를 보냈는데 내용이 비어 있는 것은 여전히 오류다 — 그건 「고르려다 깨진 것」이지 「안 고른 것」이 아니다.
+        thumbnail?.let(::validateRequiredThumbnail)
+        val uploadedThumbnail = thumbnail
         val host = findUser(userId)
         val course = resolveCourse(host, request)
-        val thumbnailKey =
-            objectStorageRepository.upload(
-                CHAT_ROOM_THUMBNAIL_PATH,
-                ObjectStorageRepository.generateFileName(WEBP_EXTENSION),
-                fhdWebpImageOptimizer.optimizeToFhdWebp(thumbnail.bytes, ErrorCode.INVALID_CHAT_ROOM_THUMBNAIL),
-                WEBP_CONTENT_TYPE,
-            )
-        val thumbnailUrl = objectStorageRepository.getDownloadUrl(thumbnailKey)
+        // 썸네일을 생략하면 코스 대표 이미지(첫 방문지 사진)를 쓰고, 그것도 없으면 null 로 둔다.
+        val thumbnailUrl =
+            uploadedThumbnail?.let {
+                val thumbnailKey =
+                    objectStorageRepository.upload(
+                        CHAT_ROOM_THUMBNAIL_PATH,
+                        ObjectStorageRepository.generateFileName(WEBP_EXTENSION),
+                        fhdWebpImageOptimizer.optimizeToFhdWebp(it.bytes, ErrorCode.INVALID_CHAT_ROOM_THUMBNAIL),
+                        WEBP_CONTENT_TYPE,
+                    )
+                objectStorageRepository.getDownloadUrl(thumbnailKey)
+            } ?: course.places
+                .firstOrNull()
+                ?.tourismContent
+                ?.thumbnail
         val room =
             roomRepository.saveAndFlush(
                 ChatRoom(
@@ -205,7 +235,9 @@ class ChatRoomService(
         val user = findUser(userId)
         return room.toDetail(
             favorite = roomFavoriteRepository.existsByUserIdAndChatRoomId(userId, roomId),
+            // BE-09: canApply 는 non-null 필드라 항상 직렬화된다. 누락되면 클라가 「신청 가능」으로 떨어진다.
             canApply = canApply(room, user),
+            myParticipationStatus = myParticipationStatus(room, userId),
         )
     }
 
@@ -323,10 +355,18 @@ class ChatRoomService(
                     .thenByDescending { it.latestMessage?.sentAt ?: LocalDateTime.MIN },
             )
 
+    /**
+     * 탐색 목록. [cursor] 없이 부르면 첫 페이지다.
+     *
+     * 받은 개수가 [limit] 보다 적으면 마지막 페이지다 — 응답이 배열이라 그 규칙이 곧 종료 조건이다.
+     * 다음 페이지는 **마지막 항목의 roomId** 를 [cursor] 로 넘겨 받는다.
+     */
     @Transactional(readOnly = true)
     fun searchRooms(
         userId: Long,
         keyword: String?,
+        tagId: Long?,
+        cursor: Long?,
         limit: Int,
     ): List<SearchChatRoomResponse> =
         searchRooms(userId, limit) { blockedUserIds, today, pageable ->
@@ -334,7 +374,9 @@ class ChatRoomService(
                 userId = userId,
                 blockedUserIds = blockedUserIds,
                 keyword = keyword?.trim()?.takeIf(String::isNotEmpty),
+                tagId = tagId,
                 today = today,
+                cursor = cursor,
                 pageable = pageable,
             )
         }
@@ -345,6 +387,7 @@ class ChatRoomService(
         latitude: Double,
         longitude: Double,
         radiusKm: Double,
+        tagId: Long? = null,
     ): List<MapChatRoomResponse> {
         validateMapSearchArea(latitude, longitude, radiusKm)
         val angularDistance = (radiusKm / EARTH_RADIUS_KM).coerceAtMost(Math.PI)
@@ -365,6 +408,8 @@ class ChatRoomService(
             roomRepository.findMapRooms(
                 userId = userId,
                 blockedUserIds = blockedUserIds,
+                // BE-02: 목록에서 고른 태그를 지도에서도 그대로 태운다. 없으면 지금까지와 같은 전체 조회다.
+                tagId = tagId,
                 today = LocalDate.now(),
                 minimumLatitude = minimumLatitude,
                 maximumLatitude = maximumLatitude,
@@ -466,7 +511,7 @@ class ChatRoomService(
                     meetingLatitude = room.meetingLatitude,
                     meetingLongitude = room.meetingLongitude,
                     meetingDetails = room.meetingDetails,
-                    participantCount = participantRepository.countByChatRoomId(room.id).toInt(),
+                    participantCount = participantCount(room.id),
                     maxParticipants = room.maxParticipants,
                 )
             }
@@ -479,20 +524,25 @@ class ChatRoomService(
             } else {
                 courseRepository.findAllByTypeAndTagIdOrderByCreatedDateTimeDesc(TravelCourseType.PUBLIC, tagId)
             }
-        return courses.map { it.toInformationResponse(travelTime = it.travelTimeText()) }
+        val regionNames = regionNamesByLegalDongCode()
+        return courses.map { it.toInformationResponse(travelTime = it.travelTimeText(), regionNames = regionNames) }
     }
 
     @Transactional(readOnly = true)
-    fun searchPublicCourses(keyword: String?): List<TravelCourseInformationResponse> =
-        courseRepository
+    fun searchPublicCourses(keyword: String?): List<TravelCourseInformationResponse> {
+        val regionNames = regionNamesByLegalDongCode()
+        return courseRepository
             .searchPublicCourses(keyword?.trim()?.takeIf(String::isNotEmpty))
-            .map { it.toInformationResponse(travelTime = it.travelTimeText()) }
+            .map { it.toInformationResponse(travelTime = it.travelTimeText(), regionNames = regionNames) }
+    }
 
     @Transactional(readOnly = true)
-    fun getPopularPublicCourses(): List<TravelCourseInformationResponse> =
-        courseRepository
+    fun getPopularPublicCourses(): List<TravelCourseInformationResponse> {
+        val regionNames = regionNamesByLegalDongCode()
+        return courseRepository
             .findPopularPublicCourses(PageRequest.of(0, POPULAR_COURSE_LIMIT))
-            .map { it.toInformationResponse(travelTime = it.travelTimeText()) }
+            .map { it.toInformationResponse(travelTime = it.travelTimeText(), regionNames = regionNames) }
+    }
 
     @Transactional(readOnly = true)
     fun getRoomCourse(roomId: Long): TravelCourseDetailResponse {
@@ -571,7 +621,10 @@ class ChatRoomService(
     }
 
     @Transactional(readOnly = true)
-    fun getCourse(courseId: Long): PublicTravelCourseDetailResponse {
+    fun getCourse(
+        courseId: Long,
+        userId: Long,
+    ): PublicTravelCourseDetailResponse {
         val course = findPublicCourse(courseId)
         val creator = course.owner?.takeIf { course.showCreatorNickname }
         val creatorTravelRoom =
@@ -605,12 +658,19 @@ class ChatRoomService(
             averageRating = courseRatingRepository.findAverageByCourseId(courseId)?.rounded(1),
             ratingCount = courseRatingRepository.countByCourseId(courseId),
             tags = course.tags.sortedBy { it.id }.map { TravelCourseTagResponse(it.id, it.name) },
+            // BE-22 · 큐레이션한 표지가 있으면 그것을, 없으면 지금까지처럼 첫 방문지 사진을 쓴다.
             thumbnail =
-                course.places
-                    .firstOrNull()
-                    ?.tourismContent
-                    ?.thumbnail,
+                course.thumbnail
+                    ?: course.places
+                        .firstOrNull()
+                        ?.tourismContent
+                        ?.thumbnail,
             places = course.toResponse(editable = false).places,
+            region = course.regionName(regionNamesByLegalDongCode()),
+            creatorUserId = course.creatorUserIdOrNull(),
+            // BE-26 · 토글 응답과 같은 두 값. 상세만 몰라서 앱이 찜 목록을 한 번 더 부르던 것을 없앤다.
+            favorite = courseLikeRepository.existsByCourseIdAndUserId(courseId, userId),
+            favoriteCount = courseLikeRepository.countByCourseId(courseId),
         )
     }
 
@@ -654,6 +714,9 @@ class ChatRoomService(
         }
         val user = findUser(userId)
         requireJoinConditions(room, user)
+        // BE-08: 화면 안내(10~200자)와 서버 제약을 맞춘다. @Size 는 공백만 채운 문자열을 통과시키므로
+        // 여기서 공백을 제외한 길이로 다시 본다. 자동 승인 방에서도 한마디를 보냈다면 같은 기준을 적용한다.
+        validateApplicationMessageLength(request.applicationMessage)
         if (room.joinApprovalMode == JoinApprovalMode.MANUAL) {
             val applicationMessage =
                 request.applicationMessage
@@ -708,6 +771,50 @@ class ChatRoomService(
                     application.applicationMessage,
                     application.user.toApplicantProfile(),
                     application.createdDateTime,
+                )
+            }
+    }
+
+    /**
+     * 호스트가 보는 **대기열**. 자리가 나면 서버가 자동으로 1번을 합류시키므로,
+     * 여기 순번은 **실제 승급 순서와 같아야 한다** — 승급이 쓰는 정렬을 그대로 쓴다.
+     */
+    @Transactional(readOnly = true)
+    fun getWaitlistedApplications(
+        hostId: Long,
+        roomId: Long,
+    ): List<WaitlistedJoinApplicationResponse> {
+        requireHost(findRoom(roomId), hostId)
+        return applicationRepository
+            .findAllByChatRoomIdAndStatusOrderByCreatedDateTimeAscIdAsc(roomId, JoinApplicationStatus.WAITLISTED)
+            .mapIndexed { index, application ->
+                WaitlistedJoinApplicationResponse(
+                    applicationId = application.id,
+                    position = index + 1,
+                    applicationMessage = application.applicationMessage,
+                    applicant = application.user.toApplicantProfile(),
+                    appliedAt = application.createdDateTime,
+                )
+            }
+    }
+
+    // BE-17: 호스트의 「거절 기록」 섹션을 채울 조회. 거절된 신청은 지워지지 않고 REJECTED 로 남는다.
+    @Transactional(readOnly = true)
+    fun getRejectedApplications(
+        hostId: Long,
+        roomId: Long,
+    ): List<RejectedJoinApplicationResponse> {
+        requireHost(findRoom(roomId), hostId)
+        return applicationRepository
+            .findAllByChatRoomIdAndStatusOrderByCreatedDateTimeDescIdDesc(roomId, JoinApplicationStatus.REJECTED)
+            .map { application ->
+                RejectedJoinApplicationResponse(
+                    applicationId = application.id,
+                    applicationMessage = application.applicationMessage,
+                    applicant = application.user.toApplicantProfile(),
+                    appliedAt = application.createdDateTime,
+                    // V64 이전에 거절된 행은 거절 시각이 없어 신청 시각으로 대체한다.
+                    rejectedAt = application.rejectedDateTime ?: application.createdDateTime,
                 )
             }
     }
@@ -1180,11 +1287,26 @@ class ChatRoomService(
         roomId: Long,
         beforeMessageId: Long?,
         limit: Int,
+        afterMessageId: Long? = null,
     ): ChatMessagePageResponse {
         findRoom(roomId)
         val participant = findParticipant(roomId, userId)
         val pageSize = limit.coerceIn(1, 100)
         val pageable = PageRequest.of(0, pageSize + 1)
+        // BE-27②: afterMessageId 는 폴링용 정방향 커서다. 새로 온 것만 오래된 순서로 받아 간다.
+        // 실시간 채널(WebSocket/SSE)을 새로 열지 않고 응답 크기만 줄이는 것이 목적이다.
+        if (afterMessageId != null) {
+            val fetchedAscending = messageRepository.findAllByChatRoomIdAndIdGreaterThanOrderByIdAsc(roomId, afterMessageId, pageable)
+            val hasMore = fetchedAscending.size > pageSize
+            val messagesAscending = fetchedAscending.take(pageSize)
+            messagesAscending.lastOrNull()?.let { participant.readThrough(it.id) }
+            return ChatMessagePageResponse(
+                messages = messagesAscending.map { it.toResponse(userId) },
+                // 다음 폴링에 그대로 afterMessageId 로 넣을 수 있도록 가장 최신 메시지 ID 를 준다.
+                nextId = messagesAscending.lastOrNull()?.id?.takeIf { hasMore },
+                hasNext = hasMore,
+            )
+        }
         val fetchedMessages =
             beforeMessageId?.let {
                 messageRepository.findAllByChatRoomIdAndIdLessThanOrderByIdDesc(roomId, it, pageable)
@@ -1495,12 +1617,16 @@ class ChatRoomService(
                 room.host.id == user.id &&
                     room.hasCompletedTrip() &&
                     room.course.type == TravelCourseType.CUSTOM,
-            participantCount = participantRepository.countByChatRoomId(room.id).toInt(),
+            participantCount = participantCount(room.id),
             maxParticipants = room.maxParticipants,
             unreadMessageCount = messageRepository.countByChatRoomIdAndIdGreaterThan(room.id, lastReadMessageId),
             latestMessage = latest.toLatestResponse(),
         )
     }
+
+    // BE-16: 목록(/search)과 상세(/{id})의 participantCount 가 어긋난다는 보고가 있어
+    // 두 응답이 반드시 같은 기준을 쓰도록 집계를 이 함수 하나로 모았다.
+    private fun participantCount(roomId: Long): Int = participantRepository.countByChatRoomId(roomId).toInt()
 
     private fun ChatRoom.toSearchResponse(favorite: Boolean): SearchChatRoomResponse =
         SearchChatRoomResponse(
@@ -1509,9 +1635,11 @@ class ChatRoomService(
             thumbnail = thumbnail,
             status = status,
             favorite = favorite,
-            participantCount = participantRepository.countByChatRoomId(id).toInt(),
+            participantCount = participantCount(id),
             maxParticipants = maxParticipants,
             tags = course.tags.sortedBy { it.id }.map { TravelCourseTagResponse(it.id, it.name) },
+            courseTitle = course.title,
+            startDate = startDate,
         )
 
     private fun ChatRoom.toMapResponse(
@@ -1524,18 +1652,21 @@ class ChatRoomService(
             thumbnail = thumbnail,
             status = status,
             favorite = favorite,
-            participantCount = participantRepository.countByChatRoomId(id).toInt(),
+            participantCount = participantCount(id),
             maxParticipants = maxParticipants,
             tags = course.tags.sortedBy { it.id }.map { TravelCourseTagResponse(it.id, it.name) },
             meetingLatitude = requireNotNull(meetingLatitude),
             meetingLongitude = requireNotNull(meetingLongitude),
             meetingDetails = meetingDetails,
             distanceMeters = round(distanceKm * METERS_PER_KILOMETER).toLong(),
+            courseTitle = course.title,
+            startDate = startDate,
         )
 
     private fun ChatRoom.toDetail(
         favorite: Boolean,
         canApply: Boolean,
+        myParticipationStatus: MyParticipationStatus,
     ): ChatRoomDetailResponse {
         val participants = participantRepository.findAllByChatRoomIdOrderByCreatedDateTimeAsc(id)
         return ChatRoomDetailResponse(
@@ -1568,7 +1699,7 @@ class ChatRoomService(
                 host.information
                     ?.profileFileName
                     ?.let(objectStorageRepository::getDownloadUrl),
-            participantCount = participants.size,
+            participantCount = participantCount(id),
             minimumParticipants = minimumParticipants,
             maxParticipants = maxParticipants,
             status = status,
@@ -1588,6 +1719,9 @@ class ChatRoomService(
                                 ?.let(objectStorageRepository::getDownloadUrl),
                     )
                 },
+            // BE-23: 요약 응답과 같은 판정을 그대로 쓴다. 새로 계산하는 값이 아니다.
+            chatAvailable = canChat(),
+            myParticipationStatus = myParticipationStatus,
         )
     }
 
@@ -1606,6 +1740,27 @@ class ChatRoomService(
 
     private fun ChatRoom.hasEnded(today: LocalDate = LocalDate.now()): Boolean =
         status == ChatRoomStatus.CANCELLED || (endDate ?: startDate).isBefore(today)
+
+    // BE-10: 세 클라이언트가 /chat-rooms/my + /my-waiting 을 더 불러 흉내 내던 값이다.
+    // 호스트 → 참가자 → 신청 상태 순으로 판정한다.
+    private fun myParticipationStatus(
+        room: ChatRoom,
+        userId: Long,
+    ): MyParticipationStatus {
+        if (room.host.id == userId) return MyParticipationStatus.HOST
+        if (participantRepository.existsByChatRoomIdAndUserId(room.id, userId)) return MyParticipationStatus.JOINED
+        val application =
+            applicationRepository.findFirstByChatRoomIdAndUserIdAndStatusInOrderByCreatedDateTimeDescIdDesc(
+                room.id,
+                userId,
+                ACTIVE_APPLICATION_STATUSES,
+            ) ?: return MyParticipationStatus.NONE
+        return when (application.status) {
+            JoinApplicationStatus.PENDING -> MyParticipationStatus.APPLIED
+            JoinApplicationStatus.WAITLISTED -> MyParticipationStatus.WAITING
+            JoinApplicationStatus.REJECTED -> MyParticipationStatus.NONE
+        }
+    }
 
     private fun canApply(
         room: ChatRoom,
@@ -1817,6 +1972,75 @@ class ChatRoomService(
             ?.takeIf { it.matches(FILE_EXTENSION_PATTERN) }
             ?: DEFAULT_IMAGE_EXTENSION
 
+    // BE-08: 입력하지 않는 것(null)은 허용하고, 입력했다면 공백을 제외하고 10~200자여야 한다.
+    private fun validateApplicationMessageLength(applicationMessage: String?) {
+        val trimmed = applicationMessage?.trim() ?: return
+        if (trimmed.isEmpty()) return // 공백만 보낸 경우는 「입력하지 않음」과 같게 보고, 수동 승인 방에서 40010 으로 걸린다
+        if (trimmed.length !in MIN_APPLICATION_MESSAGE_LENGTH..MAX_APPLICATION_MESSAGE_LENGTH) {
+            throw BaseException(ErrorCode.INVALID_CHAT_JOIN_APPLICATION_MESSAGE)
+        }
+    }
+
+    // BE-12: 모집 신고. 자동 숨김은 하지 않고 기록만 남긴다 — 모집은 참가자가 이미 붙어 있어 자동 처리가 위험하다.
+    @Transactional
+    fun reportRoom(
+        userId: Long,
+        roomId: Long,
+        request: CreateChatRoomReportRequest,
+    ) {
+        val room = findRoom(roomId)
+        if (room.host.id == userId) throw BaseException(ErrorCode.SELF_CHAT_ROOM_REPORT_NOT_ALLOWED)
+        if (chatRoomReportRepository.existsByChatRoomIdAndReporterId(roomId, userId)) {
+            throw BaseException(ErrorCode.CHAT_ROOM_ALREADY_REPORTED)
+        }
+        chatRoomReportRepository.saveAndFlush(
+            ChatRoomReport(
+                chatRoom = room,
+                reporter = findUser(userId),
+                reason = request.reason,
+                details = request.details?.trim()?.takeIf(String::isNotEmpty),
+            ),
+        )
+    }
+
+    // BE-12: 멤버 신고. 신고와 차단은 별개다 — 앱의 「이 유저를 차단할게요」는 기존 차단 API 를 따로 부르면 된다.
+    // 이미 차단한 상대도 신고할 수 있어야 하므로 차단 관계를 막지 않는다.
+    @Transactional
+    fun reportMember(
+        userId: Long,
+        roomId: Long,
+        memberId: Long,
+        request: CreateUserReportRequest,
+    ) {
+        if (userId == memberId) throw BaseException(ErrorCode.SELF_USER_REPORT_NOT_ALLOWED)
+        val room = findRoom(roomId)
+        // 그 방에 있었던 사람만 신고할 수 있다. 참가자가 아니면 신고할 근거가 없다.
+        if (!participantRepository.existsByChatRoomIdAndUserId(roomId, memberId) && room.host.id != memberId) {
+            throw BaseException(ErrorCode.CHAT_ROOM_MEMBER_NOT_FOUND)
+        }
+        requireParticipant(roomId, userId)
+        if (userReportRepository.existsByReportedUserIdAndReporterId(memberId, userId)) {
+            throw BaseException(ErrorCode.USER_ALREADY_REPORTED)
+        }
+        userReportRepository.saveAndFlush(
+            UserReport(
+                reportedUser = findUser(memberId),
+                reporter = findUser(userId),
+                chatRoom = room,
+                reason = request.reason,
+                details = request.details?.trim()?.takeIf(String::isNotEmpty),
+            ),
+        )
+    }
+
+    @Transactional(readOnly = true)
+    fun getRoomReportReasons(): List<ChatRoomReportReasonResponse> =
+        ChatRoomReportReason.entries.map { ChatRoomReportReasonResponse(reason = it, displayName = it.displayName) }
+
+    @Transactional(readOnly = true)
+    fun getMemberReportReasons(): List<UserReportReasonResponse> =
+        UserReportReason.entries.map { UserReportReasonResponse(reason = it, displayName = it.displayName) }
+
     private fun requireJoinConditions(
         room: ChatRoom,
         user: User,
@@ -1918,7 +2142,10 @@ class ChatRoomService(
         }
     }
 
-    private fun TravelCourse.toInformationResponse(travelTime: String): TravelCourseInformationResponse =
+    private fun TravelCourse.toInformationResponse(
+        travelTime: String,
+        regionNames: Map<String, String> = regionNamesByLegalDongCode(),
+    ): TravelCourseInformationResponse =
         TravelCourseInformationResponse(
             courseId = id,
             title = title,
@@ -1929,9 +2156,27 @@ class ChatRoomService(
             averageRating = courseRatingRepository.findAverageByCourseId(id)?.rounded(1),
             ratingCount = courseRatingRepository.countByCourseId(id),
             tags = tags.sortedBy { it.id }.map { TravelCourseTagResponse(it.id, it.name) },
-            thumbnail = places.firstOrNull()?.tourismContent?.thumbnail,
+            // BE-22 · 큐레이션한 표지가 있으면 그것을, 없으면 지금까지처럼 첫 방문지 사진을 쓴다.
+            thumbnail = thumbnail ?: places.firstOrNull()?.tourismContent?.thumbnail,
             places = toResponse(editable = false).places,
+            region = regionName(regionNames),
+            creatorUserId = creatorUserIdOrNull(),
         )
+
+    // BE-14 · 코스에는 지역 컬럼이 없다. 첫 방문지의 법정동 코드로 시군구명을 찾아 채운다.
+    // 목록 응답이 코스마다 조회하지 않도록 법정동 표(경북 전체가 수십 행)를 한 번만 읽어 넘긴다.
+    private fun regionNamesByLegalDongCode(): Map<String, String> =
+        legalDongCodeRepository.findAll().associate { "${it.regionCode}:${it.signguCode}" to it.signguName }
+
+    private fun TravelCourse.regionName(regionNames: Map<String, String>): String? {
+        val content = places.firstOrNull()?.tourismContent ?: return null
+        val regionCode = content.regionCode ?: return null
+        val signguCode = content.signguCode ?: return null
+        return regionNames["$regionCode:$signguCode"]
+    }
+
+    // BE-15·BE-29 · 같은 뿌리라 한곳에서 판단한다. 닉네임·사진과 같이 「표시를 허용한 경우」에만 준다.
+    private fun TravelCourse.creatorUserIdOrNull(): Long? = owner?.id?.takeIf { showCreatorNickname }
 
     companion object {
         private const val SYSTEM_NICKNAME = "시스템"
@@ -1943,6 +2188,8 @@ class ChatRoomService(
         private const val MAX_CHAT_IMAGE_BYTES = 20L * 1024 * 1024
         private const val MAX_DISCOVER_ROOM_LIMIT = 20
         private const val NO_USER_ID = -1L
+        private const val MIN_APPLICATION_MESSAGE_LENGTH = 10
+        private const val MAX_APPLICATION_MESSAGE_LENGTH = 200
         private const val DEFAULT_IMAGE_EXTENSION = "jpg"
         private const val WEBP_EXTENSION = "webp"
         private const val WEBP_CONTENT_TYPE = "image/webp"

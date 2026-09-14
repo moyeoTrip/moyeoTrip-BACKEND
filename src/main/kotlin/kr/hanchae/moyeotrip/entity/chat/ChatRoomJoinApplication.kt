@@ -14,6 +14,7 @@ import jakarta.persistence.ManyToOne
 import jakarta.persistence.Table
 import kr.hanchae.moyeotrip.entity.BaseTimeEntity
 import kr.hanchae.moyeotrip.entity.user.User
+import java.time.LocalDateTime
 
 @Entity
 @Table(name = "chat_room_join_applications")
@@ -32,14 +33,20 @@ class ChatRoomJoinApplication(
     @Column(nullable = false, length = 20)
     var status: JoinApplicationStatus = JoinApplicationStatus.PENDING,
 ) : BaseTimeEntity() {
+    // BE-17: 호스트의 「거절 기록」에 거절 시각을 보여주기 위해 남긴다. V64 이전에 거절된 행은 null 이다.
+    @Column(name = "rejected_datetime")
+    var rejectedDateTime: LocalDateTime? = null
+        protected set
+
     fun moveToWaitlist() {
         check(status == JoinApplicationStatus.PENDING)
         status = JoinApplicationStatus.WAITLISTED
     }
 
-    fun reject() {
+    fun reject(now: LocalDateTime = LocalDateTime.now()) {
         check(status == JoinApplicationStatus.PENDING)
         status = JoinApplicationStatus.REJECTED
+        rejectedDateTime = now
     }
 }
 

@@ -7,6 +7,7 @@ import jakarta.validation.constraints.Min
 import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.NotNull
 import jakarta.validation.constraints.Size
+import kr.hanchae.moyeotrip.entity.chat.ChatRoom
 import kr.hanchae.moyeotrip.entity.chat.GenderRestriction
 import kr.hanchae.moyeotrip.entity.chat.JoinApprovalMode
 import kr.hanchae.moyeotrip.entity.chat.TripType
@@ -68,13 +69,13 @@ data class CreateChatRoomRequest(
     val participationFee: Long? = null,
     @field:Schema(description = "참가 성별 제한", example = "NONE")
     val genderRestriction: GenderRestriction,
-    @field:Schema(description = "참가 최소 만 나이", example = "20", nullable = true)
-    @field:Min(20)
-    @field:Max(100)
+    @field:Schema(description = "참가 최소 만 나이. 가입 최소 연령과 같은 19세가 하한이다.", example = "20", nullable = true)
+    @field:Min(ChatRoom.MINIMUM_CONDITION_AGE.toLong())
+    @field:Max(ChatRoom.MAXIMUM_CONDITION_AGE.toLong())
     val minimumAge: Int? = null,
     @field:Schema(description = "참가 최대 만 나이", example = "39", nullable = true)
-    @field:Min(20)
-    @field:Max(100)
+    @field:Min(ChatRoom.MINIMUM_CONDITION_AGE.toLong())
+    @field:Max(ChatRoom.MAXIMUM_CONDITION_AGE.toLong())
     val maximumAge: Int? = null,
     @field:Schema(description = "참가 신청 승인 방식. AUTO는 자동 승인, MANUAL은 호스트 승인입니다.", example = "MANUAL")
     val joinApprovalMode: JoinApprovalMode,

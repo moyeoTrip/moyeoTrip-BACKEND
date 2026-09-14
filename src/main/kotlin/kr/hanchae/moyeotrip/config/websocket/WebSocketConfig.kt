@@ -20,6 +20,19 @@ import org.springframework.web.socket.config.annotation.StompEndpointRegistry
 import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerConfigurer
 import java.security.Principal
 
+/**
+ * STOMP 핸드셰이크 경로.
+ *
+ * **인그레스(`deployment/ingress.yml`)에 이 경로가 함께 있어야 한다.** 예전에는 인그레스가
+ * `/api`·`/swagger-ui`·`/api-docs` 만 서비스로 보내서, **구현은 다 돼 있는데도 운영에서 404** 였다.
+ * 그래서 세 클라이언트가 전부 폴링으로 돌아갔다(QA `BE-27` — iOS 는 채팅 화면이 열려 있는 동안
+ * 5초마다 재조회하고 있었다).
+ *
+ * HTTP 단계는 `PERMITTED_URL_PATTERNS` 로 열어 두고, **실제 인증은 STOMP `CONNECT` 프레임의
+ * `Authorization` 헤더**에서 한다([WebSocketConfig.authenticate]).
+ */
+const val STOMP_ENDPOINT = "/ws"
+
 @Configuration
 @EnableWebSocketMessageBroker
 class WebSocketConfig(
@@ -36,7 +49,7 @@ class WebSocketConfig(
 
     override fun registerStompEndpoints(registry: StompEndpointRegistry) {
         registry
-            .addEndpoint("/ws")
+            .addEndpoint(STOMP_ENDPOINT)
             .setAllowedOriginPatterns(*corsProperties.allowedOrigins.toTypedArray())
     }
 

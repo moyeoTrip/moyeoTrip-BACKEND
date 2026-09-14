@@ -136,7 +136,7 @@ class AuthServiceTest {
 
     @Test
     fun `Firebase 회원가입은 완성된 사용자와 서비스 토큰을 생성한다`() {
-        val minimumAgeBirthDate = LocalDate.now().minusYears(20)
+        val minimumAgeBirthDate = LocalDate.now().minusYears(19)
         val identity = FirebaseIdentity("firebase-uid", "user@example.com", ProviderType.EMAIL)
         val previousTokenOwner =
             User(id = 9L, userRole = UserRole.ROLE_USER).also {
@@ -229,7 +229,7 @@ class AuthServiceTest {
                 nicknameSelectionToken = "selection-token",
                 nickname = "따스한 사슴 1234",
                 gender = Gender.F,
-                birthDate = LocalDate.now().minusYears(20),
+                birthDate = LocalDate.now().minusYears(19),
                 travelStyleIds = setOf(1L),
                 interestedRegionIds = setOf(1L),
                 agreedTermIds = setOf(1L, 2L, 3L),
@@ -257,7 +257,7 @@ class AuthServiceTest {
                         nicknameSelectionToken = "selection-token",
                         nickname = "따스한 사슴 1234",
                         gender = Gender.F,
-                        birthDate = LocalDate.now().minusYears(20),
+                        birthDate = LocalDate.now().minusYears(19),
                         travelStyleIds = setOf(1L),
                         interestedRegionIds = setOf(1L),
                         agreedTermIds = setOf(1L),
@@ -270,7 +270,7 @@ class AuthServiceTest {
     }
 
     @Test
-    fun `만 20세 미만 사용자는 Firebase 회원가입을 할 수 없다`() {
+    fun `만 19세 미만 사용자는 Firebase 회원가입을 할 수 없다`() {
         val identity = FirebaseIdentity("firebase-uid", "user@example.com", ProviderType.EMAIL)
         `when`(firebaseAuthenticationClient.verifyIdToken("id-token")).thenReturn(identity)
         `when`(userAuthIdentityRepository.findByProviderTypeAndProviderUserId(ProviderType.EMAIL, "firebase-uid")).thenReturn(null)
@@ -284,7 +284,7 @@ class AuthServiceTest {
                         nicknameSelectionToken = "selection-token",
                         nickname = "따스한 사슴 1234",
                         gender = Gender.F,
-                        birthDate = LocalDate.now().minusYears(20).plusDays(1),
+                        birthDate = LocalDate.now().minusYears(19).plusDays(1),
                         travelStyleIds = setOf(1L),
                         interestedRegionIds = setOf(1L),
                     ),
@@ -878,7 +878,7 @@ class AuthServiceTest {
             nicknameSelectionToken = "selection-token",
             nickname = "따스한 사슴 1234",
             gender = Gender.F,
-            birthDate = LocalDate.now().minusYears(20),
+            birthDate = LocalDate.now().minusYears(19),
             travelStyleIds = travelStyleIds,
             interestedRegionIds = interestedRegionIds,
             agreedTermIds = agreedTermIds,

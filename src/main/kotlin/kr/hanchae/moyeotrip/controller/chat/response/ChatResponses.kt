@@ -9,6 +9,8 @@ import kr.hanchae.moyeotrip.entity.chat.GenderRestriction
 import kr.hanchae.moyeotrip.entity.chat.JoinApplicationStatus
 import kr.hanchae.moyeotrip.entity.chat.JoinApprovalMode
 import kr.hanchae.moyeotrip.entity.chat.TripType
+import kr.hanchae.moyeotrip.entity.report.ChatRoomReportReason
+import kr.hanchae.moyeotrip.entity.report.UserReportReason
 import kr.hanchae.moyeotrip.entity.tour.TravelCourseType
 import kr.hanchae.moyeotrip.entity.user.Gender
 import java.time.LocalDate
@@ -101,7 +103,28 @@ data class ChatRoomDetailResponse(
     val latestPinnedNotice: ChatRoomNoticeResponse?,
     @field:Schema(description = "현재 승인된 참가자 목록")
     val participants: List<ChatParticipantResponse>,
+    // BE-23: 요약 응답(MyChatRoomSummaryResponse.chatAvailable)에만 있던 판정을 상세에도 그대로 내려준다.
+    // 클라이언트가 status == CANCELLED 만으로는 보관된(archiveChat) 읽기 전용 방을 구분할 수 없었다.
+    @field:Schema(description = "이 채팅방에서 메시지를 보낼 수 있는지 여부. 취소되었거나 보관된 방이면 false", example = "true")
+    val chatAvailable: Boolean,
+    // BE-10: 클라이언트가 /chat-rooms/my + /my-waiting 을 더 불러 추론하던 「내 상태」를 상세 응답에 담는다.
+    @field:Schema(description = "로그인 사용자의 이 모임 참여·신청 상태", example = "NONE")
+    val myParticipationStatus: MyParticipationStatus,
 )
+
+@Schema(
+    description =
+        "로그인 사용자의 모임 참여·신청 상태. HOST=내가 개설한 모임, JOINED=참가 중, APPLIED=호스트 승인 대기, " +
+            "WAITING=승인됐지만 정원이 차 대기열, NONE=참여·신청 이력 없음",
+    allowableValues = ["HOST", "JOINED", "APPLIED", "WAITING", "NONE"],
+)
+enum class MyParticipationStatus {
+    HOST,
+    JOINED,
+    APPLIED,
+    WAITING,
+    NONE,
+}
 
 @Schema(description = "채팅방에 연결된 여행 코스 요약 정보")
 data class TravelCourseResponse(
@@ -161,10 +184,16 @@ data class TravelCourseInformationResponse(
     val ratingCount: Long,
     @field:Schema(description = "연결된 여행 코스 태그 목록")
     val tags: List<TravelCourseTagResponse>,
-    @field:Schema(description = "여행 코스 대표 썸네일 URL", nullable = true)
+    @field:Schema(description = "여행 코스 대표 썸네일 URL. 코스에 큐레이션한 이미지가 없으면 첫 방문지 사진", nullable = true)
     val thumbnail: String?,
     @field:Schema(description = "방문 순서와 시간을 포함한 장소 목록")
     val places: List<TravelCoursePlaceResponse>,
+    // BE-14 · 코스에는 지역 컬럼이 없어 첫 방문지의 법정동 시군구명으로 채운다. 방문지에 법정동 코드가 없으면 null.
+    @field:Schema(description = "첫 방문지 기준 시군구명. 확인할 수 없으면 null", example = "청송군", nullable = true)
+    val region: String?,
+    // BE-15 · 작성자 프로필로 이동할 수 있도록 userId 를 준다. 닉네임·사진과 같은 「표시를 허용한 경우」 조건을 따른다.
+    @field:Schema(description = "작성자 표시를 허용한 경우의 작성자 userId. 비공개거나 작성자가 없으면 null", example = "123", nullable = true)
+    val creatorUserId: Long?,
 )
 
 @Schema(description = "공개 여행 코스 상세 정보")
@@ -195,10 +224,21 @@ data class PublicTravelCourseDetailResponse(
     val ratingCount: Long,
     @field:Schema(description = "연결된 여행 코스 태그 목록")
     val tags: List<TravelCourseTagResponse>,
-    @field:Schema(description = "여행 코스 대표 썸네일 URL", nullable = true)
+    @field:Schema(description = "여행 코스 대표 썸네일 URL. 코스에 큐레이션한 이미지가 없으면 첫 방문지 사진", nullable = true)
     val thumbnail: String?,
     @field:Schema(description = "방문 순서와 시간을 포함한 장소 목록")
     val places: List<TravelCoursePlaceResponse>,
+    // BE-14 · 목록 응답과 같은 기준(첫 방문지의 법정동 시군구명)으로 채운다.
+    @field:Schema(description = "첫 방문지 기준 시군구명. 확인할 수 없으면 null", example = "청송군", nullable = true)
+    val region: String?,
+    // BE-29 · 25 공개 프로필은 userId 로만 열린다. 닉네임·사진과 같은 「표시를 허용한 경우」 조건을 따른다.
+    @field:Schema(description = "작성자 표시를 허용한 경우의 작성자 userId. 비공개거나 작성자가 없으면 null", example = "123", nullable = true)
+    val creatorUserId: Long?,
+    // BE-26 · 상세를 열 때마다 찜 목록을 한 번 더 부르지 않도록 토글 응답과 같은 두 값을 함께 준다.
+    @field:Schema(description = "로그인 사용자의 찜 여부", example = "true")
+    val favorite: Boolean,
+    @field:Schema(description = "코스 찜 수", example = "12")
+    val favoriteCount: Long,
 )
 
 @Schema(description = "여행 코스 방문 장소와 일정 정보")
@@ -271,6 +311,56 @@ data class ChatRoomKickHistoryResponse(
     val reason: String,
     @field:Schema(description = "강퇴 처리 일시", example = "2026-09-10T12:00:00")
     val kickedAt: LocalDateTime,
+)
+
+// BE-17: 거절된 신청은 status=REJECTED 로 남아 있는데 조회할 API 가 없어 호스트의 「거절 기록」이 영원히 비어 있었다.
+@Schema(description = "호스트가 조회하는 거절된 참가 신청 이력")
+data class RejectedJoinApplicationResponse(
+    @field:Schema(description = "거절된 참가 신청 ID", example = "30")
+    val applicationId: Long,
+    @field:Schema(description = "신청자가 작성했던 자기소개")
+    val applicationMessage: String,
+    @field:Schema(description = "신청자 프로필 정보")
+    val applicant: ApplicantProfileResponse,
+    @field:Schema(description = "참가 신청 일시", example = "2026-09-01T12:30:00")
+    val appliedAt: LocalDateTime,
+    @field:Schema(description = "거절 처리 일시", example = "2026-09-02T09:10:00")
+    val rejectedAt: LocalDateTime,
+)
+
+/**
+ * 대기열에 올라 있는 신청. 호스트 화면이 「승인 대기」만 보여 줘서,
+ * **호스트가 승인한 사람이 정원 초과로 대기열에 들어가면 화면에서 사라진 것처럼 보였다.**
+ */
+@Schema(description = "대기열에 올라 있는 참가 신청")
+data class WaitlistedJoinApplicationResponse(
+    @field:Schema(description = "참가 신청 ID", example = "30")
+    val applicationId: Long,
+    @field:Schema(description = "대기 순번. 1이 다음에 자동으로 합류할 사람이다.", example = "1")
+    val position: Int,
+    @field:Schema(description = "신청자가 작성한 자기소개")
+    val applicationMessage: String,
+    @field:Schema(description = "신청자 프로필 정보")
+    val applicant: ApplicantProfileResponse,
+    @field:Schema(description = "참가 신청 일시", example = "2026-09-01T12:30:00")
+    val appliedAt: LocalDateTime,
+)
+
+// BE-12: 클라이언트가 사유 목록을 하드코딩하지 않도록 피드(FeedReportReasonResponse)와 같은 형태로 내려준다.
+@Schema(description = "모집 신고 사유 항목")
+data class ChatRoomReportReasonResponse(
+    @field:Schema(description = "신고 요청에 전달할 사유 코드", example = "SPAM")
+    val reason: ChatRoomReportReason,
+    @field:Schema(description = "화면에 표시할 신고 사유명", example = "스팸 또는 광고")
+    val displayName: String,
+)
+
+@Schema(description = "멤버 신고 사유 항목")
+data class UserReportReasonResponse(
+    @field:Schema(description = "신고 요청에 전달할 사유 코드", example = "HARASSMENT")
+    val reason: UserReportReason,
+    @field:Schema(description = "화면에 표시할 신고 사유명", example = "괴롭힘 또는 혐오 표현")
+    val displayName: String,
 )
 
 @Schema(description = "채팅방 참가 신청 처리 결과")
@@ -584,6 +674,11 @@ data class SearchChatRoomResponse(
     val maxParticipants: Int,
     @field:Schema(description = "여행 코스 태그 목록")
     val tags: List<TravelCourseTagResponse>,
+    // BE-11: 카드가 「코스 제목 · 출발일」을 그리는데 값이 없어 구분점만 남던 문제.
+    @field:Schema(description = "연결된 여행 코스 제목", example = "주왕산 단풍길 코스")
+    val courseTitle: String,
+    @field:Schema(description = "여행 시작일", example = "2026-09-12", type = "string", format = "date")
+    val startDate: LocalDate,
 )
 
 @Schema(description = "지도 반경 내 모집 중인 채팅방 정보")
@@ -612,6 +707,11 @@ data class MapChatRoomResponse(
     val meetingDetails: String?,
     @field:Schema(description = "요청 좌표로부터 집합 장소까지의 직선거리(m)", example = "842")
     val distanceMeters: Long,
+    // BE-11: 지도 말풍선도 목록 카드와 같은 정보를 그린다.
+    @field:Schema(description = "연결된 여행 코스 제목", example = "주왕산 단풍길 코스")
+    val courseTitle: String,
+    @field:Schema(description = "여행 시작일", example = "2026-09-12", type = "string", format = "date")
+    val startDate: LocalDate,
 )
 
 @Schema(description = "호스트 승인 또는 대기열 대기 중인 채팅방 정보")

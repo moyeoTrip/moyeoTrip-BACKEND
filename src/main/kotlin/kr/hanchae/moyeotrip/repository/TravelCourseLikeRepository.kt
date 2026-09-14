@@ -16,6 +16,12 @@ interface TravelCourseLikeRepository :
     ): TravelCourseLike?
 
     fun countByCourseId(courseId: Long): Long
+
+    // BE-26 · 코스 상세는 찜 여부만 필요해 엔티티를 읽지 않는다.
+    fun existsByCourseIdAndUserId(
+        courseId: Long,
+        userId: Long,
+    ): Boolean
 }
 
 interface TravelCourseLikeCustomRepository {

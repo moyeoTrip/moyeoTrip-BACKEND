@@ -1,11 +1,17 @@
 package kr.hanchae.moyeotrip.controller.chat
 
+import kr.hanchae.moyeotrip.controller.chat.response.CreateChatRoomResponse
 import kr.hanchae.moyeotrip.service.chat.ChatRoomService
 import kr.hanchae.moyeotrip.service.search.PopularSearchKeywordService
 import kr.hanchae.moyeotrip.support.LoginUserIdStubResolver
 import org.junit.jupiter.api.Test
+import org.mockito.ArgumentMatchers.any
+import org.mockito.ArgumentMatchers.eq
+import org.mockito.ArgumentMatchers.isNull
 import org.mockito.Mockito.mock
+import org.mockito.Mockito.verify
 import org.mockito.Mockito.verifyNoInteractions
+import org.mockito.Mockito.`when`
 import org.springframework.http.HttpMethod
 import org.springframework.http.MediaType
 import org.springframework.mock.web.MockMultipartFile
@@ -47,8 +53,11 @@ class ChatRoomControllerValidationTest {
         verifyNoInteractions(chatRoomService)
     }
 
+    // BE-07: 썸네일 파트는 선택값이 됐다. 파트가 아예 없으면 서버가 코스 대표 이미지로 채우므로 생성을 막지 않는다.
     @Test
-    fun `채팅방 생성은 필수 썸네일 파트가 없으면 거부한다`() {
+    fun `채팅방 생성은 썸네일 파트가 없어도 서비스까지 전달한다`() {
+        `when`(chatRoomService.createRoom(eq(1L), anyValue(), isNull())).thenReturn(CreateChatRoomResponse(roomId = 101L))
+
         mockMvc
             .perform(
                 multipart("/api/v1/chat-rooms")
@@ -60,9 +69,9 @@ class ChatRoomControllerValidationTest {
                             validCreateRoomJson.toByteArray(),
                         ),
                     ),
-            ).andExpect(status().isBadRequest)
+            ).andExpect(status().isCreated)
 
-        verifyNoInteractions(chatRoomService)
+        verify(chatRoomService).createRoom(eq(1L), anyValue(), isNull())
     }
 
     @Test
@@ -77,7 +86,7 @@ class ChatRoomControllerValidationTest {
                 validCreateRoomJson.addAfterTitle("\"meetingLongitude\":181,"),
                 validCreateRoomJson.addAfterTitle("\"meetingDetails\":\"${"가".repeat(501)}\","),
                 validCreateRoomJson.addAfterTitle("\"participationFee\":-1,"),
-                validCreateRoomJson.addAfterTitle("\"minimumAge\":19,"),
+                validCreateRoomJson.addAfterTitle("\"minimumAge\":18,"),
                 validCreateRoomJson.addAfterTitle("\"maximumAge\":101,"),
                 validCreateRoomJson.replace("\"title\":\"테스트 코스\"", "\"title\":\" \""),
                 validCreateRoomJson.replace("\"title\":\"테스트 코스\"", "\"title\":\"${"가".repeat(101)}\""),
@@ -345,4 +354,7 @@ class ChatRoomControllerValidationTest {
             }
             """.trimIndent()
     }
+
+    // Mockito 의 any() 는 null 을 돌려줘 Kotlin 의 non-null 파라미터에 그대로 쓸 수 없다.
+    private fun <T> anyValue(): T = any()
 }

@@ -12,11 +12,15 @@ import kr.hanchae.moyeotrip.controller.user.response.ProfileImageSelectionRespon
 import kr.hanchae.moyeotrip.controller.user.response.ProfileOptionsResponse
 import kr.hanchae.moyeotrip.controller.user.response.PublicProfileResponse
 import kr.hanchae.moyeotrip.controller.user.response.TravelStyleResponse
+import kr.hanchae.moyeotrip.controller.user.response.WithdrawalReasonResponse
 import kr.hanchae.moyeotrip.entity.feed.FeedVisibility
 import kr.hanchae.moyeotrip.entity.notification.ChatNotificationMode
+import kr.hanchae.moyeotrip.entity.user.AgePolicy
 import kr.hanchae.moyeotrip.entity.user.SignupState
 import kr.hanchae.moyeotrip.entity.user.User
 import kr.hanchae.moyeotrip.entity.user.UserProfileImage
+import kr.hanchae.moyeotrip.entity.user.WithdrawalReason
+import kr.hanchae.moyeotrip.entity.user.WithdrawalReasonRecord
 import kr.hanchae.moyeotrip.exception.BaseException
 import kr.hanchae.moyeotrip.exception.ErrorCode
 import kr.hanchae.moyeotrip.exception.UserNotFoundException
@@ -29,6 +33,7 @@ import kr.hanchae.moyeotrip.repository.TravelStyleRepository
 import kr.hanchae.moyeotrip.repository.UserProfileImageRepository
 import kr.hanchae.moyeotrip.repository.UserRepository
 import kr.hanchae.moyeotrip.repository.UserWithdrawalDataRepository
+import kr.hanchae.moyeotrip.repository.WithdrawalReasonRepository
 import kr.hanchae.moyeotrip.utils.FhdWebpImageOptimizer
 import kr.hanchae.moyeotrip.utils.jwt.JwtUtil
 import org.slf4j.LoggerFactory
@@ -55,6 +60,7 @@ class UserService(
     private val userWithdrawalDataRepository: UserWithdrawalDataRepository,
     private val chatRoomParticipantRepository: ChatRoomParticipantRepository,
     private val feedRepository: FeedRepository,
+    private val withdrawalReasonRepository: WithdrawalReasonRepository,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -91,7 +97,7 @@ class UserService(
     ): MyProfileResponse {
         val user = userRepository.findByIdForUpdate(userId) ?: throw UserNotFoundException(userId)
         requireProfileSetupStarted(user)
-        if (Period.between(request.birthDate, LocalDate.now()).years < MINIMUM_PROFILE_AGE) {
+        if (Period.between(request.birthDate, LocalDate.now()).years < AgePolicy.MINIMUM_SIGNUP_AGE) {
             throw BaseException(ErrorCode.MINIMUM_SIGNUP_AGE_NOT_MET)
         }
         val interestedRegions = legalDongCodeRepository.findAllById(request.interestedRegionIds)
@@ -203,10 +209,21 @@ class UserService(
         )
     }
 
+    /** 탈퇴 사유 선택지. 문구 정본은 서버에 둔다 — 세 플랫폼이 하드코딩하면 조금씩 어긋난다. */
+    fun getWithdrawalReasons(): List<WithdrawalReasonResponse> =
+        WithdrawalReason.entries.map { WithdrawalReasonResponse(reason = it, displayName = it.displayName) }
+
+    /**
+     * @param reason 탈퇴 화면에서 고른 사유. 선택값이다 — 예전에는 화면이 사유를 묻고도
+     * 보낼 곳이 없어 그대로 버렸다 (QA `BE-25`). **누가 골랐는지는 남기지 않는다.**
+     * @param reasonDetail 「기타」를 고른 경우의 자유 입력.
+     */
     @Transactional
     fun withdraw(
         userId: Long,
         withdrawnAt: LocalDateTime = LocalDateTime.now(),
+        reason: WithdrawalReason? = null,
+        reasonDetail: String? = null,
     ) {
         val user = userRepository.findByIdForUpdate(userId) ?: throw UserNotFoundException(userId)
         if (user.isWithdrawn()) throw UserNotFoundException(userId)
@@ -217,6 +234,17 @@ class UserService(
                 .all
 
         user.withdraw(withdrawnAt)
+        // 사유는 **탈퇴 처리와 별개로** 남긴다. 사유 저장이 실패한다고 탈퇴를 막으면 안 되고,
+        // 반대로 사유를 안 골랐다고 탈퇴를 막을 이유도 없다.
+        reason?.let {
+            withdrawalReasonRepository.save(
+                WithdrawalReasonRecord(
+                    reason = it,
+                    // 「기타」가 아닌데 딸려 온 자유 입력은 버린다 — 화면이 지운 값을 서버가 주워 담지 않는다.
+                    detail = reasonDetail?.trim()?.takeIf { text -> text.isNotEmpty() && it == WithdrawalReason.OTHER },
+                ),
+            )
+        }
         scheduleWithdrawalCleanupAfterCommit(userId, activityObjectKeys)
     }
 
@@ -363,7 +391,6 @@ class UserService(
     }
 
     companion object {
-        private const val MINIMUM_PROFILE_AGE = 20
         private const val GYEONGSANGBUKDO_REGION_CODE = "47"
     }
 }

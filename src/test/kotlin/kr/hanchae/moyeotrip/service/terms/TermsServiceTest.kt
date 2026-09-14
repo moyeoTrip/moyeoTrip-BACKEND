@@ -41,6 +41,49 @@ class TermsServiceTest {
             assertEquals(listOf("[필수] 모여트립 이용약관", "[선택] 마케팅 정보 수신 동의"), response.map { it.title })
             assertEquals(listOf(true, false), response.map { it.required })
         }
+
+        @Test
+        fun `고지 문서인 처리방침은 가입 동의 목록에 오지 않는다`() {
+            // 처리방침은 동의를 받는 문서가 아니다. 섞이면 가입 화면에 동의할 수 없는 체크박스가 생긴다.
+            `when`(agreementTermRepository.findAllByActiveTrueOrderByIdAsc())
+                .thenReturn(
+                    listOf(
+                        term(id = 1L, required = true),
+                        term(id = 4L, required = false, code = AgreementTermCode.PRIVACY_POLICY),
+                    ),
+                )
+
+            val response = termsService.getTerms()
+
+            assertEquals(listOf(1L), response.map { it.termId })
+        }
+    }
+
+    @Nested
+    inner class GetLatestTerm {
+        @Test
+        fun `종류로 현재 판본 본문을 가져온다`() {
+            `when`(agreementTermRepository.findFirstByCodeAndActiveTrueOrderByIdDesc(AgreementTermCode.PRIVACY_POLICY))
+                .thenReturn(term(id = 4L, required = false, code = AgreementTermCode.PRIVACY_POLICY))
+
+            val response = termsService.getLatestTerm(AgreementTermCode.PRIVACY_POLICY)
+
+            assertEquals(AgreementTermCode.PRIVACY_POLICY, response.code)
+            assertEquals("# 모여트립 이용약관", response.content)
+        }
+
+        @Test
+        fun `그 종류의 활성 판본이 없으면 조회할 수 없다`() {
+            `when`(agreementTermRepository.findFirstByCodeAndActiveTrueOrderByIdDesc(AgreementTermCode.PRIVACY_POLICY))
+                .thenReturn(null)
+
+            val exception =
+                assertThrows(BaseException::class.java) {
+                    termsService.getLatestTerm(AgreementTermCode.PRIVACY_POLICY)
+                }
+
+            assertEquals(ErrorCode.AGREEMENT_TERM_NOT_FOUND, exception.errorCode)
+        }
     }
 
     @Nested

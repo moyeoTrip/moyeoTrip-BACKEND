@@ -40,11 +40,19 @@ interface ChatRoomRepository :
 }
 
 interface ChatRoomCustomRepository {
+    // BE-02: 목록과 지도가 같은 필터(tagId)를 받아 같은 결과 집합을 주도록 맞췄다.
+    /**
+     * 탐색 목록. [cursor] 는 **직전 페이지의 마지막 방 id** 이고, 그보다 작은 id 만 준다.
+     * 정렬을 `id DESC` 하나로 둔 이유가 여기 있다 — 커서가 id 인데 다른 값으로 정렬하면
+     * 경계에서 한 건을 건너뛰거나 두 번 보여 준다.
+     */
     fun searchRooms(
         userId: Long,
         blockedUserIds: Collection<Long>,
         keyword: String?,
+        tagId: Long?,
         today: LocalDate,
+        cursor: Long?,
         pageable: Pageable,
     ): List<ChatRoom>
 
@@ -59,6 +67,7 @@ interface ChatRoomCustomRepository {
     fun findMapRooms(
         userId: Long,
         blockedUserIds: Collection<Long>,
+        tagId: Long?,
         today: LocalDate,
         minimumLatitude: Double,
         maximumLatitude: Double,
@@ -96,6 +105,20 @@ interface ChatRoomCustomRepository {
         date: LocalDate,
     ): List<ChatRoom>
 
+    /**
+     * 채팅을 잠글 때가 된 방 — 여행이 [date] 이전에 끝났고 아직 안 잠긴 확정 방.
+     *
+     * **삭제 예약(`deletionScheduledDate`)과는 별개다.** 잠금은 「더 못 쓴다」이고,
+     * 삭제는 「기록이 사라진다」라 시점이 다르다(잠금 +7일 · 삭제 +14일).
+     * 그래서 `findAllCompletedRoomsWithoutDeletionScheduleForUpdate` 와 달리
+     * 삭제 예약 여부를 보지 않는다.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    fun findAllChatCloseDueRoomsForUpdate(
+        status: ChatRoomStatus,
+        date: LocalDate,
+    ): List<ChatRoom>
+
     fun existsCompletedHostRoom(
         hostId: Long,
         courseId: Long,
@@ -117,6 +140,7 @@ class ChatRoomCustomRepositoryImpl(
     override fun findMapRooms(
         userId: Long,
         blockedUserIds: Collection<Long>,
+        tagId: Long?,
         today: LocalDate,
         minimumLatitude: Double,
         maximumLatitude: Double,
@@ -127,15 +151,22 @@ class ChatRoomCustomRepositoryImpl(
         kotlinJdslJpqlExecutor
             .findAll {
                 val room = entity(ChatRoom::class)
+                val course = entity(TravelCourse::class)
+                val tag = entity(TravelCourseTag::class)
                 val blockedParticipant = entity(ChatRoomParticipant::class)
                 val myParticipant = entity(ChatRoomParticipant::class)
                 val longitude = room.path(ChatRoom::meetingLongitude)
 
-                select(room)
-                    .from(room)
-                    .whereAnd(
+                // BE-02: 목록(searchRooms)과 같은 태그 조건을 태울 수 있도록 코스·태그를 조인한다.
+                selectDistinct(room)
+                    .from(
+                        room,
+                        innerJoin(room.path(ChatRoom::course)).`as`(course),
+                        leftJoin(course.path(TravelCourse::courseTags)).`as`(tag),
+                    ).whereAnd(
                         room.path(ChatRoom::status).eq(ChatRoomStatus.RECRUITING),
                         room.path(ChatRoom::recruitmentDeadlineDate).ge(today),
+                        tagId?.let { tag.path(TravelCourseTag::id).eq(it) },
                         room.path(ChatRoom::meetingLatitude).ge(minimumLatitude),
                         room.path(ChatRoom::meetingLatitude).le(maximumLatitude),
                         if (crossesDateLine) {
@@ -167,7 +198,9 @@ class ChatRoomCustomRepositoryImpl(
         userId: Long,
         blockedUserIds: Collection<Long>,
         keyword: String?,
+        tagId: Long?,
         today: LocalDate,
+        cursor: Long?,
         pageable: Pageable,
     ): List<ChatRoom> =
         kotlinJdslJpqlExecutor
@@ -190,6 +223,10 @@ class ChatRoomCustomRepositoryImpl(
                     ).whereAnd(
                         room.path(ChatRoom::status).eq(ChatRoomStatus.RECRUITING),
                         room.path(ChatRoom::recruitmentDeadlineDate).ge(today),
+                        // 무한 스크롤 커서. 첫 페이지는 null 이라 지금까지와 똑같이 동작한다.
+                        cursor?.let { room.path(ChatRoom::id).lt(it) },
+                        // BE-02: 지도와 같은 태그 조건. 생략하면 지금까지와 똑같이 전체를 조회한다.
+                        tagId?.let { tag.path(TravelCourseTag::id).eq(it) },
                         keyword?.let { keyword ->
                             val pattern = "%${keyword.lowercase()}%"
                             or(
@@ -219,10 +256,7 @@ class ChatRoomCustomRepositoryImpl(
                                     myParticipant.path(ChatRoomParticipant::user).path(User::id).eq(userId),
                                 ).asSubquery(),
                         ),
-                    ).orderBy(
-                        room.path(ChatRoom::createdDateTime).desc(),
-                        room.path(ChatRoom::id).desc(),
-                    )
+                    ).orderBy(room.path(ChatRoom::id).desc())
             }.filterNotNull()
 
     override fun findRecruitingRoomsByPublicCourseId(
@@ -342,6 +376,24 @@ class ChatRoomCustomRepositoryImpl(
                     .whereAnd(
                         room.path(ChatRoom::status).eq(status),
                         room.path(ChatRoom::deletionScheduledDate).isNull(),
+                        room.path(ChatRoom::chatClosedDateTime).isNull(),
+                        completedTripPredicate(room, date),
+                    )
+            }.filterNotNull()
+
+    override fun findAllChatCloseDueRoomsForUpdate(
+        status: ChatRoomStatus,
+        date: LocalDate,
+    ): List<ChatRoom> =
+        kotlinJdslJpqlExecutor
+            .findAll {
+                val room = entity(ChatRoom::class)
+
+                select(room)
+                    .from(room)
+                    .whereAnd(
+                        room.path(ChatRoom::status).eq(status),
+                        // 이미 잠긴 방은 건드리지 않는다 — 잠금 시각을 뒤로 미루면 안 된다.
                         room.path(ChatRoom::chatClosedDateTime).isNull(),
                         completedTripPredicate(room, date),
                     )

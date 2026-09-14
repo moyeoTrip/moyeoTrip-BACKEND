@@ -228,7 +228,13 @@ interface TravelCourseAPISpec {
         request: PublishTravelCourseRequest,
     ): CoursePublicationResponse
 
-    @Operation(summary = "여행 코스 상세 조회", description = "공개된 여행 코스의 작성자 표시 여부, 평점, 태그와 방문 장소를 반환합니다.")
+    @Operation(
+        summary = "여행 코스 상세 조회",
+        description =
+            "공개된 여행 코스의 작성자 표시 여부, 평점, 태그와 방문 장소를 반환합니다. " +
+                "작성자 표시를 허용한 코스는 creatorUserId 로 공개 프로필을 열 수 있고, " +
+                "favorite·favoriteCount 로 로그인 사용자의 찜 여부와 찜 수를 함께 확인할 수 있습니다.",
+    )
     @ApiResponses(
         value = [
             ApiResponse(
@@ -249,6 +255,7 @@ interface TravelCourseAPISpec {
         ],
     )
     fun getCourse(
+        @Parameter(hidden = true) userId: Long,
         @Parameter(description = "상세 조회할 공개 여행 코스 ID", example = "77")
         courseId: Long,
     ): PublicTravelCourseDetailResponse

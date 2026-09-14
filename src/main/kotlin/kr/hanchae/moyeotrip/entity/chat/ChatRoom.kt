@@ -15,6 +15,7 @@ import jakarta.persistence.Table
 import jakarta.persistence.Transient
 import kr.hanchae.moyeotrip.entity.BaseModifiableEntity
 import kr.hanchae.moyeotrip.entity.tour.TravelCourse
+import kr.hanchae.moyeotrip.entity.user.AgePolicy
 import kr.hanchae.moyeotrip.entity.user.User
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -150,8 +151,8 @@ class ChatRoom(
         participationFee?.let { require(it >= 0) }
         val minimumAgeValue = minimumAge
         val maximumAgeValue = maximumAge
-        minimumAgeValue?.let { require(it in 20..100) }
-        maximumAgeValue?.let { require(it in 20..100) }
+        minimumAgeValue?.let { require(it in MINIMUM_CONDITION_AGE..MAXIMUM_CONDITION_AGE) }
+        maximumAgeValue?.let { require(it in MINIMUM_CONDITION_AGE..MAXIMUM_CONDITION_AGE) }
         if (minimumAgeValue != null && maximumAgeValue != null) require(minimumAgeValue <= maximumAgeValue)
         meetingLatitude?.let { require(it in -90.0..90.0) }
         meetingLongitude?.let { require(it in -180.0..180.0) }
@@ -248,6 +249,20 @@ class ChatRoom(
         deletionScheduledDate = deletionDate
     }
 
+    /**
+     * 여행이 끝나고 일정 기간이 지나 **더 쓸 수 없게** 잠근다. 읽기는 그대로 된다.
+     *
+     * [archiveChat] 과 다르다 — 저쪽은 **보관**이라 삭제 예약을 지우고 메시지도 함께 정리된다.
+     * 이쪽은 「대화를 여기서 멈춘다」뿐이라 **삭제 예약을 건드리지 않는다.**
+     * 이미 잠긴 방은 그대로 둔다 — 다시 부른다고 잠금 시각이 밀리면 안 된다.
+     */
+    fun closeChatForWriting(now: LocalDateTime) {
+        require(status == ChatRoomStatus.CONFIRMED)
+        if (chatClosedDateTime == null) {
+            chatClosedDateTime = now
+        }
+    }
+
     fun archiveChat(now: LocalDateTime) {
         require(status == ChatRoomStatus.CONFIRMED)
         chatClosedDateTime = now
@@ -264,6 +279,10 @@ class ChatRoom(
     companion object {
         const val MINIMUM_PARTICIPANTS = 3
         const val MAXIMUM_PARTICIPANTS = 20
+
+        /** 모집의 연령 조건 하한은 **가입 최소 연령과 같다**. 이유는 [AgePolicy] 참고. */
+        const val MINIMUM_CONDITION_AGE = AgePolicy.MINIMUM_SIGNUP_AGE
+        const val MAXIMUM_CONDITION_AGE = 100
     }
 }
 

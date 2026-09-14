@@ -54,10 +54,13 @@ data class CreateFeedReportRequest(
 )
 
 @Schema(
-    description = "피드 조회 탭. FRIENDS=내 친구의 전체·친구 공개 피드, DISCOVER=차단 관계가 아닌 전체 공개 피드",
-    allowableValues = ["FRIENDS", "DISCOVER"],
+    description = "피드 조회 탭. FRIENDS=내 친구의 전체·친구 공개 피드, DISCOVER=차단 관계가 아닌 전체 공개 피드, MINE=내가 쓴 피드",
+    allowableValues = ["FRIENDS", "DISCOVER", "MINE"],
 )
 enum class FeedTab {
     FRIENDS,
     DISCOVER,
+
+    // BE-28 · 「내 피드」 화면이 그릴 것이 없어 피드 탭 전체로 떨어지던 것을 막는다. 공개 범위와 무관하게 내 것만 준다.
+    MINE,
 }

@@ -41,6 +41,7 @@ class TravelCourse(
         if (type == TravelCourseType.PUBLIC) CoursePublicationStatus.PUBLISHED else CoursePublicationStatus.NOT_REQUESTED,
     showCreatorNickname: Boolean = true,
     creatorNickname: String? = null,
+    thumbnail: String? = null,
 ) : BaseModifiableEntity() {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
@@ -66,6 +67,11 @@ class TravelCourse(
 
     @Column(name = "creator_nickname", length = 24)
     var creatorNickname: String? = creatorNickname
+        protected set
+
+    // BE-22 · 큐레이션한 코스 대표 이미지. 없으면 첫 방문지 사진을 표지로 쓰던 기존 동작을 그대로 따른다.
+    @Column(name = "thumbnail", length = 1000)
+    var thumbnail: String? = thumbnail
         protected set
 
     @OneToMany(mappedBy = "course", fetch = FetchType.LAZY)
@@ -129,6 +135,10 @@ class TravelCourse(
         this.creatorNickname = creatorNickname
         type = TravelCourseType.PUBLIC
         publicationStatus = CoursePublicationStatus.PUBLISHED
+    }
+
+    fun updateThumbnail(thumbnail: String?) {
+        this.thumbnail = thumbnail
     }
 
     fun addTags(tags: Collection<TravelCourseTag>) {

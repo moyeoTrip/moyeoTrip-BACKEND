@@ -27,6 +27,7 @@ import kr.hanchae.moyeotrip.repository.TravelStyleRepository
 import kr.hanchae.moyeotrip.repository.UserProfileImageRepository
 import kr.hanchae.moyeotrip.repository.UserRepository
 import kr.hanchae.moyeotrip.repository.UserWithdrawalDataRepository
+import kr.hanchae.moyeotrip.repository.WithdrawalReasonRepository
 import kr.hanchae.moyeotrip.utils.FhdWebpImageOptimizer
 import kr.hanchae.moyeotrip.utils.jwt.JwtUtil
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -61,6 +62,7 @@ class UserServiceTest {
     private val userWithdrawalDataRepository = mock(UserWithdrawalDataRepository::class.java)
     private val chatRoomParticipantRepository = mock(ChatRoomParticipantRepository::class.java)
     private val feedRepository = mock(FeedRepository::class.java)
+    private val withdrawalReasonRepository = mock(WithdrawalReasonRepository::class.java)
     private val service =
         UserService(
             userRepository,
@@ -76,6 +78,7 @@ class UserServiceTest {
             userWithdrawalDataRepository,
             chatRoomParticipantRepository,
             feedRepository,
+            withdrawalReasonRepository,
         )
 
     @Test
@@ -401,7 +404,7 @@ class UserServiceTest {
     }
 
     @Test
-    fun `만 20세 미만 생년월일로 프로필을 수정할 수 없다`() {
+    fun `만 19세 미만 생년월일로 프로필을 수정할 수 없다`() {
         val user = profileImageRequiredUser()
         `when`(userRepository.findByIdForUpdate(7L)).thenReturn(user)
 
@@ -410,7 +413,7 @@ class UserServiceTest {
                 service.updateProfile(
                     7L,
                     UpdateProfileRequest(
-                        birthDate = LocalDate.now().minusYears(20).plusDays(1),
+                        birthDate = LocalDate.now().minusYears(19).plusDays(1),
                         gender = Gender.F,
                     ),
                 )

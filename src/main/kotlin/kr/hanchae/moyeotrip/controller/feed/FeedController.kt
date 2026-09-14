@@ -91,6 +91,17 @@ class FeedController(
         return ResponseEntity.noContent().build()
     }
 
+    @PostMapping("/{feedId}/comments/{commentId}/reports")
+    override fun reportComment(
+        @LoginUserId userId: Long,
+        @PathVariable feedId: Long,
+        @PathVariable commentId: Long,
+        @Valid @RequestBody request: CreateFeedReportRequest,
+    ): ResponseEntity<Void> {
+        feedService.reportComment(userId, feedId, commentId, request)
+        return ResponseEntity.noContent().build()
+    }
+
     @GetMapping("/{feedId}/comments")
     override fun getComments(
         @LoginUserId userId: Long,

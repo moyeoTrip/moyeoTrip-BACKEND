@@ -25,6 +25,13 @@ interface ChatMessageRepository :
         pageable: Pageable,
     ): List<ChatMessage>
 
+    // BE-27②: 폴링 클라이언트가 「마지막으로 받은 것 이후」만 받아 가도록 하는 정방향 커서.
+    fun findAllByChatRoomIdAndIdGreaterThanOrderByIdAsc(
+        chatRoomId: Long,
+        afterMessageId: Long,
+        pageable: Pageable,
+    ): List<ChatMessage>
+
     fun findFirstByChatRoomIdOrderByIdDesc(chatRoomId: Long): ChatMessage?
 
     fun countByChatRoomIdAndIdGreaterThan(

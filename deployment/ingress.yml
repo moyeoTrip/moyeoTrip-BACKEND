@@ -52,6 +52,16 @@ spec:
                 name: moyeo-trip-api-svc
                 port:
                   number: 80
+          # 채팅 실시간 채널(STOMP 핸드셰이크). 이 줄이 없어서 서버에 구현이 다 돼 있는데도
+          # 운영에서 404 였고, 세 클라이언트가 전부 폴링으로 돌아갔다 (QA BE-27).
+          # 여기(:80 리다이렉트 라우터)에도 두는 이유는 http 로 들어온 요청을 https 로 넘기기 위해서다.
+          - path: /ws
+            pathType: Prefix
+            backend:
+              service:
+                name: moyeo-trip-api-svc
+                port:
+                  number: 80
 ---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
@@ -85,6 +95,15 @@ spec:
                 port:
                   number: 80
           - path: /api-docs
+            pathType: Prefix
+            backend:
+              service:
+                name: moyeo-trip-api-svc
+                port:
+                  number: 80
+          # 채팅 실시간 채널(STOMP 핸드셰이크) — 클라이언트가 실제로 붙는 곳은 여기(https)다.
+          # Traefik 은 WebSocket 업그레이드를 따로 켤 필요 없이 그대로 넘긴다.
+          - path: /ws
             pathType: Prefix
             backend:
               service:

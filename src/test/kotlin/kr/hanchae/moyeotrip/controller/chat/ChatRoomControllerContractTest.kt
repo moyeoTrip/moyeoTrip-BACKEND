@@ -46,11 +46,11 @@ class ChatRoomControllerContractTest {
 
     @Test
     fun `모임 통합 검색어를 인기 검색어 집계에 전달한다`() {
-        `when`(chatRoomService.searchRooms(7L, " 주왕산 ", 20)).thenReturn(emptyList())
+        `when`(chatRoomService.searchRooms(7L, " 주왕산 ", null, null, 20)).thenReturn(emptyList())
 
-        controller.searchRooms(7L, " 주왕산 ", 20)
+        controller.searchRooms(7L, " 주왕산 ", null, null, 20)
 
-        verify(chatRoomService).searchRooms(7L, " 주왕산 ", 20)
+        verify(chatRoomService).searchRooms(7L, " 주왕산 ", null, null, 20)
         verify(popularSearchKeywordService).record(" 주왕산 ")
     }
 }

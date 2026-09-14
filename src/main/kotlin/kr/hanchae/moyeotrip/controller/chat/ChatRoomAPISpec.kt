@@ -13,8 +13,10 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses
 import io.swagger.v3.oas.annotations.tags.Tag
 import kr.hanchae.moyeotrip.controller.chat.request.CreateChatPollRequest
 import kr.hanchae.moyeotrip.controller.chat.request.CreateChatRoomNoticeRequest
+import kr.hanchae.moyeotrip.controller.chat.request.CreateChatRoomReportRequest
 import kr.hanchae.moyeotrip.controller.chat.request.CreateChatRoomRequest
 import kr.hanchae.moyeotrip.controller.chat.request.CreateSettlementMemoRequest
+import kr.hanchae.moyeotrip.controller.chat.request.CreateUserReportRequest
 import kr.hanchae.moyeotrip.controller.chat.request.JoinChatRoomRequest
 import kr.hanchae.moyeotrip.controller.chat.request.KickChatRoomMemberRequest
 import kr.hanchae.moyeotrip.controller.chat.request.MyChatRoomFilter
@@ -32,6 +34,7 @@ import kr.hanchae.moyeotrip.controller.chat.response.ChatRoomFavoriteResponse
 import kr.hanchae.moyeotrip.controller.chat.response.ChatRoomKickHistoryResponse
 import kr.hanchae.moyeotrip.controller.chat.response.ChatRoomMemberListResponse
 import kr.hanchae.moyeotrip.controller.chat.response.ChatRoomNoticeHistoryResponse
+import kr.hanchae.moyeotrip.controller.chat.response.ChatRoomReportReasonResponse
 import kr.hanchae.moyeotrip.controller.chat.response.CreateChatRoomNoticeResponse
 import kr.hanchae.moyeotrip.controller.chat.response.CreateChatRoomResponse
 import kr.hanchae.moyeotrip.controller.chat.response.CurrentTravelRoadmapResponse
@@ -41,7 +44,10 @@ import kr.hanchae.moyeotrip.controller.chat.response.LeaveChatRoomResponse
 import kr.hanchae.moyeotrip.controller.chat.response.MapChatRoomResponse
 import kr.hanchae.moyeotrip.controller.chat.response.MyChatRoomSummaryResponse
 import kr.hanchae.moyeotrip.controller.chat.response.MyWaitingChatRoomResponse
+import kr.hanchae.moyeotrip.controller.chat.response.RejectedJoinApplicationResponse
 import kr.hanchae.moyeotrip.controller.chat.response.SearchChatRoomResponse
+import kr.hanchae.moyeotrip.controller.chat.response.UserReportReasonResponse
+import kr.hanchae.moyeotrip.controller.chat.response.WaitlistedJoinApplicationResponse
 import kr.hanchae.moyeotrip.exception.ErrorResponse
 import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
@@ -55,7 +61,9 @@ interface ChatRoomAPISpec {
             생성한 사용자가 호스트이자 첫 참가자가 됩니다.
             `DAY_TRIP`은 종료 날짜 없이 시작·종료 시각을, `OVERNIGHT`은 시작일 이후의 종료 날짜만 입력합니다.
             `PUBLIC` 코스는 courseId만, `CUSTOM` 코스는 customCourse만 입력합니다.
-            thumbnail 파트는 20MB 이하 이미지 파일로 전송하며, 서버가 비율을 유지한 최대 FHD(1920×1080) WebP로 변환해 저장합니다.
+            thumbnail 파트는 선택값입니다. 보내면 20MB 이하 이미지 파일이어야 하며 서버가 비율을 유지한 최대 FHD(1920×1080) WebP로 변환해 저장합니다.
+            파트를 아예 생략하면 연결된 코스의 대표 이미지(첫 방문지 사진)를 쓰고, 그마저 없으면 썸네일은 null이 됩니다.
+            파트를 보냈는데 내용이 비어 있으면 400 필수 썸네일 오류입니다.
         """,
     )
     @ApiResponses(
@@ -67,7 +75,7 @@ interface ChatRoomAPISpec {
             ),
             ApiResponse(
                 responseCode = "400",
-                description = "요청 본문·필수 썸네일·일정·나이 또는 커스텀 코스 구성 검증 실패",
+                description = "요청 본문·썸네일 파일·일정·나이 또는 커스텀 코스 구성 검증 실패. 썸네일 파트를 보냈는데 내용이 비어 있으면 필수 썸네일 오류입니다.",
                 content = [
                     Content(
                         schema = Schema(implementation = ErrorResponse::class),
@@ -126,7 +134,7 @@ interface ChatRoomAPISpec {
     fun createRoom(
         @Parameter(hidden = true) userId: Long,
         @RequestBody(
-            description = "채팅방 생성 정보와 필수 썸네일을 multipart/form-data로 전송합니다. request 파트는 application/json입니다.",
+            description = "채팅방 생성 정보와 선택 썸네일을 multipart/form-data로 전송합니다. request 파트는 application/json입니다.",
             required = true,
             content = [
                 Content(
@@ -139,9 +147,159 @@ interface ChatRoomAPISpec {
             description = "채팅방 생성 JSON. 아래 예시는 바로 실행 가능한 1박 2일 커스텀 코스입니다.",
         )
         request: CreateChatRoomRequest,
-        @Parameter(description = "필수 채팅방 썸네일 이미지 파일", required = true)
-        thumbnail: MultipartFile,
+        @Parameter(description = "선택 채팅방 썸네일 이미지 파일. 생략하면 코스 대표 이미지를 사용합니다.", required = false)
+        thumbnail: MultipartFile?,
     ): ResponseEntity<CreateChatRoomResponse>
+
+    @Operation(
+        summary = "모집 신고 사유 목록",
+        description = "모집(채팅방) 신고 요청에 쓸 사유 코드와 화면 표시명을 반환합니다. 클라이언트가 목록을 하드코딩하지 않도록 서버가 제공합니다.",
+    )
+    @ApiResponses(
+        value = [
+            ApiResponse(
+                responseCode = "200",
+                description = "모집 신고 사유 목록 조회 성공",
+                content = [Content(array = ArraySchema(schema = Schema(implementation = ChatRoomReportReasonResponse::class)))],
+            ),
+        ],
+    )
+    fun getRoomReportReasons(): List<ChatRoomReportReasonResponse>
+
+    @Operation(
+        summary = "멤버 신고 사유 목록",
+        description = "멤버(사용자) 신고 요청에 쓸 사유 코드와 화면 표시명을 반환합니다. 모집 신고와 사유가 다릅니다.",
+    )
+    @ApiResponses(
+        value = [
+            ApiResponse(
+                responseCode = "200",
+                description = "멤버 신고 사유 목록 조회 성공",
+                content = [Content(array = ArraySchema(schema = Schema(implementation = UserReportReasonResponse::class)))],
+            ),
+        ],
+    )
+    fun getMemberReportReasons(): List<UserReportReasonResponse>
+
+    @Operation(
+        summary = "모집 신고",
+        description =
+            "모집(채팅방)을 신고합니다. 같은 사용자는 같은 모집을 한 번만 신고할 수 있고, 본인이 개설한 모집은 신고할 수 없습니다. " +
+                "신고는 기록만 남기며 모집을 자동으로 숨기거나 호스트를 자동 차단하지 않습니다.",
+    )
+    @ApiResponses(
+        value = [
+            ApiResponse(responseCode = "204", description = "모집 신고 성공. 응답 본문 없음"),
+            ApiResponse(
+                responseCode = "400",
+                description = "본인이 개설한 모집이거나 요청 본문이 올바르지 않음",
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [
+                            ExampleObject(name = "본인 모집 신고", value = ChatRoomSwaggerExamples.SELF_CHAT_ROOM_REPORT_NOT_ALLOWED),
+                            ExampleObject(name = "요청 본문 오류", value = ChatRoomSwaggerExamples.BAD_REQUEST),
+                        ],
+                    ),
+                ],
+            ),
+            ApiResponse(
+                responseCode = "404",
+                description = "인증 실패, 채팅방 또는 로그인 사용자 없음",
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [ExampleObject(value = ChatRoomSwaggerExamples.CHAT_ROOM_NOT_FOUND)],
+                    ),
+                ],
+            ),
+            ApiResponse(
+                responseCode = "409",
+                description = "이미 신고한 모집",
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [ExampleObject(value = ChatRoomSwaggerExamples.CHAT_ROOM_ALREADY_REPORTED)],
+                    ),
+                ],
+            ),
+        ],
+    )
+    fun reportRoom(
+        @Parameter(hidden = true) userId: Long,
+        @Parameter(description = "신고할 모집(채팅방) ID", example = "101")
+        roomId: Long,
+        @RequestBody(description = "신고 사유와 선택 상세 내용", required = true)
+        request: CreateChatRoomReportRequest,
+    ): ResponseEntity<Void>
+
+    @Operation(
+        summary = "멤버 신고",
+        description =
+            "같은 모집에 있는 멤버(호스트 포함)를 신고합니다. 신고자는 그 모집의 참가자여야 하고, 자기 자신은 신고할 수 없습니다. " +
+                "같은 사용자는 같은 상대를 한 번만 신고할 수 있습니다. 신고와 차단은 별개입니다 — " +
+                "화면의 「이 유저를 차단할게요」는 POST /api/v1/users/me/blocks 를 따로 호출하면 되고, 이미 차단한 상대도 신고할 수 있습니다.",
+    )
+    @ApiResponses(
+        value = [
+            ApiResponse(responseCode = "204", description = "멤버 신고 성공. 응답 본문 없음"),
+            ApiResponse(
+                responseCode = "400",
+                description = "자기 자신을 신고했거나 요청 본문이 올바르지 않음",
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [
+                            ExampleObject(name = "자기 자신 신고", value = ChatRoomSwaggerExamples.SELF_USER_REPORT_NOT_ALLOWED),
+                            ExampleObject(name = "요청 본문 오류", value = ChatRoomSwaggerExamples.BAD_REQUEST),
+                        ],
+                    ),
+                ],
+            ),
+            ApiResponse(
+                responseCode = "403",
+                description = "신고자가 그 모집의 참가자가 아님",
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [ExampleObject(value = ChatRoomSwaggerExamples.CHAT_ROOM_NOT_PARTICIPANT)],
+                    ),
+                ],
+            ),
+            ApiResponse(
+                responseCode = "404",
+                description = "인증 실패, 채팅방 또는 신고 대상 멤버 없음",
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [
+                            ExampleObject(name = "채팅방 없음", value = ChatRoomSwaggerExamples.CHAT_ROOM_NOT_FOUND),
+                            ExampleObject(name = "멤버 없음", value = ChatRoomSwaggerExamples.CHAT_ROOM_MEMBER_NOT_FOUND),
+                        ],
+                    ),
+                ],
+            ),
+            ApiResponse(
+                responseCode = "409",
+                description = "이미 신고한 사용자",
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [ExampleObject(value = ChatRoomSwaggerExamples.USER_ALREADY_REPORTED)],
+                    ),
+                ],
+            ),
+        ],
+    )
+    fun reportMember(
+        @Parameter(hidden = true) userId: Long,
+        @Parameter(description = "신고 대상이 속한 모집(채팅방) ID", example = "101")
+        roomId: Long,
+        @Parameter(description = "신고할 멤버의 사용자 ID", example = "12")
+        memberId: Long,
+        @RequestBody(description = "신고 사유와 선택 상세 내용", required = true)
+        request: CreateUserReportRequest,
+    ): ResponseEntity<Void>
 
     @Operation(summary = "내 채팅방 목록", description = "모집중·확정·종료 상태로 필터링하며 인원, 마감 D-day, 안 읽은 수와 최근 메시지를 반환합니다.")
     @ApiResponses(
@@ -207,7 +365,8 @@ interface ChatRoomAPISpec {
         summary = "모임 검색",
         description =
             "참가 가능한 모집 중 모임만 반환합니다. 제목·소개·코스 제목·코스 태그·방문지 이름·주소(지역)로 검색하며, " +
-                "차단 관계인 사용자가 호스트 또는 참가자인 모임은 제외합니다.",
+                "차단 관계인 사용자가 호스트 또는 참가자인 모임은 제외합니다. " +
+                "tagId를 주면 그 태그가 달린 코스의 모임만 반환하며, 지도 조회(GET /chat-rooms/map)와 같은 결과 집합입니다.",
     )
     @ApiResponses(
         value = [
@@ -232,7 +391,16 @@ interface ChatRoomAPISpec {
         @Parameter(hidden = true) userId: Long,
         @Parameter(description = "제목·소개·코스·태그·방문지·지역 주소에 포함되어야 하는 검색어. 생략하면 전체 모집을 조회합니다.", example = "청송")
         keyword: String?,
-        @Parameter(description = "반환할 최대 개수. 기본값은 20입니다.", example = "20")
+        @Parameter(description = "코스 태그 ID 필터. 생략하면 태그로 거르지 않습니다. 지도 조회와 같은 파라미터입니다.", example = "3")
+        tagId: Long?,
+        @Parameter(
+            description =
+                "무한 스크롤 커서. 직전 페이지 마지막 항목의 roomId를 넘기면 그 다음부터 반환합니다. " +
+                    "생략하면 첫 페이지입니다. 반환 개수가 limit보다 적으면 마지막 페이지입니다.",
+            example = "384",
+        )
+        cursor: Long?,
+        @Parameter(description = "한 페이지에 반환할 최대 개수. 기본값은 20이고 20을 넘길 수 없습니다.", example = "20")
         limit: Int,
     ): List<SearchChatRoomResponse>
 
@@ -240,7 +408,8 @@ interface ChatRoomAPISpec {
         summary = "지도 반경 내 모임 조회",
         description =
             "입력 좌표로부터 지정 반경 안에 집합 장소가 있는 모집 중 모임을 가까운 순서로 반환합니다. " +
-                "집합 좌표가 없거나 모집이 마감된 모임, 차단 관계인 사용자가 포함된 모임과 이미 참여 중인 모임은 제외합니다.",
+                "집합 좌표가 없거나 모집이 마감된 모임, 차단 관계인 사용자가 포함된 모임과 이미 참여 중인 모임은 제외합니다. " +
+                "tagId는 모임 검색(GET /chat-rooms/search)과 같은 태그 필터로, 같은 값을 주면 같은 결과 집합을 반환합니다.",
     )
     @ApiResponses(
         value = [
@@ -276,9 +445,16 @@ interface ChatRoomAPISpec {
         @Parameter(description = "지도 중심 위도(-90~90)", example = "36.5684") latitude: Double,
         @Parameter(description = "지도 중심 경도(-180~180)", example = "128.7294") longitude: Double,
         @Parameter(description = "검색 반경(km). 0보다 크고 200 이하여야 합니다.", example = "5") radiusKm: Double,
+        @Parameter(description = "코스 태그 ID 필터. 생략하면 태그로 거르지 않습니다. 목록과 같은 파라미터입니다.", example = "3")
+        tagId: Long?,
     ): List<MapChatRoomResponse>
 
-    @Operation(summary = "채팅방 상세 조회", description = "모집·여행 정보, 호스트, 참가자와 최신 고정 공지를 반환합니다. 종료 후 2주가 지난 채팅방은 조회할 수 없습니다.")
+    @Operation(
+        summary = "채팅방 상세 조회",
+        description =
+            "모집·여행 정보, 호스트, 참가자와 최신 고정 공지를 반환합니다. 종료 후 2주가 지난 채팅방은 조회할 수 없습니다. " +
+                "canApply(신청 가능 여부)·chatAvailable(채팅 가능 여부)·myParticipationStatus(내 참여·신청 상태)는 항상 포함됩니다.",
+    )
     @ApiResponses(
         value = [
             ApiResponse(
@@ -425,7 +601,12 @@ interface ChatRoomAPISpec {
         request: UpdateMeetingInfoRequest,
     ): ResponseEntity<Void>
 
-    @Operation(summary = "채팅방 참가 신청", description = "소개를 작성해 호스트의 승인을 기다립니다.")
+    @Operation(
+        summary = "채팅방 참가 신청",
+        description =
+            "소개를 작성해 호스트의 승인을 기다립니다. 한마디를 입력하면 공백을 제외하고 10자 이상 200자 이하여야 하며, " +
+                "수동 승인(MANUAL) 모임에서는 한마디가 필수입니다.",
+    )
     @ApiResponses(
         value = [
             ApiResponse(
@@ -435,7 +616,7 @@ interface ChatRoomAPISpec {
             ),
             ApiResponse(
                 responseCode = "400",
-                description = "요청 본문이 유효하지 않거나 수동 승인 모임에 전할 말을 입력하지 않음",
+                description = "요청 본문이 유효하지 않거나, 한마디 길이가 규격을 벗어나거나, 수동 승인 모임에 전할 말을 입력하지 않음",
                 content = [
                     Content(
                         schema = Schema(implementation = ErrorResponse::class),
@@ -444,6 +625,10 @@ interface ChatRoomAPISpec {
                             ExampleObject(
                                 name = "수동 승인 모임의 신청 메시지 누락",
                                 value = ChatRoomSwaggerExamples.CHAT_JOIN_APPLICATION_MESSAGE_REQUIRED,
+                            ),
+                            ExampleObject(
+                                name = "신청 한마디 길이 위반",
+                                value = ChatRoomSwaggerExamples.INVALID_CHAT_JOIN_APPLICATION_MESSAGE,
                             ),
                         ],
                     ),
@@ -555,6 +740,86 @@ interface ChatRoomAPISpec {
         @Parameter(description = "승인 대기 신청을 조회할 채팅방 ID", example = "101")
         roomId: Long,
     ): List<JoinApplicationResponse>
+
+    @Operation(
+        summary = "대기열 조회",
+        description =
+            "호스트에게만 이 채팅방의 대기열을 승급 순서대로 반환합니다. position 1이 자리가 나면 자동으로 합류할 사람입니다. " +
+                "정원이 찬 방에서 승인한 신청은 대기열로 들어가므로, 승인 대기 목록(GET /applications)에는 더 이상 나오지 않습니다.",
+    )
+    @ApiResponses(
+        value = [
+            ApiResponse(
+                responseCode = "200",
+                description = "대기열 조회 성공",
+                content = [Content(array = ArraySchema(schema = Schema(implementation = WaitlistedJoinApplicationResponse::class)))],
+            ),
+            ApiResponse(
+                responseCode = "403",
+                description = "호스트가 아님",
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [ExampleObject(value = ChatRoomSwaggerExamples.CHAT_ROOM_HOST_REQUIRED)],
+                    ),
+                ],
+            ),
+            ApiResponse(
+                responseCode = "404",
+                description = "인증 실패 또는 채팅방 없음",
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [ExampleObject(value = ChatRoomSwaggerExamples.CHAT_ROOM_NOT_FOUND)],
+                    ),
+                ],
+            ),
+        ],
+    )
+    fun getWaitlistedApplications(
+        @Parameter(hidden = true) userId: Long,
+        @Parameter(description = "대기열을 조회할 채팅방 ID", example = "101")
+        roomId: Long,
+    ): List<WaitlistedJoinApplicationResponse>
+
+    @Operation(
+        summary = "거절한 참가 신청 이력",
+        description = "호스트에게만 이 채팅방에서 거절한 참가 신청을 신청 최신순으로 반환합니다. 거절 시각이 기록되기 전의 이력은 신청 시각을 그대로 반환합니다.",
+    )
+    @ApiResponses(
+        value = [
+            ApiResponse(
+                responseCode = "200",
+                description = "거절 이력 조회 성공",
+                content = [Content(array = ArraySchema(schema = Schema(implementation = RejectedJoinApplicationResponse::class)))],
+            ),
+            ApiResponse(
+                responseCode = "403",
+                description = "호스트가 아님",
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [ExampleObject(value = ChatRoomSwaggerExamples.CHAT_ROOM_HOST_REQUIRED)],
+                    ),
+                ],
+            ),
+            ApiResponse(
+                responseCode = "404",
+                description = "인증 실패 또는 채팅방 없음",
+                content = [
+                    Content(
+                        schema = Schema(implementation = ErrorResponse::class),
+                        examples = [ExampleObject(value = ChatRoomSwaggerExamples.CHAT_ROOM_NOT_FOUND)],
+                    ),
+                ],
+            ),
+        ],
+    )
+    fun getRejectedApplications(
+        @Parameter(hidden = true) userId: Long,
+        @Parameter(description = "거절 이력을 조회할 채팅방 ID", example = "101")
+        roomId: Long,
+    ): List<RejectedJoinApplicationResponse>
 
     @Operation(summary = "참가 신청 승인", description = "정원 내면 참가, 정원이 찼으면 승인된 대기열로 이동합니다.")
     @ApiResponses(
@@ -1381,7 +1646,13 @@ interface ChatRoomAPISpec {
         request: CreateSettlementMemoRequest,
     ): ResponseEntity<ChatMessageResponse>
 
-    @Operation(summary = "채팅 메시지 커서 조회", description = "beforeMessageId보다 오래된 메시지를 조회하며 응답 메시지는 오래된 순서로 반환합니다.")
+    @Operation(
+        summary = "채팅 메시지 커서 조회",
+        description =
+            "beforeMessageId보다 오래된 메시지를 조회하며 응답 메시지는 오래된 순서로 반환합니다. " +
+                "afterMessageId를 주면 그 ID보다 새로운 메시지만 오래된 순서로 반환합니다(폴링용). " +
+                "afterMessageId가 있으면 beforeMessageId는 무시하며, nextId는 받아 간 메시지 중 가장 최신 ID라 다음 폴링의 afterMessageId로 그대로 쓸 수 있습니다.",
+    )
     @ApiResponses(
         value = [
             ApiResponse(
@@ -1409,6 +1680,8 @@ interface ChatRoomAPISpec {
         beforeMessageId: Long?,
         @Parameter(description = "반환할 메시지 수. 1~100으로 보정되며 기본값은 50입니다.", example = "50")
         limit: Int,
+        @Parameter(description = "이 ID보다 새로운 메시지만 조회하는 폴링용 커서. 주면 beforeMessageId보다 우선합니다.", example = "501")
+        afterMessageId: Long?,
     ): ChatMessagePageResponse
 
     @Operation(summary = "현재 여행 로드맵", description = "확정된 여행 당일의 전체 장소 진행 상태와 현재·다음 일정을 반환합니다.")
@@ -1476,6 +1749,13 @@ private object ChatRoomSwaggerExamples {
     const val INVALID_CHAT_IMAGE = """{"code":40023,"errorMessage":"채팅 이미지는 비어 있지 않은 20MB 이하 이미지 파일만 공유할 수 있습니다."}"""
     const val CHAT_ROOM_MEETING_LOCATION_NOT_SET = """{"code":40024,"errorMessage":"호스트가 채팅방 집합 위치 좌표를 등록하지 않았습니다."}"""
     const val DUPLICATE_CHAT_POLL_OPTION = """{"code":40025,"errorMessage":"투표 선택지는 중복될 수 없습니다."}"""
+    const val SELF_CHAT_ROOM_REPORT_NOT_ALLOWED = """{"code":40044,"errorMessage":"본인이 개설한 모집은 신고할 수 없습니다."}"""
+    const val SELF_USER_REPORT_NOT_ALLOWED = """{"code":40045,"errorMessage":"자기 자신은 신고할 수 없습니다."}"""
+    const val CHAT_ROOM_ALREADY_REPORTED = """{"code":40920,"errorMessage":"이미 신고한 모집입니다."}"""
+    const val USER_ALREADY_REPORTED = """{"code":40921,"errorMessage":"이미 신고한 사용자입니다."}"""
+    const val INVALID_CHAT_JOIN_APPLICATION_MESSAGE =
+        """{"code":40043,"errorMessage":"참가 신청 한마디는 공백을 제외하고 10자 이상 200자 이하여야 합니다."}"""
+
     const val CHAT_ROOM_HOST_REQUIRED = """{"code":40307,"errorMessage":"채팅방 호스트만 이 작업을 할 수 있습니다."}"""
     const val CHAT_REPLY_MESSAGE_NOT_FOUND = """{"code":40416,"errorMessage":"답글을 달 원본 채팅 메시지를 찾을 수 없습니다."}"""
     const val CHAT_MESSAGE_NOT_FOUND = """{"code":40423,"errorMessage":"채팅 메시지를 찾을 수 없습니다."}"""

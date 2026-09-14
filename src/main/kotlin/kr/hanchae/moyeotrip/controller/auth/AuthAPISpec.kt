@@ -555,7 +555,7 @@ private object AuthSwaggerExamples {
     const val KAKAO_CLIENT_EXCEPTION = """{"code":40102,"errorMessage":"유효하지 않은 카카오 액세스 토큰입니다."}"""
     const val INVALID_KAKAO_APP = """{"code":40103,"errorMessage":"다른 카카오 애플리케이션에서 발급된 액세스 토큰입니다."}"""
     const val INVALID_KAKAO_REDIRECT_URI = """{"code":40004,"errorMessage":"허용되지 않은 카카오 redirect URI입니다."}"""
-    const val MINIMUM_SIGNUP_AGE_NOT_MET = """{"code":40011,"errorMessage":"만 20세 이상만 가입할 수 있습니다."}"""
+    const val MINIMUM_SIGNUP_AGE_NOT_MET = """{"code":40011,"errorMessage":"만 19세 이상만 가입할 수 있습니다."}"""
     const val INVALID_TERMS_AGREEMENT = """{"code":40013,"errorMessage":"현재 가입에 사용할 수 없는 약관이 포함되어 있습니다."}"""
     const val INVALID_KAKAO_AUTHORIZATION_CODE = """{"code":40104,"errorMessage":"유효하지 않거나 만료된 카카오 인가 코드입니다."}"""
     const val KAKAO_AUTH_UNAVAILABLE = """{"code":50202,"errorMessage":"카카오 인증 서버와 통신하지 못했습니다."}"""

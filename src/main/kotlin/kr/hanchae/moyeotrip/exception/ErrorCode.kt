@@ -19,7 +19,7 @@ enum class ErrorCode(
     INVALID_TRIP_SCHEDULE(HttpStatus.BAD_REQUEST, 40008, "당일치기는 종료 날짜 없이 시간을, 1박 이상은 종료 날짜만 입력해야 합니다."),
     INVALID_CHAT_ROOM_AGE_RESTRICTION(HttpStatus.BAD_REQUEST, 40009, "최소 나이는 최대 나이보다 작거나 같아야 합니다."),
     CHAT_JOIN_APPLICATION_MESSAGE_REQUIRED(HttpStatus.BAD_REQUEST, 40010, "수동 승인 모임은 호스트에게 전할 말을 입력해야 합니다."),
-    MINIMUM_SIGNUP_AGE_NOT_MET(HttpStatus.BAD_REQUEST, 40011, "만 20세 이상만 가입할 수 있습니다."),
+    MINIMUM_SIGNUP_AGE_NOT_MET(HttpStatus.BAD_REQUEST, 40011, "만 19세 이상만 가입할 수 있습니다."),
     REQUIRED_TERMS_NOT_AGREED(HttpStatus.BAD_REQUEST, 40012, "필수 약관에 모두 동의해야 회원가입할 수 있습니다."),
     INVALID_TERMS_AGREEMENT(HttpStatus.BAD_REQUEST, 40013, "현재 가입에 사용할 수 없는 약관이 포함되어 있습니다."),
     INVALID_INTERESTED_REGION_SELECTION(HttpStatus.BAD_REQUEST, 40014, "관심 지역으로 선택할 수 없는 지역 ID가 포함되어 있습니다."),
@@ -51,6 +51,10 @@ enum class ErrorCode(
     INVALID_MAP_SEARCH_AREA(HttpStatus.BAD_REQUEST, 40040, "위도, 경도 또는 검색 반경이 유효하지 않습니다."),
     CHAT_ROOM_THUMBNAIL_REQUIRED(HttpStatus.BAD_REQUEST, 40041, "채팅방 썸네일 이미지는 필수입니다."),
     INVALID_CHAT_ROOM_THUMBNAIL(HttpStatus.BAD_REQUEST, 40042, "채팅방 썸네일은 비어 있지 않은 20MB 이하 이미지 파일이어야 합니다."),
+    INVALID_CHAT_JOIN_APPLICATION_MESSAGE(HttpStatus.BAD_REQUEST, 40043, "참가 신청 한마디는 공백을 제외하고 10자 이상 200자 이하여야 합니다."),
+    SELF_CHAT_ROOM_REPORT_NOT_ALLOWED(HttpStatus.BAD_REQUEST, 40044, "본인이 개설한 모집은 신고할 수 없습니다."),
+    SELF_USER_REPORT_NOT_ALLOWED(HttpStatus.BAD_REQUEST, 40045, "자기 자신은 신고할 수 없습니다."),
+    SELF_FEED_COMMENT_REPORT_NOT_ALLOWED(HttpStatus.BAD_REQUEST, 40046, "본인이 작성한 댓글은 신고할 수 없습니다."),
 
     // UNAUTHORIZED는 40100부터 시작
     UNAUTHORIZED(HttpStatus.UNAUTHORIZED, 40100, "인증되지 않은 사용자입니다."),
@@ -119,6 +123,9 @@ enum class ErrorCode(
     FEED_ALREADY_REPORTED(HttpStatus.CONFLICT, 40917, "이미 신고한 피드입니다."),
     PROFILE_IMAGE_REQUIRED(HttpStatus.CONFLICT, 40918, "프로필 이미지 선택이 필요합니다."),
     PROFILE_IMAGE_ALREADY_SELECTED(HttpStatus.CONFLICT, 40919, "이미 프로필 이미지 설정을 완료했습니다."),
+    CHAT_ROOM_ALREADY_REPORTED(HttpStatus.CONFLICT, 40920, "이미 신고한 모집입니다."),
+    USER_ALREADY_REPORTED(HttpStatus.CONFLICT, 40921, "이미 신고한 사용자입니다."),
+    FEED_COMMENT_ALREADY_REPORTED(HttpStatus.CONFLICT, 40922, "이미 신고한 댓글입니다."),
 
     // 요청 한도 초과는 42900부터 시작
     PROFILE_IMAGE_GENERATION_LIMIT(HttpStatus.TOO_MANY_REQUESTS, 42900, "프로필 이미지는 사용자당 최대 3번까지 생성할 수 있습니다."),
