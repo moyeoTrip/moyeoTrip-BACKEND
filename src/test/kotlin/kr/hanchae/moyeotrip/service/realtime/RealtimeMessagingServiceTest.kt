@@ -11,6 +11,7 @@ import kr.hanchae.moyeotrip.entity.notification.NotificationType
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertDoesNotThrow
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Test
 import org.mockito.ArgumentCaptor
 import org.mockito.ArgumentMatchers.any
@@ -50,7 +51,9 @@ class RealtimeMessagingServiceTest {
         listener.onMessage("moyeotrip:realtime-events", publishedJson())
         service.unsubscribe()
 
-        verify(messagingTemplate).convertAndSend(eq("/topic/chat-rooms/10/messages"), any(JsonNode::class.java))
+        // 본문은 **내용이 담긴 Map** 이어야 한다. JsonNode 를 그대로 보내면 내용 없이 나간다.
+        val body = sentBody("/topic/chat-rooms/10/messages")
+        assertEquals("안녕하세요", body["content"])
         verify(topic).removeListener(7)
     }
 
@@ -63,7 +66,10 @@ class RealtimeMessagingServiceTest {
 
         listener.onMessage("moyeotrip:realtime-events", publishedJson())
 
-        verify(messagingTemplate).convertAndSendToUser(eq("2"), eq("/queue/notifications"), any(JsonNode::class.java))
+        val body = ArgumentCaptor.forClass(Any::class.java)
+        verify(messagingTemplate).convertAndSendToUser(eq("2"), eq("/queue/notifications"), body.capture())
+        @Suppress("UNCHECKED_CAST")
+        assertEquals("친구 신청", (body.value as Map<String, Any?>)["content"])
     }
 
     @Test
@@ -79,7 +85,8 @@ class RealtimeMessagingServiceTest {
 
         listener.onMessage("moyeotrip:realtime-events", publishedJson())
 
-        verify(messagingTemplate).convertAndSend(eq("/topic/chat-rooms/10/polls"), any(JsonNode::class.java))
+        val body = sentBody("/topic/chat-rooms/10/polls")
+        assertEquals(501L, (body["messageId"] as Number).toLong())
     }
 
     @Test
@@ -144,6 +151,31 @@ class RealtimeMessagingServiceTest {
         `when`(topic.addListener(eq(String::class.java), captor.capture())).thenReturn(7)
         service.subscribe()
         return captor.value
+    }
+
+    @Test
+    fun `웹소켓으로 보내는 본문은 메시지 내용이어야 한다`() {
+        // JsonNode 를 그대로 convertAndSend 에 넘기면 변환기가 트리를 쓰지 않고 **JsonNode 를 POJO 로**
+        // 직렬화해 `{"array":false,"nodeType":"OBJECT",…}` 가 나간다. 클라이언트는 연결도 되고
+        // 프레임도 받는데 **내용만 비어 있다** — 실서버에서 실제로 그렇게 나가고 있었다(2026-09-14).
+        val payload: JsonNode = objectMapper.valueToTree(chatMessage())
+
+        val body = service.toSendableBody(payload)
+
+        assertEquals(1L, (body["messageId"] as Number).toLong())
+        assertEquals("안녕하세요", body["content"])
+        assertEquals("여행자", body["senderNickname"])
+        // JsonNode 의 getter 가 새어 나오면 안 된다.
+        assertFalse(body.containsKey("nodeType"), "JsonNode 속성이 새어 나왔다: $body")
+        assertFalse(body.containsKey("array"), "JsonNode 속성이 새어 나왔다: $body")
+        assertFalse(body.containsKey("object"), "JsonNode 속성이 새어 나왔다: $body")
+    }
+
+    @Suppress("UNCHECKED_CAST")
+    private fun sentBody(destination: String): Map<String, Any?> {
+        val captor = ArgumentCaptor.forClass(Any::class.java)
+        verify(messagingTemplate).convertAndSend(eq(destination), captor.capture())
+        return captor.value as Map<String, Any?>
     }
 
     private fun publishedJson(): String {

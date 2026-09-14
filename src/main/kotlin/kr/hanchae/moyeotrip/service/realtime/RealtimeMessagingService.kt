@@ -1,5 +1,6 @@
 package kr.hanchae.moyeotrip.service.realtime
 
+import com.fasterxml.jackson.core.type.TypeReference
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
 import jakarta.annotation.PostConstruct
@@ -110,19 +111,33 @@ class RealtimeMessagingService(
     }
 
     private fun deliverToLocalWebSocketSessions(event: RealtimeRedisEvent) {
+        val body = toSendableBody(event.payload)
         when (event.type) {
             RealtimeEventType.CHAT_MESSAGE ->
-                messagingTemplate.convertAndSend("/topic/chat-rooms/${event.targetId}/messages", event.payload)
+                messagingTemplate.convertAndSend("/topic/chat-rooms/${event.targetId}/messages", body)
 
             RealtimeEventType.CHAT_POLL_UPDATED ->
-                messagingTemplate.convertAndSend("/topic/chat-rooms/${event.targetId}/polls", event.payload)
+                messagingTemplate.convertAndSend("/topic/chat-rooms/${event.targetId}/polls", body)
 
             RealtimeEventType.NOTIFICATION ->
-                messagingTemplate.convertAndSendToUser(event.targetId.toString(), "/queue/notifications", event.payload)
+                messagingTemplate.convertAndSendToUser(event.targetId.toString(), "/queue/notifications", body)
         }
     }
 
+    /**
+     * `JsonNode` 를 **그대로 보내면 안 된다.**
+     *
+     * 메시지 변환기가 `JsonNode` 를 일반 객체로 보고 getter 를 직렬화해 버려,
+     * 실제 내용 대신 `{"array":false,"object":true,"nodeType":"OBJECT",…}` 가 나간다.
+     * 클라이언트는 **연결도 되고 프레임도 받는데 내용만 비어 있는** 상태가 된다 —
+     * 실서버에서 그렇게 나가고 있었다(2026-09-14 안드로이드 QA 에서 발견).
+     *
+     * `Map` 으로 바꿔 보내면 어떤 변환기를 쓰든 내용 그대로 직렬화된다.
+     */
+    internal fun toSendableBody(payload: JsonNode): Map<String, Any?> = objectMapper.convertValue(payload, MAP_TYPE)
+
     companion object {
+        private val MAP_TYPE = object : TypeReference<Map<String, Any?>>() {}
         private const val REALTIME_CHANNEL = "moyeotrip:realtime-events"
         private val logger = LoggerFactory.getLogger(RealtimeMessagingService::class.java)
     }
