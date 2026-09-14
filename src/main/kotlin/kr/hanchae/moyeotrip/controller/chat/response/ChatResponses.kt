@@ -194,6 +194,10 @@ data class TravelCourseInformationResponse(
     // BE-15 · 작성자 프로필로 이동할 수 있도록 userId 를 준다. 닉네임·사진과 같은 「표시를 허용한 경우」 조건을 따른다.
     @field:Schema(description = "작성자 표시를 허용한 경우의 작성자 userId. 비공개거나 작성자가 없으면 null", example = "123", nullable = true)
     val creatorUserId: Long?,
+    // 목록에 `creatorUserId` 만 있고 닉네임이 없어, 카드가 작성자를 **가리킬 수는 있는데 이름을 못 쓰는** 상태였다.
+    // 상세(`PublicTravelCourseDetailResponse`)와 **같은 공개 조건**을 따른다 — 허용하지 않았으면 null 이다.
+    @field:Schema(description = "작성자 표시를 허용한 경우의 작성자 닉네임. 비공개거나 작성자가 없으면 null", example = "다정한 수달 5128", nullable = true)
+    val creatorNickname: String?,
 )
 
 @Schema(description = "공개 여행 코스 상세 정보")
@@ -644,8 +648,14 @@ data class MyChatRoomSummaryResponse(
     val recruitmentDDay: Long? = null,
     @field:Schema(description = "여행 종료 여부", example = "false")
     val ended: Boolean,
-    @field:Schema(description = "호스트가 완료한 커스텀 코스를 공개할 수 있는지 여부", example = "false")
+    // **이미 공개한 코스에는 false 다.** 예전에는 공개 여부를 보지 않아, 화면이 「코스 공개하기」를 그대로 내주고
+    // 누른 뒤에야 서버가 409 로 거절했다 — 되돌릴 수 없는 2단계 확인을 다 지난 뒤였다.
+    @field:Schema(description = "호스트가 완료한 커스텀 코스를 공개할 수 있는지 여부. 이미 공개했으면 false", example = "false")
     val coursePublicationAvailable: Boolean,
+    // 27-4 가 내가 준 별을 다시 그릴 수 있어야 한다. 되읽을 방법이 없어 재진입하면 별이 비어 보였고,
+    // 사용자는 평가가 안 된 줄 알고 다시 매겼다(서버는 갱신이라 조용히 덮인다).
+    @field:Schema(description = "로그인 사용자가 이 여행의 코스에 준 평점. 아직 평가하지 않았으면 null", example = "5", nullable = true)
+    val myCourseRating: Int? = null,
     @field:Schema(description = "현재 승인된 참가자 수. 지난 여행 요약이면 null", nullable = true)
     val participantCount: Int? = null,
     @field:Schema(description = "호스트를 포함한 최대 참가 인원. 지난 여행 요약이면 null", nullable = true)

@@ -81,6 +81,7 @@ import kr.hanchae.moyeotrip.entity.report.ChatRoomReport
 import kr.hanchae.moyeotrip.entity.report.ChatRoomReportReason
 import kr.hanchae.moyeotrip.entity.report.UserReport
 import kr.hanchae.moyeotrip.entity.report.UserReportReason
+import kr.hanchae.moyeotrip.entity.tour.CoursePublicationStatus
 import kr.hanchae.moyeotrip.entity.tour.TourismContent
 import kr.hanchae.moyeotrip.entity.tour.TravelCourse
 import kr.hanchae.moyeotrip.entity.tour.TravelCoursePlace
@@ -1593,9 +1594,8 @@ class ChatRoomService(
                 endDate = room.endDate,
                 chatAvailable = false,
                 ended = true,
-                coursePublicationAvailable =
-                    room.host.id == user.id &&
-                        room.course.type == TravelCourseType.CUSTOM,
+                coursePublicationAvailable = room.coursePublishableBy(user.id, requireEnded = false),
+                myCourseRating = myCourseRating(room.id, user.id),
             )
         }
         val latest =
@@ -1613,10 +1613,8 @@ class ChatRoomService(
             status = room.status,
             recruitmentDDay = room.recruitmentDDay(),
             ended = room.hasEnded(),
-            coursePublicationAvailable =
-                room.host.id == user.id &&
-                    room.hasCompletedTrip() &&
-                    room.course.type == TravelCourseType.CUSTOM,
+            coursePublicationAvailable = room.coursePublishableBy(user.id, requireEnded = true),
+            myCourseRating = myCourseRating(room.id, user.id),
             participantCount = participantCount(room.id),
             maxParticipants = room.maxParticipants,
             unreadMessageCount = messageRepository.countByChatRoomIdAndIdGreaterThan(room.id, lastReadMessageId),
@@ -2161,6 +2159,7 @@ class ChatRoomService(
             places = toResponse(editable = false).places,
             region = regionName(regionNames),
             creatorUserId = creatorUserIdOrNull(),
+            creatorNickname = creatorNicknameOrNull(),
         )
 
     // BE-14 · 코스에는 지역 컬럼이 없다. 첫 방문지의 법정동 코드로 시군구명을 찾아 채운다.
@@ -2176,7 +2175,34 @@ class ChatRoomService(
     }
 
     // BE-15·BE-29 · 같은 뿌리라 한곳에서 판단한다. 닉네임·사진과 같이 「표시를 허용한 경우」에만 준다.
+
+    /**
+     * 호스트가 이 방의 커스텀 코스를 **지금 공개할 수 있는가**.
+     * **이미 공개했으면 false** — 그러지 않으면 화면이 「코스 공개하기」를 내주고 누른 뒤에야 409 로 거절된다.
+     */
+    private fun ChatRoom.coursePublishableBy(
+        userId: Long,
+        requireEnded: Boolean,
+    ): Boolean =
+        host.id == userId &&
+            course.type == TravelCourseType.CUSTOM &&
+            course.publicationStatus != CoursePublicationStatus.PUBLISHED &&
+            (!requireEnded || hasCompletedTrip())
+
+    /** 내가 이 여행의 코스에 준 평점. 없으면 null — 화면이 별을 다시 그릴 수 있어야 한다. */
+    private fun myCourseRating(
+        roomId: Long,
+        userId: Long,
+    ): Int? = courseRatingRepository.findByChatRoomIdAndUserId(roomId, userId)?.score
+
     private fun TravelCourse.creatorUserIdOrNull(): Long? = owner?.id?.takeIf { showCreatorNickname }
+
+    /**
+     * 목록 카드에 쓸 작성자 닉네임. **상세와 같은 조건**이다 — 표시를 허용하지 않았으면 null.
+     * 탈퇴 등으로 `owner` 가 없어도 공개 시점에 찍어 둔 [TravelCourse.creatorNickname] 이 남아 있다.
+     */
+    private fun TravelCourse.creatorNicknameOrNull(): String? =
+        if (showCreatorNickname) owner?.information?.nickname ?: creatorNickname else null
 
     companion object {
         private const val SYSTEM_NICKNAME = "시스템"
