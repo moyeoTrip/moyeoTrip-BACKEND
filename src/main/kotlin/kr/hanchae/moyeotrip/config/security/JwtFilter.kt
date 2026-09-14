@@ -127,7 +127,6 @@ class JwtFilter(
                 "/actuator/health",
                 "/swagger-ui",
                 "/api-docs",
-                "/api/v1/test",
                 "/api/v1/terms",
             )
     }

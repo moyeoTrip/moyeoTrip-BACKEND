@@ -67,7 +67,6 @@ val PERMITTED_URL_PATTERNS =
         "/swagger-ui/**",
         "/api-docs/**",
         "/api/v1/auth/**",
-        "/api/v1/test/**",
         "/api/v1/terms/**",
         // STOMP 핸드셰이크(`STOMP_ENDPOINT`). 여기서 여는 것은 **핸드셰이크뿐**이고,
         // 실제 인증은 STOMP `CONNECT` 프레임의 `Authorization` 헤더에서 한다.
