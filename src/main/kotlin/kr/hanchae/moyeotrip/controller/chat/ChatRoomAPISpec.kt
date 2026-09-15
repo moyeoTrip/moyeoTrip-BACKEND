@@ -659,13 +659,14 @@ interface ChatRoomAPISpec {
             ),
             ApiResponse(
                 responseCode = "409",
-                description = "이미 참가·신청했거나 모집이 종료됨",
+                description = "이미 참가·신청했거나, 모집이 종료됐거나, 내보내진 모임임",
                 content = [
                     Content(
                         schema = Schema(implementation = ErrorResponse::class),
                         examples = [
                             ExampleObject(name = "이미 참가 또는 신청함", value = ChatRoomSwaggerExamples.CHAT_ROOM_ALREADY_JOINED),
                             ExampleObject(name = "모집 종료", value = ChatRoomSwaggerExamples.CHAT_ROOM_CLOSED),
+                            ExampleObject(name = "내보내진 모임", value = ChatRoomSwaggerExamples.CHAT_ROOM_KICKED_CANNOT_REAPPLY),
                         ],
                     ),
                 ],
@@ -1752,6 +1753,9 @@ private object ChatRoomSwaggerExamples {
     const val CHAT_ROOM_CLOSED = """{"code":40905,"errorMessage":"모집이 종료된 채팅방입니다."}"""
     const val CHAT_ROOM_NOT_JOINED = """{"code":40907,"errorMessage":"참가하거나 대기 중인 채팅방이 아닙니다."}"""
     const val INVALID_CHAT_ROOM_STATUS = """{"code":40910,"errorMessage":"변경할 수 없는 여행 상태입니다."}"""
+    const val CHAT_ROOM_KICKED_CANNOT_REAPPLY =
+        """{"code":40925,"errorMessage":"내보내진 모임에는 다시 신청할 수 없습니다."}"""
+
     const val CHAT_ROOM_PARTICIPANTS_NOT_ENOUGH =
         """{"code":40924,"errorMessage":"최소 출발 인원을 채워야 여행을 확정할 수 있습니다."}"""
     const val CHAT_ROOM_NOTICE_MODIFIED =

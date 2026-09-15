@@ -8,6 +8,7 @@ import kr.hanchae.moyeotrip.entity.tour.TravelCourseType
 import kr.hanchae.moyeotrip.entity.user.User
 import kr.hanchae.moyeotrip.entity.user.UserRole
 import kr.hanchae.moyeotrip.repository.ChatMessageRepository
+import kr.hanchae.moyeotrip.repository.ChatRoomJoinApplicationRepository
 import kr.hanchae.moyeotrip.repository.ChatRoomParticipantRepository
 import kr.hanchae.moyeotrip.repository.ChatRoomRepository
 import kr.hanchae.moyeotrip.repository.TravelCourseRepository
@@ -35,6 +36,7 @@ class ChatRoomLifecycleSchedulerTest {
     private val notificationService = mock(NotificationService::class.java)
     private val realtimeMessagingService = mock(RealtimeMessagingService::class.java)
     private val travelCompanionService = mock(TravelCompanionService::class.java)
+    private val applicationRepository = mock(ChatRoomJoinApplicationRepository::class.java)
     private val scheduler =
         ChatRoomLifecycleScheduler(
             roomRepository,
@@ -44,6 +46,7 @@ class ChatRoomLifecycleSchedulerTest {
             notificationService,
             realtimeMessagingService,
             travelCompanionService,
+            applicationRepository,
         )
 
     @Test
@@ -77,6 +80,21 @@ class ChatRoomLifecycleSchedulerTest {
         scheduler.notifyRecruitmentDeadline()
 
         verify(notificationService).notifyRecruitmentDeadline(room)
+    }
+
+    @Test
+    fun `마감일이 지나 저절로 확정되면 호스트에게도 알린다`() {
+        // BE-32 · 손으로 누르는 경로에만 알림을 붙였더니 이 자동 경로가 빠져 있었다.
+        // 아무도 누르지 않았으므로 **호스트도 모른다** — 그래서 호스트를 빼지 않는다.
+        val room = room()
+        `when`(roomRepository.findAllExpiredRecruitingRoomsForUpdate(ChatRoomStatus.RECRUITING, LocalDate.now()))
+            .thenReturn(listOf(room))
+        `when`(participantRepository.countByChatRoomId(room.id)).thenReturn(3L)
+        `when`(messageRepository.save(any(ChatMessage::class.java))).thenAnswer { it.arguments[0] }
+
+        scheduler.closeExpiredRecruitingRooms()
+
+        verify(notificationService).notifyTripStatusChanged(room, true, emptyList(), true)
     }
 
     @Test

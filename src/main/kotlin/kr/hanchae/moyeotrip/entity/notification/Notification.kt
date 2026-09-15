@@ -56,6 +56,16 @@ class Notification(
 enum class NotificationType {
     CHAT_ROOM_CREATED,
     CHAT_ROOM_KICKED,
+    // BE-32 · 대기자가 자동 합류했을 때. 당사자가 앱을 보고 있지 않을 때 일어나는 변화라 알림이 없으면 합류한 줄도 모른다.
+    CHAT_ROOM_WAITLIST_PROMOTED,
+    // BE-32 · 여행 확정·불발. 화면이 「동행자 모두에게 알림이 가요」라고 약속한다.
+    CHAT_ROOM_CONFIRMED,
+    CHAT_ROOM_CANCELLED,
+    // BE-33 · 공지 등록. 화면이 「공지를 올리면 방 사람들에게 알림이 가요」라고 약속한다.
+    CHAT_ROOM_NOTICE_POSTED,
+    // BE-33 · 참가 신청 결과. 화면이 「결과는 알림으로 알려드려요」라고 약속한다.
+    CHAT_ROOM_APPLICATION_APPROVED,
+    CHAT_ROOM_APPLICATION_REJECTED,
     CHAT_MESSAGE_RECEIVED,
     TRAVEL_COURSE_UPDATED,
     MEETING_INFO_UPDATED,

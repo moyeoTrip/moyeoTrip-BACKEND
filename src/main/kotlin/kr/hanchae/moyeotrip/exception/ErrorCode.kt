@@ -133,6 +133,9 @@ enum class ErrorCode(
     // BE-31 · 확정에도 최소 출발 인원을 지킨다. 예전에는 생성 때만 검사해서 2명으로도 확정됐다.
     CHAT_ROOM_PARTICIPANTS_NOT_ENOUGH(HttpStatus.CONFLICT, 40924, "최소 출발 인원을 채워야 여행을 확정할 수 있습니다."),
 
+    // BE-34 · 내보내진 사람의 재신청. 세 플랫폼이 「이 모임에는 다시 신청할 수 없어요」라고 적는데 서버가 막지 않았다.
+    CHAT_ROOM_KICKED_CANNOT_REAPPLY(HttpStatus.CONFLICT, 40925, "내보내진 모임에는 다시 신청할 수 없습니다."),
+
     // 요청 한도 초과는 42900부터 시작
     PROFILE_IMAGE_GENERATION_LIMIT(HttpStatus.TOO_MANY_REQUESTS, 42900, "프로필 이미지는 사용자당 최대 3번까지 생성할 수 있습니다."),
 

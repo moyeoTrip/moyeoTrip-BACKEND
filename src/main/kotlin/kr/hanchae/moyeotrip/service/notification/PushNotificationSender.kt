@@ -112,7 +112,14 @@ class FirebasePushNotificationSender(
     private fun NotificationType.pushTitle(): String =
         when (this) {
             NotificationType.CHAT_ROOM_CREATED -> error("채팅방 생성 알림은 푸시로 전송하지 않습니다.")
-            NotificationType.CHAT_ROOM_KICKED -> "모임 알림"
+            NotificationType.CHAT_ROOM_KICKED,
+            NotificationType.CHAT_ROOM_WAITLIST_PROMOTED,
+            NotificationType.CHAT_ROOM_CONFIRMED,
+            NotificationType.CHAT_ROOM_CANCELLED,
+            NotificationType.CHAT_ROOM_NOTICE_POSTED,
+            NotificationType.CHAT_ROOM_APPLICATION_APPROVED,
+            NotificationType.CHAT_ROOM_APPLICATION_REJECTED,
+            -> "모임 알림"
             NotificationType.CHAT_MESSAGE_RECEIVED -> "새 메시지"
             NotificationType.TRAVEL_COURSE_UPDATED,
             NotificationType.MEETING_INFO_UPDATED,

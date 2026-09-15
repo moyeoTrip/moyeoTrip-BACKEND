@@ -5,8 +5,10 @@ import kr.hanchae.moyeotrip.entity.chat.ChatMessage
 import kr.hanchae.moyeotrip.entity.chat.ChatMessageType
 import kr.hanchae.moyeotrip.entity.chat.ChatRoom
 import kr.hanchae.moyeotrip.entity.chat.ChatRoomStatus
+import kr.hanchae.moyeotrip.entity.chat.JoinApplicationStatus
 import kr.hanchae.moyeotrip.entity.tour.TravelCourseType
 import kr.hanchae.moyeotrip.repository.ChatMessageRepository
+import kr.hanchae.moyeotrip.repository.ChatRoomJoinApplicationRepository
 import kr.hanchae.moyeotrip.repository.ChatRoomParticipantRepository
 import kr.hanchae.moyeotrip.repository.ChatRoomRepository
 import kr.hanchae.moyeotrip.repository.TravelCourseRepository
@@ -28,6 +30,7 @@ class ChatRoomLifecycleScheduler(
     private val notificationService: NotificationService,
     private val realtimeMessagingService: RealtimeMessagingService,
     private val travelCompanionService: TravelCompanionService,
+    private val applicationRepository: ChatRoomJoinApplicationRepository,
 ) {
     @Scheduled(cron = "0 0 13 * * *", zone = "Asia/Seoul")
     @Transactional
@@ -47,13 +50,23 @@ class ChatRoomLifecycleScheduler(
         roomRepository
             .findAllExpiredRecruitingRoomsForUpdate(ChatRoomStatus.RECRUITING, LocalDate.now())
             .forEach { room ->
-                if (participantRepository.countByChatRoomId(room.id) >= room.minimumParticipants) {
+                val confirmed = participantRepository.countByChatRoomId(room.id) >= room.minimumParticipants
+                if (confirmed) {
                     room.confirm()
                     saveSystemMessage(room, "모집이 마감되어 여행이 확정되었어요.")
                 } else {
                     saveSystemMessage(room, "모집 마감까지 최소 ${room.minimumParticipants}명이 모이지 않아 여행이 불발되었어요.")
                     room.cancel(now)
                 }
+                // BE-32 · 손으로 바꾸는 `ChatRoomService.changeStatus` 에만 알림을 붙였더니 **이 자동 경로가 빠졌다.**
+                // 오히려 이쪽이 더 필요하다 — 아무도 누르지 않았고 아무도 보고 있지 않은 채로 상태가 바뀐다.
+                // 그래서 호스트도 받는다(`includeHost = true`). 손으로 누른 경우와 달리 호스트도 모르기 때문이다.
+                notificationService.notifyTripStatusChanged(
+                    room = room,
+                    confirmed = confirmed,
+                    waitingApplicants = waitingApplicants(room),
+                    includeHost = true,
+                )
             }
     }
 
@@ -127,6 +140,12 @@ class ChatRoomLifecycleScheduler(
         }
     }
 
+    /** 아직 기다리던 신청자(승인 대기·대기열). 상태가 바뀌어도 신청 행은 남으므로 지금 읽는다. */
+    private fun waitingApplicants(room: ChatRoom) =
+        WAITING_APPLICATION_STATUSES
+            .flatMap { applicationRepository.findAllByChatRoomIdAndStatusOrderByCreatedDateTimeAscIdAsc(room.id, it) }
+            .map { it.user }
+
     private fun saveSystemMessage(
         room: ChatRoom,
         content: String,
@@ -155,6 +174,9 @@ class ChatRoomLifecycleScheduler(
     }
 
     companion object {
+        private val WAITING_APPLICATION_STATUSES =
+            listOf(JoinApplicationStatus.PENDING, JoinApplicationStatus.WAITLISTED)
+
         private const val CHAT_ROOM_RETENTION_DAYS = 14L
 
         /**

@@ -2671,6 +2671,107 @@ class ChatRoomServiceTest {
     }
 
     @Test
+    fun `확정하면 아직 기다리는 신청자에게도 알린다`() {
+        // BE-32 · 18-1 은 「대기 중인 신청자에게는 마감 알림이 가요」라고 적는다.
+        // 이 사람들은 확정으로 **영영 못 들어가게 된 쪽**이라 오히려 알림이 더 필요하다.
+        val room = room(user(1L))
+        val waiting = user(7L)
+        `when`(roomRepository.findByIdForUpdate(10L)).thenReturn(room)
+        `when`(participantRepository.countByChatRoomId(10L)).thenReturn(3L)
+        `when`(messageRepository.saveAndFlush(any(ChatMessage::class.java))).thenAnswer { it.arguments[0] }
+        `when`(
+            applicationRepository.findAllByChatRoomIdAndStatusOrderByCreatedDateTimeAscIdAsc(10L, JoinApplicationStatus.WAITLISTED),
+        ).thenReturn(
+            listOf(
+                ChatRoomJoinApplication(
+                    id = 44L,
+                    chatRoom = room,
+                    user = waiting,
+                    applicationMessage = "대기합니다",
+                    status = JoinApplicationStatus.WAITLISTED,
+                ),
+            ),
+        )
+
+        service.changeStatus(1L, 10L, ChatRoomStatus.CONFIRMED)
+
+        verify(notificationService).notifyTripStatusChanged(room, true, listOf(waiting))
+    }
+
+    @Test
+    fun `내보내진 사람은 같은 모임에 다시 신청할 수 없다`() {
+        // BE-34 · 13-1 과 20-5 가 세 플랫폼 모두에서 「이 모임에는 다시 신청할 수 없어요」라고 적는데
+        // 서버에 검사가 없어 그대로 다시 들어올 수 있었다.
+        val room = room(user(1L))
+        `when`(roomRepository.findByIdForUpdate(10L)).thenReturn(room)
+        `when`(userRepository.findById(2L)).thenReturn(Optional.of(user(2L)))
+        `when`(kickHistoryRepository.existsByChatRoomIdAndKickedUserId(10L, 2L)).thenReturn(true)
+
+        val exception =
+            assertThrows(BaseException::class.java) {
+                service.applyToJoin(2L, 10L, JoinChatRoomRequest("다시 신청할게요"))
+            }
+
+        assertEquals(ErrorCode.CHAT_ROOM_KICKED_CANNOT_REAPPLY, exception.errorCode)
+    }
+
+    @Test
+    fun `호스트가 신청을 승인하면 신청자에게 결과를 알린다`() {
+        // BE-33 · 19-2 는 「호스트 승인을 기다리고 있어요. 결과는 알림으로 알려드려요」라고 약속한다.
+        val room = room(user(1L))
+        val applicant = user(2L)
+        val application = ChatRoomJoinApplication(id = 30L, chatRoom = room, user = applicant, applicationMessage = "신청합니다")
+        `when`(roomRepository.findByIdForUpdate(10L)).thenReturn(room)
+        `when`(applicationRepository.findByIdAndChatRoomId(30L, 10L)).thenReturn(application)
+        `when`(participantRepository.countByChatRoomId(10L)).thenReturn(1L)
+        `when`(participantRepository.save(any(ChatRoomParticipant::class.java))).thenAnswer { it.arguments[0] }
+        `when`(messageRepository.saveAndFlush(any(ChatMessage::class.java))).thenAnswer { it.arguments[0] }
+
+        service.approveApplication(1L, 10L, 30L)
+
+        verify(notificationService).notifyApplicationApproved(room, applicant, 30L, true)
+    }
+
+    @Test
+    fun `호스트가 신청을 거절하면 신청자에게 결과를 알린다`() {
+        // 거절도 결과다. 알리지 않으면 신청자는 계속 기다린다.
+        val room = room(user(1L))
+        val applicant = user(2L)
+        val application = ChatRoomJoinApplication(id = 30L, chatRoom = room, user = applicant, applicationMessage = "신청합니다")
+        `when`(roomRepository.findByIdForUpdate(10L)).thenReturn(room)
+        `when`(applicationRepository.findByIdAndChatRoomId(30L, 10L)).thenReturn(application)
+
+        service.rejectApplication(1L, 10L, 30L)
+
+        verify(notificationService).notifyApplicationRejected(room, applicant, 30L)
+    }
+
+    @Test
+    fun `확정하면 호스트를 뺀 동행자에게 알린다`() {
+        // BE-32 · 예전에는 시스템 메시지만 남기고 알림을 만들지 않았다. 화면은 알림이 간다고 약속한다.
+        val room = room(user(1L))
+        `when`(roomRepository.findByIdForUpdate(10L)).thenReturn(room)
+        `when`(participantRepository.countByChatRoomId(10L)).thenReturn(3L)
+        `when`(messageRepository.saveAndFlush(any(ChatMessage::class.java))).thenAnswer { it.arguments[0] }
+
+        service.changeStatus(1L, 10L, ChatRoomStatus.CONFIRMED)
+
+        verify(notificationService).notifyTripStatusChanged(room, true)
+    }
+
+    @Test
+    fun `불발도 동행자에게 알린다`() {
+        // 여행이 무산된 것은 확정만큼 알아야 하는 일이다.
+        val room = room(user(1L))
+        `when`(roomRepository.findByIdForUpdate(10L)).thenReturn(room)
+        `when`(messageRepository.saveAndFlush(any(ChatMessage::class.java))).thenAnswer { it.arguments[0] }
+
+        service.changeStatus(1L, 10L, ChatRoomStatus.CANCELLED)
+
+        verify(notificationService).notifyTripStatusChanged(room, false)
+    }
+
+    @Test
     fun `최소 출발 인원을 채우지 못하면 확정할 수 없다`() {
         // BE-31 · 예전에는 `minimumParticipants` 를 **모집을 만들 때만** 검증해서
         // 호스트가 참가자 2명으로도 확정할 수 있었다. 화면은 「최소 3명이 모이면 출발」이라고
@@ -2769,6 +2870,8 @@ class ChatRoomServiceTest {
         assertEquals(3L, response.promotedUserId)
         verify(applicationRepository).delete(waiting)
         verify(participantRepository).saveAndFlush(any(ChatRoomParticipant::class.java))
+        // BE-32 · 승격은 당사자가 아무 조작도 하지 않은 채 일어난다. 알리지 않으면 합류한 줄도 모른다.
+        verify(notificationService).notifyWaitlistPromoted(room, waitingUser, 0L)
     }
 
     @Test

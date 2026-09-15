@@ -95,6 +95,12 @@ class NotificationSetting(
             NotificationType.MARKETING -> marketingEnabled
             NotificationType.CHAT_ROOM_CREATED,
             NotificationType.CHAT_ROOM_KICKED,
+            NotificationType.CHAT_ROOM_WAITLIST_PROMOTED,
+            NotificationType.CHAT_ROOM_CONFIRMED,
+            NotificationType.CHAT_ROOM_CANCELLED,
+            NotificationType.CHAT_ROOM_NOTICE_POSTED,
+            NotificationType.CHAT_ROOM_APPLICATION_APPROVED,
+            NotificationType.CHAT_ROOM_APPLICATION_REJECTED,
             NotificationType.TRAVEL_COURSE_UPDATED,
             NotificationType.MEETING_INFO_UPDATED,
             -> true

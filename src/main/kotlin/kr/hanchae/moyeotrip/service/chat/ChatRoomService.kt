@@ -714,6 +714,11 @@ class ChatRoomService(
             throw BaseException(ErrorCode.CHAT_ROOM_ALREADY_JOINED)
         }
         val user = findUser(userId)
+        // BE-34 · 내보내진 사람은 같은 모임에 다시 신청할 수 없다. 13-1(강퇴 사유)과 20-5(내보내기 확인)가
+        // 세 플랫폼 모두에서 「이 모임에는 다시 신청할 수 없어요」라고 적는데 서버에 검사가 없었다.
+        if (kickHistoryRepository.existsByChatRoomIdAndKickedUserId(roomId, userId)) {
+            throw BaseException(ErrorCode.CHAT_ROOM_KICKED_CANNOT_REAPPLY)
+        }
         requireJoinConditions(room, user)
         // BE-08: 화면 안내(10~200자)와 서버 제약을 맞춘다. @Size 는 공백만 채운 문자열을 통과시키므로
         // 여기서 공백을 제외한 길이로 다시 본다. 자동 승인 방에서도 한마디를 보냈다면 같은 기준을 적용한다.
@@ -842,10 +847,13 @@ class ChatRoomService(
             applicationRepository.delete(application)
             val latestMessageId = recordParticipantJoined(room, application.user, count + 1)
             participant.readThrough(latestMessageId)
+            // BE-33 · 「결과는 알림으로 알려드려요」. 신청 행은 지워지므로 id 를 먼저 잡아 둔다.
+            notificationService.notifyApplicationApproved(room, application.user, applicationId, joined = true)
             ApproveJoinApplicationResponse(applicationId, ApprovalResult.JOINED, null)
         } else {
             application.moveToWaitlist()
             val position = applicationRepository.countByChatRoomIdAndStatus(roomId, JoinApplicationStatus.WAITLISTED).toInt()
+            notificationService.notifyApplicationApproved(room, application.user, applicationId, joined = false)
             ApproveJoinApplicationResponse(applicationId, ApprovalResult.WAITLISTED, position)
         }
     }
@@ -864,6 +872,8 @@ class ChatRoomService(
                 ?.takeIf { it.status == JoinApplicationStatus.PENDING }
                 ?: throw BaseException(ErrorCode.CHAT_JOIN_APPLICATION_NOT_FOUND)
         application.reject()
+        // BE-33 · 거절도 결과다. 알리지 않으면 신청자는 계속 기다린다.
+        notificationService.notifyApplicationRejected(room, application.user, applicationId)
     }
 
     @Transactional
@@ -1029,6 +1039,15 @@ class ChatRoomService(
             saveSystemMessage(room, "여행이 불발되었어요.")
             room.cancel(LocalDateTime.now())
         }
+        // BE-32 · 화면은 「동행자 모두에게 알림이 가요」라고 약속하는데 예전에는 아무것도 만들지 않았다.
+        //
+        // 아직 기다리던 신청자(승인 대기·대기열)도 대상이다. 이 사람들은 이 조작으로 **영영 못 들어가게 된 쪽**이라
+        // 알림이 더 필요하고, 18-1 도 그렇게 약속한다. 상태를 바꾸면 신청 행은 그대로 남으므로 지금 읽어 둔다.
+        val waitingApplicants =
+            ACTIVE_APPLICATION_STATUSES
+                .flatMap { applicationRepository.findAllByChatRoomIdAndStatusOrderByCreatedDateTimeAscIdAsc(room.id, it) }
+                .map { it.user }
+        notificationService.notifyTripStatusChanged(room, status == ChatRoomStatus.CONFIRMED, waitingApplicants)
     }
 
     @Transactional
@@ -1044,6 +1063,8 @@ class ChatRoomService(
         val content = notice.trim().takeIf(String::isNotEmpty) ?: throw BaseException(ErrorCode.NOTICE_CONTENT_BLANK)
         val savedNotice = noticeRepository.save(ChatRoomNotice(chatRoom = room, author = room.host, content = content, pinned = pinned))
         saveSystemMessage(room, "공지가 등록되었어요.\n$content")
+        // BE-33 · 시스템 메시지는 `notifyMessage` 를 타지 않아 방을 열어 보지 않으면 알 수 없었다.
+        notificationService.notifyNoticePosted(room, savedNotice.id, content)
         return savedNotice.id
     }
 
@@ -1570,6 +1591,8 @@ class ChatRoomService(
         val participantCount = participantRepository.countByChatRoomId(room.id).toInt()
         val latestMessageId = recordParticipantJoined(room, application.user, participantCount)
         participant.readThrough(latestMessageId)
+        // BE-32 · 승격된 당사자에게 알린다. 예전에는 시스템 메시지만 남아서, 방을 열어 보지 않으면 알 길이 없었다.
+        notificationService.notifyWaitlistPromoted(room, application.user, participant.id)
         return application.user
     }
 
@@ -1795,6 +1818,8 @@ class ChatRoomService(
         ) {
             return false
         }
+        // BE-34 · 눌러 보고 나서 막히는 것보다 버튼부터 잠그는 편이 낫다. `applyToJoin` 과 같은 규칙을 본다.
+        if (kickHistoryRepository.existsByChatRoomIdAndKickedUserId(room.id, user.id)) return false
         return meetsJoinConditions(room, user)
     }
 

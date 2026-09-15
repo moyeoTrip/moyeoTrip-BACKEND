@@ -209,6 +209,125 @@ class NotificationService(
         )
     }
 
+    /// BE-32 · 대기자가 자리를 이어받아 자동 합류했을 때 당사자에게 알린다.
+    ///
+    /// 승격은 **당사자가 아무 조작도 하지 않은 채** 일어나는 유일한 상태 변화다. 알림이 없으면
+    /// 대기자는 자기가 합류한 것을 모른 채 방치된다 (QA BE-32, 2026-09-15).
+    ///
+    /// `referenceId` 로 참가자 행 id 를 쓴다 — 방 id 를 쓰면 나갔다가 다시 대기·승격된 사람에게
+    /// 두 번째 알림이 `uk_notification_reference` 에 막혀 사라진다.
+    fun notifyWaitlistPromoted(
+        room: ChatRoom,
+        recipient: User,
+        participantId: Long,
+    ) {
+        save(
+            recipient = recipient,
+            type = NotificationType.CHAT_ROOM_WAITLIST_PROMOTED,
+            content = "자리가 나서 ${room.roomTitle} 모임에 합류했어요 🎉",
+            chatRoomId = room.id,
+            referenceId = participantId,
+        )
+    }
+
+    /// BE-32 · 여행 확정·불발을 **동행자와 아직 기다리는 신청자** 모두에게 알린다.
+    ///
+    /// 호스트도 참가자 행을 갖지만 **직접 누른 사람**이라 뺀다 — 집합 정보 변경(`notifyMeetingInfoUpdated`)과 같은 방식이다.
+    ///
+    /// 신청자를 빼먹으면 화면 약속을 절반만 지키게 된다. 18-1 은 확정에 「대기 중인 신청자에게는 마감 알림이 가요」,
+    /// 불발에 「승인된 동행자와 대기 중인 신청자 모두에게 알림이 가요」라고 적는다. 이 사람들은
+    /// **영영 못 들어가게 된 쪽**이라 오히려 알림이 더 필요하다. 그래서 문구도 동행자와 다르다 —
+    /// 동행자에게는 「확정되었어요」지만 신청자에게는 「모집이 마감되었어요」다.
+    ///
+    /// 방 하나는 `RECRUITING` 에서만 상태가 바뀌므로 확정·불발은 각각 한 번뿐이고, `referenceId` 는 방 id 로 충분하다.
+    fun notifyTripStatusChanged(
+        room: ChatRoom,
+        confirmed: Boolean,
+        waitingApplicants: List<User> = emptyList(),
+        includeHost: Boolean = false,
+    ) {
+        val type = if (confirmed) NotificationType.CHAT_ROOM_CONFIRMED else NotificationType.CHAT_ROOM_CANCELLED
+        val memberContent =
+            if (confirmed) {
+                "${room.roomTitle} 여행이 확정되었어요 ✈️"
+            } else {
+                "${room.roomTitle} 여행이 불발되었어요."
+            }
+        val applicantContent =
+            if (confirmed) {
+                "${room.roomTitle} 모집이 마감되었어요."
+            } else {
+                "${room.roomTitle} 여행이 불발되었어요."
+            }
+        participantRepository
+            .findAllByChatRoomIdOrderByCreatedDateTimeAsc(room.id)
+            .asSequence()
+            // 호스트가 직접 눌렀으면 본인은 이미 안다. 마감일이 지나 **저절로** 바뀐 것이면 호스트도 받아야 한다.
+            .filter { includeHost || it.user.id != room.host.id }
+            .forEach { participant ->
+                save(participant.user, type, memberContent, room.id, room.id)
+            }
+        waitingApplicants
+            .asSequence()
+            .distinctBy { it.id }
+            .forEach { applicant ->
+                save(applicant, type, applicantContent, room.id, room.id)
+            }
+    }
+
+    /// BE-33 · 공지가 올라왔음을 방 사람들에게 알린다.
+    ///
+    /// 예전에는 채팅 시스템 메시지만 남겼다. 시스템 메시지는 `notifyMessage` 를 타지 않아서
+    /// 방을 열어 보지 않으면 공지가 올라온 줄 알 수 없었는데, 20-2d 는 「공지를 올리면 방 사람들에게 알림이 가요」라고 적는다.
+    fun notifyNoticePosted(
+        room: ChatRoom,
+        noticeId: Long,
+        content: String,
+    ) {
+        participantRepository
+            .findAllByChatRoomIdOrderByCreatedDateTimeAsc(room.id)
+            .asSequence()
+            .filter { it.user.id != room.host.id }
+            .forEach { participant ->
+                save(participant.user, NotificationType.CHAT_ROOM_NOTICE_POSTED, "${room.roomTitle} 새 공지 · $content", room.id, noticeId)
+            }
+    }
+
+    /// BE-33 · 참가 신청 결과를 신청자에게 알린다.
+    ///
+    /// 19-2·13-1 이 「호스트 승인을 기다리고 있어요. 결과는 알림으로 알려드려요」라고 약속하는데
+    /// 예전에는 승인에도 거절에도 아무것도 만들지 않았다. 신청자는 스스로 화면을 다시 열어 보는 수밖에 없었다.
+    ///
+    /// `referenceId` 는 신청 행 id 다 — 같은 방에 다시 신청할 수 있어서 방 id 로는 두 번째 결과가 사라진다.
+    fun notifyApplicationApproved(
+        room: ChatRoom,
+        applicant: User,
+        applicationId: Long,
+        joined: Boolean,
+    ) {
+        val content =
+            if (joined) {
+                "${room.roomTitle} 참가가 승인되었어요 🎉"
+            } else {
+                "${room.roomTitle} 신청이 승인되어 대기 순서에 올랐어요."
+            }
+        save(applicant, NotificationType.CHAT_ROOM_APPLICATION_APPROVED, content, room.id, applicationId)
+    }
+
+    fun notifyApplicationRejected(
+        room: ChatRoom,
+        applicant: User,
+        applicationId: Long,
+    ) {
+        save(
+            applicant,
+            NotificationType.CHAT_ROOM_APPLICATION_REJECTED,
+            "${room.roomTitle} 신청이 받아들여지지 않았어요.",
+            room.id,
+            applicationId,
+        )
+    }
+
     fun notifyMessage(message: ChatMessage) {
         val sender = message.sender ?: return
         participantRepository
