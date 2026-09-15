@@ -1027,7 +1027,16 @@ interface ChatRoomAPISpec {
                 content = [
                     Content(
                         schema = Schema(implementation = ErrorResponse::class),
-                        examples = [ExampleObject(value = ChatRoomSwaggerExamples.INVALID_CHAT_ROOM_STATUS)],
+                        examples = [
+                            ExampleObject(
+                                name = "변경할 수 없는 상태",
+                                value = ChatRoomSwaggerExamples.INVALID_CHAT_ROOM_STATUS,
+                            ),
+                            ExampleObject(
+                                name = "최소 출발 인원 미달",
+                                value = ChatRoomSwaggerExamples.CHAT_ROOM_PARTICIPANTS_NOT_ENOUGH,
+                            ),
+                        ],
                     ),
                 ],
             ),
@@ -1138,11 +1147,17 @@ interface ChatRoomAPISpec {
             ),
             ApiResponse(
                 responseCode = "409",
-                description = "종료된 방에는 공지를 변경하거나 삭제할 수 없음",
+                description = "종료된 방에는 공지를 변경할 수 없거나, 그 사이 다른 사람이 먼저 공지를 수정함",
                 content = [
                     Content(
                         schema = Schema(implementation = ErrorResponse::class),
-                        examples = [ExampleObject(value = ChatRoomSwaggerExamples.CHAT_DISABLED)],
+                        examples = [
+                            ExampleObject(name = "종료된 방", value = ChatRoomSwaggerExamples.CHAT_DISABLED),
+                            ExampleObject(
+                                name = "다른 사람이 먼저 수정함",
+                                value = ChatRoomSwaggerExamples.CHAT_ROOM_NOTICE_MODIFIED,
+                            ),
+                        ],
                     ),
                 ],
             ),
@@ -1737,6 +1752,10 @@ private object ChatRoomSwaggerExamples {
     const val CHAT_ROOM_CLOSED = """{"code":40905,"errorMessage":"모집이 종료된 채팅방입니다."}"""
     const val CHAT_ROOM_NOT_JOINED = """{"code":40907,"errorMessage":"참가하거나 대기 중인 채팅방이 아닙니다."}"""
     const val INVALID_CHAT_ROOM_STATUS = """{"code":40910,"errorMessage":"변경할 수 없는 여행 상태입니다."}"""
+    const val CHAT_ROOM_PARTICIPANTS_NOT_ENOUGH =
+        """{"code":40924,"errorMessage":"최소 출발 인원을 채워야 여행을 확정할 수 있습니다."}"""
+    const val CHAT_ROOM_NOTICE_MODIFIED =
+        """{"code":40923,"errorMessage":"다른 사람이 먼저 공지를 수정했습니다."}"""
     const val CHAT_DISABLED = """{"code":40911,"errorMessage":"종료된 방에서는 채팅할 수 없습니다."}"""
     const val CHAT_ROOM_NOT_PARTICIPANT = """{"code":40301,"errorMessage":"사용자가 채팅방에 참여하고 있지 않습니다."}"""
     const val RESOURCE_NOT_FOUND = """{"code":40402,"errorMessage":"요청한 리소스를 찾을 수 없습니다."}"""

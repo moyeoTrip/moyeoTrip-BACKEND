@@ -1010,6 +1010,19 @@ class ChatRoomService(
             throw BaseException(ErrorCode.INVALID_CHAT_ROOM_STATUS)
         }
         if (status == ChatRoomStatus.CONFIRMED) {
+            // BE-31 · 확정에도 최소 출발 인원을 지킨다.
+            //
+            // 예전에는 `minimumParticipants` 를 **모집을 만들 때만** 검증해서, 호스트가 참가자 2명으로도
+            // 확정할 수 있었다. 서비스가 화면에서 약속한 규칙은 「최소 3명이 모이면 출발」이고
+            // 모집 만들기 안내도 「낯선 사람과 단둘이 되는 일은 생기지 않아요」라고 적는다 —
+            // 확정에서 검사하지 않으면 그 약속이 지켜지지 않는다 (QA BE-31, 2026-09-15).
+            //
+            // 호스트도 참가자 행을 갖는다(방 생성 시 `ChatParticipantRole.HOST` 로 저장). 그래서
+            // 이 수는 화면의 「3/5명」과 같은 값이고, 최소 인원과 바로 견줄 수 있다.
+            val joined = participantCount(room.id)
+            if (joined < room.minimumParticipants) {
+                throw BaseException(ErrorCode.CHAT_ROOM_PARTICIPANTS_NOT_ENOUGH)
+            }
             room.confirm()
             saveSystemMessage(room, "여행이 확정되었어요.")
         } else {
@@ -1041,6 +1054,7 @@ class ChatRoomService(
         noticeId: Long,
         notice: String?,
         pinned: Boolean?,
+        expectedUpdatedAt: LocalDateTime? = null,
     ) {
         val room = findRoomForUpdate(roomId)
         requireHost(room, hostId)
@@ -1050,6 +1064,17 @@ class ChatRoomService(
         val target =
             noticeRepository.findByIdAndChatRoomId(noticeId, roomId)
                 ?: throw BaseException(ErrorCode.CHAT_ROOM_NOTICE_NOT_FOUND)
+        // BE-30 · 내가 읽은 뒤 남이 먼저 고쳤으면 덮어쓰지 않는다.
+        //
+        // 예전에는 이 검사가 없어 **마지막 쓰기가 그냥 이겼다** — 앞사람 수정이 흔적 없이 사라지고
+        // 아무도 알지 못했다(QA NOTICE-021). 화면 쪽에서 저장 직전 재조회로 막아 두었지만,
+        // 그건 경합 창을 좁힐 뿐 닫지는 못한다(재조회와 PUT 사이가 남는다). 여기서 닫는다.
+        //
+        // `expectedUpdatedAt` 이 null 이면 검사하지 않는다 — 아직 이 값을 보내지 않는 클라이언트가
+        // 바로 깨지지 않게 하려는 것이다. 세 플랫폼이 모두 보내기 시작하면 필수로 올린다.
+        if (expectedUpdatedAt != null && target.updatedDateTime != expectedUpdatedAt) {
+            throw BaseException(ErrorCode.CHAT_ROOM_NOTICE_MODIFIED)
+        }
         normalizedNotice?.let {
             target.updateContent(it)
             saveSystemMessage(room, "공지가 수정되었어요.\n$it")
@@ -1841,6 +1866,7 @@ class ChatRoomService(
             senderNickname = sender?.nickname() ?: SYSTEM_NICKNAME,
             content = content,
             createdAt = createdDateTime,
+            deleted = deleted,
             imageUrl = imageUrl.takeUnless { deleted },
             tourismContent =
                 sharedContent?.let {
@@ -1908,6 +1934,7 @@ class ChatRoomService(
             pinned = pinned,
             authorNickname = author.nickname(),
             createdAt = createdDateTime,
+            updatedAt = updatedDateTime,
         )
 
     private fun User.nickname() = information?.nickname ?: "사용자 $id"

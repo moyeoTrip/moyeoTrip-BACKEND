@@ -991,6 +991,65 @@ class ChatRoomServiceTest {
     }
 
     @Test
+    fun `내가 읽은 뒤 남이 먼저 고친 공지는 덮어쓰지 않는다`() {
+        // BE-30 · 예전에는 마지막 쓰기가 그냥 이겼다 — 앞사람 수정이 흔적 없이 사라지고
+        // 아무도 알지 못했다 (QA NOTICE-021). 이제 읽은 시각을 함께 보내 충돌을 가른다.
+        val host = user(1L)
+        val room = room(host)
+        val readAt = LocalDateTime.of(2026, 9, 15, 10, 0)
+        val serverChangedAt = readAt.plusMinutes(3)
+        val notice =
+            mock(ChatRoomNotice::class.java).also {
+                `when`(it.updatedDateTime).thenReturn(serverChangedAt)
+            }
+        `when`(roomRepository.findByIdForUpdate(10L)).thenReturn(room)
+        `when`(noticeRepository.findByIdAndChatRoomId(7L, 10L)).thenReturn(notice)
+
+        val exception =
+            assertThrows(BaseException::class.java) {
+                service.updateNotice(1L, 10L, 7L, "내가 쓴 공지", pinned = null, expectedUpdatedAt = readAt)
+            }
+
+        assertEquals(ErrorCode.CHAT_ROOM_NOTICE_MODIFIED, exception.errorCode)
+        verify(notice, never()).updateContent(anyValue())
+        verifyNoInteractions(messageRepository)
+    }
+
+    @Test
+    fun `읽은 시각이 서버와 같으면 공지를 수정한다`() {
+        val host = user(1L)
+        val room = room(host)
+        val readAt = LocalDateTime.of(2026, 9, 15, 10, 0)
+        val notice =
+            mock(ChatRoomNotice::class.java).also {
+                `when`(it.updatedDateTime).thenReturn(readAt)
+            }
+        `when`(roomRepository.findByIdForUpdate(10L)).thenReturn(room)
+        `when`(noticeRepository.findByIdAndChatRoomId(7L, 10L)).thenReturn(notice)
+        `when`(messageRepository.saveAndFlush(any(ChatMessage::class.java))).thenAnswer { it.arguments[0] }
+
+        service.updateNotice(1L, 10L, 7L, "내가 쓴 공지", pinned = null, expectedUpdatedAt = readAt)
+
+        verify(notice).updateContent("내가 쓴 공지")
+    }
+
+    @Test
+    fun `읽은 시각을 보내지 않으면 충돌을 검사하지 않는다`() {
+        // 아직 이 값을 보내지 않는 클라이언트가 바로 깨지지 않게 한다.
+        // 세 플랫폼이 모두 보내기 시작하면 필수로 올린다.
+        val host = user(1L)
+        val room = room(host)
+        val notice = ChatRoomNotice(id = 7L, chatRoom = room, author = host, content = "기존 공지", pinned = false)
+        `when`(roomRepository.findByIdForUpdate(10L)).thenReturn(room)
+        `when`(noticeRepository.findByIdAndChatRoomId(7L, 10L)).thenReturn(notice)
+        `when`(messageRepository.saveAndFlush(any(ChatMessage::class.java))).thenAnswer { it.arguments[0] }
+
+        service.updateNotice(1L, 10L, 7L, "새 내용", pinned = null, expectedUpdatedAt = null)
+
+        assertEquals("새 내용", notice.content)
+    }
+
+    @Test
     fun `호스트는 기존 공지를 삭제할 수 있다`() {
         val host = user(1L)
         val room = room(host)
@@ -2599,6 +2658,8 @@ class ChatRoomServiceTest {
     fun `호스트는 모집 중인 여행을 확정할 수 있다`() {
         val room = room(user(1L))
         `when`(roomRepository.findByIdForUpdate(10L)).thenReturn(room)
+        // 호스트를 포함해 최소 출발 인원(3)이 찼을 때만 확정된다 (BE-31).
+        `when`(participantRepository.countByChatRoomId(10L)).thenReturn(3L)
         `when`(messageRepository.saveAndFlush(any(ChatMessage::class.java))).thenAnswer { it.arguments[0] }
 
         service.changeStatus(1L, 10L, ChatRoomStatus.CONFIRMED)
@@ -2607,6 +2668,39 @@ class ChatRoomServiceTest {
         val captor = ArgumentCaptor.forClass(ChatMessage::class.java)
         verify(messageRepository).saveAndFlush(captor.capture())
         assertEquals("여행이 확정되었어요.", captor.value.content)
+    }
+
+    @Test
+    fun `최소 출발 인원을 채우지 못하면 확정할 수 없다`() {
+        // BE-31 · 예전에는 `minimumParticipants` 를 **모집을 만들 때만** 검증해서
+        // 호스트가 참가자 2명으로도 확정할 수 있었다. 화면은 「최소 3명이 모이면 출발」이라고
+        // 약속하는데 서버가 그걸 지키지 않았다 (QA 2026-09-15, 실서버에서 204 확인).
+        val room = room(user(1L))
+        `when`(roomRepository.findByIdForUpdate(10L)).thenReturn(room)
+        `when`(participantRepository.countByChatRoomId(10L)).thenReturn(2L)
+
+        val exception =
+            assertThrows(BaseException::class.java) {
+                service.changeStatus(1L, 10L, ChatRoomStatus.CONFIRMED)
+            }
+
+        assertEquals(ErrorCode.CHAT_ROOM_PARTICIPANTS_NOT_ENOUGH, exception.errorCode)
+        assertEquals(ChatRoomStatus.RECRUITING, room.status)
+        verifyNoInteractions(messageRepository)
+    }
+
+    @Test
+    fun `인원이 모자라도 불발 처리는 막지 않는다`() {
+        // 최소 인원 검사는 **확정에만** 건다. 사람이 안 모여서 접는 길까지 막으면
+        // 호스트가 방을 정리할 수 없게 된다.
+        val room = room(user(1L))
+        `when`(roomRepository.findByIdForUpdate(10L)).thenReturn(room)
+        `when`(participantRepository.countByChatRoomId(10L)).thenReturn(1L)
+        `when`(messageRepository.saveAndFlush(any(ChatMessage::class.java))).thenAnswer { it.arguments[0] }
+
+        service.changeStatus(1L, 10L, ChatRoomStatus.CANCELLED)
+
+        assertEquals(ChatRoomStatus.CANCELLED, room.status)
     }
 
     @Test
@@ -3120,6 +3214,8 @@ class ChatRoomServiceTest {
             `when`(it.pinned).thenReturn(pinned)
             `when`(it.author).thenReturn(author)
             `when`(it.createdDateTime).thenReturn(createdAt)
+            // 한 번도 고치지 않은 공지는 수정시각이 생성시각과 같다 (BE-30).
+            `when`(it.updatedDateTime).thenReturn(createdAt)
         }
 
     private fun message(

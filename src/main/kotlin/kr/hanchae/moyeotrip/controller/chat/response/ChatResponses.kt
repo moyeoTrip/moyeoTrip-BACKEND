@@ -463,6 +463,10 @@ data class ChatMessageResponse(
     val content: String,
     @field:Schema(description = "메시지 전송 일시", example = "2026-09-12T13:30:00")
     val createdAt: LocalDateTime,
+    // 지워진 메시지의 `content` 는 서버가 「삭제된 메시지입니다」로 바꿔 준다. 그런데 그 문장을
+    // **사용자가 직접 칠 수도 있어서**, 클라이언트가 문자열만 보고는 둘을 구분할 수 없었다.
+    @field:Schema(description = "지워진 메시지인지 여부. true 면 content 는 안내 문구로 대체된 값이다", example = "false")
+    val deleted: Boolean = false,
     @field:Schema(description = "공유한 사진 URL. 사진 메시지가 아니면 null", nullable = true)
     val imageUrl: String? = null,
     @field:Schema(description = "공유한 관광 장소 카드. 장소 메시지가 아니면 null", nullable = true)
@@ -794,6 +798,10 @@ data class ChatRoomNoticeResponse(
     val authorNickname: String,
     @field:Schema(description = "공지 등록 일시", example = "2026-09-01T12:00:00")
     val createdAt: LocalDateTime,
+    // BE-30 · 동시 수정 충돌을 막는 기준값이다. 수정 요청에 이 값을 그대로 실어 보내면
+    // 서버가 그 사이 남이 고쳤는지 판단한다. 한 번도 안 고친 공지는 등록 일시와 같다.
+    @field:Schema(description = "공지 최종 수정 일시. 수정 요청의 expectedUpdatedAt 에 그대로 실어 보낸다", example = "2026-09-01T12:30:00")
+    val updatedAt: LocalDateTime,
 )
 
 @Schema(description = "고정·일반 채팅방 공지 이력")

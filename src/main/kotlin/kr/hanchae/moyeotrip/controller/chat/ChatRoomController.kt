@@ -282,7 +282,7 @@ class ChatRoomController(
         @PathVariable noticeId: Long,
         @Valid @RequestBody request: UpdateChatRoomNoticeRequest,
     ): ResponseEntity<Void> {
-        chatRoomService.updateNotice(userId, roomId, noticeId, request.notice, request.pinned)
+        chatRoomService.updateNotice(userId, roomId, noticeId, request.notice, request.pinned, request.expectedUpdatedAt)
         return ResponseEntity.noContent().build()
     }
 
